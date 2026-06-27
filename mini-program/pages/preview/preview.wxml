@@ -1,0 +1,10 @@
+<view class="container">
+  <view wx:if="{{loading}}" class="card">加载中...</view>
+  <view wx:elif="{{!contentMd}}" class="card">
+    <view>暂无简历</view>
+    <view class="btn-primary" bindtap="goForm" style="margin-top:24rpx;">去填写</view>
+  </view>
+  <view wx:else class="card resume-body">
+    <rich-text nodes="{{mdHtml}}" />
+  </view>
+</view>
