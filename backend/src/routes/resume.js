@@ -58,4 +58,23 @@ router.post('/generate', userAuth, async (req, res, next) => {
   }
 });
 
+router.get('/current', userAuth, async (req, res, next) => {
+  try {
+    const userId = req.user.userId;
+    const [rows] = await pool.query(
+      'SELECT id, content_md, source_form FROM resumes WHERE user_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1',
+      [userId]
+    );
+    if (!rows.length) throw new AppError(1005, 'no active resume', 404);
+
+    const row = rows[0];
+    const sourceForm = typeof row.source_form === 'string'
+      ? JSON.parse(row.source_form)
+      : row.source_form;
+    res.json({ code: 0, data: { resume_id: row.id, content_md: row.content_md, source_form: sourceForm } });
+  } catch (err) {
+    next(err);
+  }
+});
+
 module.exports = router;
