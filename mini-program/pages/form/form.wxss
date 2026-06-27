@@ -1,0 +1,2 @@
+.container { padding: 24rpx; padding-bottom: 96rpx; }
+.section-title { font-size: 32rpx; font-weight: bold; margin-bottom: 16rpx; }
