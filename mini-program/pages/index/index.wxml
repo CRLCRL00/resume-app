@@ -1,0 +1,9 @@
+<view class="container">
+  <view class="card">
+    <view style="font-size:48rpx; font-weight:bold;">简历助手</view>
+    <view class="label" style="margin-top:16rpx;">简单填写，自动生成专业简历</view>
+  </view>
+
+  <view wx:if="{{hasResume}}" class="btn-secondary" bindtap="goPreview">查看我的简历</view>
+  <view class="btn-primary" bindtap="goForm">{{hasResume ? '更新简历' : '开始填写'}}</view>
+</view>
