@@ -1,0 +1,8 @@
+* { box-sizing: border-box; margin: 0; padding: 0; }
+page { background: #f7f8fa; font-family: -apple-system, sans-serif; font-size: 28rpx; }
+.container { padding: 24rpx; }
+.btn-primary { background: #07c160; color: white; border-radius: 8rpx; padding: 24rpx; text-align: center; font-size: 32rpx; }
+.btn-secondary { background: white; color: #333; border: 1rpx solid #ddd; border-radius: 8rpx; padding: 24rpx; text-align: center; font-size: 32rpx; }
+.card { background: white; border-radius: 12rpx; padding: 32rpx; margin: 16rpx 0; }
+.input { border: 1rpx solid #ddd; border-radius: 8rpx; padding: 16rpx; width: 100%; box-sizing: border-box; margin: 8rpx 0; }
+.label { color: #666; font-size: 24rpx; margin-top: 16rpx; }
