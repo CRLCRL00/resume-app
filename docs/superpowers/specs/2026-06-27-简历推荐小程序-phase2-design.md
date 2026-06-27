@@ -85,12 +85,16 @@ app.js onLaunch
       "city": "string required max 64",
       "position": "string required max 128",
       "salary_min": "int required min 0",
-      "salary_max": "int required min 0"
+      "salary_max": "int required min 0, must >= salary_min (Joi.ref)"
     },
     "skills": ["string array, 1-20 items"]
   }
 }
 ```
+
+**校验规则**：
+- `salary_max >= salary_min`：`Joi.number().min(Joi.ref('salary_min')).required()`
+- 错误返回 `{code:400, message:"薪资上限不能低于下限"}`
 
 **处理**：
 1. 写 `resumes` 表：`user_id, source_form, content_md=''`
@@ -106,6 +110,18 @@ app.js onLaunch
 ```
 
 **错误**：401（无 token）/ 400（joi 失败）
+
+**统一错误格式**（沿用 Phase 1 契约，不改字段名）：
+```json
+{
+  "code": 400,
+  "message": "薪资上限不能低于下限",
+  "data": null
+}
+```
+- `code`：HTTP 状态码对齐（400/401/403/404/429/500）
+- `message`：人类可读，前端直接 toast
+- `data`：可选，结构化附加信息
 
 ---
 
@@ -123,31 +139,45 @@ app.js onLaunch
 2. 用模板函数生成 Markdown（**Phase 3 替换成 LLM**）
 3. `UPDATE resumes SET content_md = ?`
 
-**模板逻辑**（纯函数 `services/resumeTemplate.js`）：
-```markdown
-# {{name}}
+**模板逻辑**（纯函数 `services/resumeTemplate.js`，支持多段）：
 
-## 基本信息
-- 性别：{{gender}}
-- 学历：{{degree}}
-- 联系方式：{{phone || '未提供'}}
+```js
+function renderResume(form) {
+  const lines = [];
+  lines.push(`# ${form.name}`);
+  lines.push('');
+  lines.push('## 基本信息');
+  lines.push(`- 性别：${form.gender}`);
+  lines.push(`- 学历：${form.degree}`);
+  lines.push(`- 联系方式：${form.phone || '未提供'}`);
+  lines.push('');
 
-## 教育经历
-### {{school}} ({{start}} - {{end}})
-- 专业：{{major}}
-- 学历：{{degree}}
+  lines.push('## 教育经历');
+  for (const e of form.educations) {
+    lines.push(`### ${e.school} (${e.start} - ${e.end})`);
+    lines.push(`- 专业：${e.major}`);
+    lines.push(`- 学历：${e.degree}`);
+    lines.push('');
+  }
 
-## 工作经历
-### {{company}} - {{title}} ({{start}} - {{end}})
-{{desc}}
+  lines.push('## 工作经历');
+  for (const x of form.experiences) {
+    lines.push(`### ${x.company} - ${x.title} (${x.start} - ${x.end})`);
+    lines.push(x.desc);
+    lines.push('');
+  }
 
-## 求职期望
-- 城市：{{expected.city}}
-- 岗位：{{expected.position}}
-- 薪资：{{expected.salary_min}}K - {{expected.salary_max}}K
+  lines.push('## 求职期望');
+  lines.push(`- 城市：${form.expected.city}`);
+  lines.push(`- 岗位：${form.expected.position}`);
+  lines.push(`- 薪资：${form.expected.salary_min}K - ${form.expected.salary_max}K`);
+  lines.push('');
 
-## 技能
-{{skills.join('、')}}
+  lines.push('## 技能');
+  lines.push(form.skills.join('、'));
+
+  return lines.join('\n');
+}
 ```
 
 **返**：
@@ -236,33 +266,101 @@ mini-program/
 
 **`utils/validate.js`**：
 ```js
-function validatePhone(phone) { /* CN mobile regex */ }
+function validatePhone(phone) { /* CN mobile regex，空值合法 */ }
 function validateYearMonth(s) { /* YYYY-MM 或 '至今' */ }
-function validateResume(form) { /* 返回 errors 对象 */ }
+function validateResume(form) { /* 返回 errors 对象，校验整体表单 */ }
 ```
 
 **`utils/format.js`**：
 ```js
 function buildSourceForm(formData) { /* 拼成后端期望 JSON */ }
-function parseYearMonth(s) { /* 'YYYY-MM' → {year, month} */ }
+function parseYearMonth(s) { /* 'YYYY-MM' → {year, month}，'至今' → null */ }
 function formatDate(iso) { /* ISO → 'YYYY-MM-DD HH:mm' */ }
+function parseSkills(input) { /* 'a,b,, c' → ['a','b','c'] 去重+去空 */ }
+function mdToHtml(md) { /* 极简 md → html（先 escapeHtml 再转标签） */ }
+function escapeHtml(str) { /* XSS 防护：& < > " 转义 */ }
+```
+
+**`utils/request.js`**（关键封装）：
+```js
+function request({ url, method, data }) {
+  const token = wx.getStorageSync('token');
+  return new Promise((resolve, reject) => {
+    wx.request({
+      url: BASE_URL + url,
+      method,
+      data,
+      header: {
+        'Content-Type': 'application/json',
+        Authorization: token ? `Bearer ${token}` : '',
+      },
+      success: (res) => {
+        if (res.statusCode === 200) resolve(res.data);
+        else if (res.statusCode === 401) {
+          wx.removeStorageSync('token');
+          wx.showToast({ title: '请重新登录', icon: 'none' });
+          reject(res.data);
+        } else {
+          wx.showToast({ title: res.data?.message || '请求失败', icon: 'none' });
+          reject(res.data);
+        }
+      },
+      fail: (err) => { wx.showToast({ title: '网络错误', icon: 'none' }); reject(err); },
+    });
+  });
+}
 ```
 
 ### 4.3 UI 极简风
 
 ```css
-/* app.wxss 全局 */
+/* app.wxss 全局 reset */
+* { box-sizing: border-box; margin: 0; padding: 0; }
 page { background: #f7f8fa; font-family: -apple-system, sans-serif; }
 .container { padding: 24rpx; }
 .btn-primary { background: #07c160; color: white; border-radius: 8rpx; }
 .btn-secondary { background: white; color: #333; border: 1rpx solid #ddd; }
 .card { background: white; border-radius: 12rpx; padding: 32rpx; margin: 16rpx 0; }
-.input { border: 1rpx solid #ddd; border-radius: 8rpx; padding: 16rpx; }
+.input { border: 1rpx solid #ddd; border-radius: 8rpx; padding: 16rpx; width: 100%; box-sizing: border-box; }
 ```
 
 ### 4.4 预览页 Markdown 渲染
 
-**方案**：用 `<rich-text nodes="{{mdHtml}}">`，前端把 Markdown 转 HTML（用 `utils/format.js` 加个 `mdToHtml(md)` 函数）。
+**方案**：用 `<rich-text nodes="{{mdHtml}}">`，前端把 Markdown 转 HTML。
+
+**`mdToHtml` 实现**（极简，先 escape 再转标签）：
+```js
+function mdToHtml(md) {
+  // 1. 先 escape 防 XSS（rich-text 历史上出过漏洞）
+  let s = escapeHtml(md);
+  // 2. 转标签
+  s = s.replace(/^# (.+)$/gm, '<h1>$1</h1>')
+       .replace(/^## (.+)$/gm, '<h2>$1</h2>')
+       .replace(/^### (.+)$/gm, '<h3>$1</h3>')
+       .replace(/^- (.+)$/gm, '<li>$1</li>');
+  // 3. li 包 ul（连续 li 合成 ul 块）
+  s = s.replace(/(<li>[^]*?<\/li>\n?)+/g, (m) => `<ul>${m}</ul>`);
+  // 4. 换行 → <br>
+  s = s.replace(/\n/g, '<br>');
+  return s;
+}
+```
+
+**`escapeHtml`**（防 XSS）：
+```js
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+```
+
+**为什么不用 wxParse**：第三方库，Phase 2 不引依赖。Phase 6 再换 marked.js。
+
+**`<rich-text>` 安全警告**：微信官方文档明确，nodes 中的 HTML 不会被组件外的 CSP 限制，必须**前端先 escape**。
 
 **为什么不用 wxParse**：第三方库，Phase 2 不引依赖。
 
@@ -314,7 +412,37 @@ page { background: #f7f8fa; font-family: -apple-system, sans-serif; }
 
 **目标 ≥ 10 新测试，全 pass**
 
-### 5.3 UI 测试
+**测试 case 详细场景**：
+
+`validate.test.js`（node:test）：
+1. `validatePhone('') === true`（空值合法）
+2. `validatePhone('123456') === false`（非法）
+3. `validatePhone('13800138000') === true`（合法）
+4. `validateYearMonth('2024-13') === false`（月份越界）
+5. `validateResume({...salary_min: 25, salary_max: 15})` 返回 `{expected: '薪资上限不能低于下限'}`
+
+`format.test.js`：
+1. `parseYearMonth('至今') === null`
+2. `parseYearMonth('2024-06') === {year:2024, month:6}`
+3. `parseSkills('React, Vue,, React, ') === ['React','Vue']`（去重+去空）
+4. `escapeHtml('<script>') === '&lt;script&gt;'`
+5. `mdToHtml('# 标题') === '<h1>标题</h1>'`
+
+### 5.3 后端 `userAuth` mock 模板
+
+```js
+// tests/helpers/mockAuth.js
+const mockUserAuth = (req, res, next) => {
+  req.user = { id: 123, openid: 'test_openid' };
+  next();
+};
+const mockUserAuthFail = (req, res) => {
+  res.status(401).json({ code: 401, message: '未授权', data: null });
+};
+module.exports = { mockUserAuth, mockUserAuthFail };
+```
+
+### 5.4 UI 测试
 
 **不做**。靠真机 + 开发者工具肉眼验。
 
@@ -391,9 +519,15 @@ page { background: #f7f8fa; font-family: -apple-system, sans-serif; }
 ## §10 启动清单（Phase 2 开始前用户必做）
 
 1. ✅ 已完成：注册微信小程序开发者工具账号
-2. ⏳ 待办：去 mp.weixin.qq.com → 开发管理 → 开发设置 → 配置 request 合法域名 `https://43.139.176.199`
-3. ⏳ 待办：本地装微信开发者工具（最新稳定版）
-4. ⏳ 待办：用开发者工具新建项目，导入 `mini-program/` 目录（项目创建后会自动生成 `project.config.json`）
+2. ⏳ 待办：本地装微信开发者工具（**最新稳定版**）
+3. ⏳ 待办：用开发者工具新建项目，导入 `mini-program/` 目录（项目创建后会自动生成 `project.config.json`）
+4. ⏳ 待办：**导入后手动检查** `project.config.json` 中 `appid` 是否为 `wxf9c88ec9dd38cc64`（**避免自动生成的配置覆盖**）
+5. ⏳ 待办：确认用户拥有 `wxf9c88ec9dd38cc64` 账号的**开发权限**（真机调试会提示"无权限"）
+6. ⏳ 待办：开发者工具 → 设置 → 项目设置 → **勾选"不校验合法域名、web-view（业务域名）、TLS 版本以及 HTTPS 证书"**（仅测试用，**因服务器用自签证书**）
+7. ⏳ 待办：（可选）mp.weixin.qq.com → 开发管理 → 开发设置 → 配置 request 合法域名 `https://43.139.176.199`（不勾上面那个才必须）
+8. ⏳ 待办：手机微信升到 **8.0+**（部分 API 新接口需新版本）
+
+**自签证书问题解决方案**：服务器目前用自签证书（备案期），勾选「不校验合法域名」是最快的方案。备案完成后切回正式校验。
 
 ---
 
@@ -414,3 +548,14 @@ page { background: #f7f8fa; font-family: -apple-system, sans-serif; }
 **决策 7**：后端 stub 全量 3 接口（save/generate/current）— 用户选
 
 **决策 8**：前端 utils 用 node:test 测纯函数，UI 不测 — 用户选
+
+**决策 9**（review 采纳）：错误格式**沿用 Phase 1** `{code, message, data?}`，不改字段名 — 避免破坏 Phase 1 契约（已 OK）
+
+**决策 10**（review 采纳）：`<rich-text>` 渲染前**先 escapeHtml 防 XSS**（微信历史上出过漏洞）
+
+**决策 11**（review 采纳）：开发者工具**勾选不校验合法域名**（自签证书问题最简方案）
+
+**数据模型确认**（schema.sql L23-35 已存在）：
+- `resumes.source_form`：JSON 类型（MySQL 8.0+ 原生 JSON，可存 `{educations:[{...}], skills:["..."]}` 含字符串）
+- `resumes.content_md`：MEDIUMTEXT
+- `resumes.is_active`：TINYINT(1)（每次 save 改老 active=0，新 active=1）
