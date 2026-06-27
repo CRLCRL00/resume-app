@@ -20,7 +20,7 @@ if (!process.env[LOADED_FLAG]) {
 const REQUIRED = [
   'PORT', 'WX_APPID', 'WX_SECRET', 'JWT_SECRET',
   'DB_HOST', 'DB_USER', 'DB_PASSWORD', 'DB_NAME',
-  'REDIS_HOST', 'REDIS_PASSWORD',
+  'REDIS_HOST',
   'DEEPSEEK_API_KEY', 'DEEPSEEK_BASE_URL', 'DEEPSEEK_MODEL',
 ];
 
@@ -29,6 +29,8 @@ function load() {
   if (missing.length) {
     throw new Error(`Missing required env: ${missing.join(', ')}`);
   }
+  // REDIS_PASSWORD 可选（本地无密码开发环境）；空串视为未设置
+  const redisPassword = process.env.REDIS_PASSWORD || undefined;
   return {
     NODE_ENV: process.env.NODE_ENV || 'development',
     PORT: parseInt(process.env.PORT, 10),
@@ -50,11 +52,11 @@ function load() {
     },
     REDIS_HOST: process.env.REDIS_HOST,
     REDIS_PORT: parseInt(process.env.REDIS_PORT, 10) || 6379,
-    REDIS_PASSWORD: process.env.REDIS_PASSWORD,
+    REDIS_PASSWORD: redisPassword,
     REDIS: {
       host: process.env.REDIS_HOST,
       port: parseInt(process.env.REDIS_PORT, 10) || 6379,
-      password: process.env.REDIS_PASSWORD,
+      password: redisPassword,
     },
     DEEPSEEK_API_KEY: process.env.DEEPSEEK_API_KEY,
     DEEPSEEK_BASE_URL: process.env.DEEPSEEK_BASE_URL,
