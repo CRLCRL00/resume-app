@@ -2,6 +2,7 @@ const express = require('express');
 const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const testRouter = require('./routes/test');
+const adminRouter = require('./routes/admin');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -12,6 +13,7 @@ function createApp() {
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/test', testRouter);
+  app.use('/api/admin', adminRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
