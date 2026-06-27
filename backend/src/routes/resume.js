@@ -3,6 +3,7 @@ const router = express.Router();
 const { userAuth } = require('../middleware/auth');
 const { resumeSchema } = require('../middleware/validate');
 const { AppError } = require('../middleware/errorHandler');
+const { renderResume } = require('../services/resumeTemplate');
 const pool = require('../config/db');
 
 router.post('/save', userAuth, async (req, res, next) => {
@@ -27,6 +28,31 @@ router.post('/save', userAuth, async (req, res, next) => {
     } finally {
       conn.release();
     }
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.post('/generate', userAuth, async (req, res, next) => {
+  try {
+    const { resume_id } = req.body;
+    if (!resume_id) throw new AppError(1000, 'resume_id required', 400);
+
+    const userId = req.user.userId;
+    const [rows] = await pool.query(
+      'SELECT id, source_form FROM resumes WHERE id = ? AND user_id = ? LIMIT 1',
+      [resume_id, userId]
+    );
+    if (!rows.length) throw new AppError(1004, 'resume not found', 404);
+
+    const sourceForm = typeof rows[0].source_form === 'string'
+      ? JSON.parse(rows[0].source_form)
+      : rows[0].source_form;
+    const contentMd = renderResume(sourceForm);
+
+    await pool.query('UPDATE resumes SET content_md = ? WHERE id = ?', [contentMd, resume_id]);
+
+    res.json({ code: 0, data: { resume_id, content_md: contentMd } });
   } catch (err) {
     next(err);
   }
