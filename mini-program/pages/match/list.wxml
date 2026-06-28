@@ -1,0 +1,22 @@
+<view class="container">
+  <view wx:if="{{loading}}" class="card">匹配中...</view>
+  <view wx:elif="{{error}}" class="card">
+    <view>{{error}}</view>
+    <view class="btn-primary" bindtap="goForm" style="margin-top:24rpx;">去填写简历</view>
+  </view>
+  <view wx:elif="{{results.length === 0}}" class="card">
+    <view>{{message || '暂未找到匹配岗位'}}</view>
+    <view class="label">试试调整期望城市或薪资范围</view>
+    <view class="btn-primary" bindtap="goForm" style="margin-top:24rpx;">修改期望</view>
+  </view>
+  <view wx:else>
+    <view wx:for="{{results}}" wx:key="job_id" class="card" bindtap="goDetail" data-id="{{item.job_id}}" data-score="{{item.score}}" data-reason="{{item.reason}}">
+      <view style="display:flex; justify-content:space-between;">
+        <view style="font-weight:bold;">{{item.title}}</view>
+        <view style="font-size:36rpx; color:{{item.color}};">{{item.score}}</view>
+      </view>
+      <view class="label">{{item.company}} · {{item.city}} · {{item.salary_min}}-{{item.salary_max}}K</view>
+      <view wx:if="{{item.reason}}" class="label" style="margin-top:8rpx; color:#666;">💡 {{item.reason}}</view>
+    </view>
+  </view>
+</view>
