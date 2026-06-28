@@ -13,6 +13,9 @@ App({
     }
 
     this.login();
+
+    // 先把 index=1（管理 tab）隐藏，等 checkAdmin 返回再决定是否显示
+    setTimeout(() => this.checkAdmin(), 1500);
   },
 
   login() {
@@ -37,5 +40,24 @@ App({
   setToken(token, user) {
     wx.setStorageSync('token', token);
     if (user) wx.setStorageSync('user', user);
+  },
+
+  async checkAdmin() {
+    try {
+      const res = await require('./utils/request').request({ url: '/admin/check' });
+      if (res.data?.isAdmin) {
+        wx.setTabBarItem({
+          index: 1,
+          pagePath: 'admin/pages/jobs/list',
+          text: '管理',
+        });
+        wx.showTabBar({ index: 1, animation: false });
+      } else {
+        wx.hideTabBar({ index: 1, animation: false });
+      }
+    } catch (e) {
+      // 非 admin 或网络错，不显示
+      wx.hideTabBar({ index: 1, animation: false });
+    }
   },
 });
