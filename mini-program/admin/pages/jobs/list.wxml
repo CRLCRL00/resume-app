@@ -1,0 +1,24 @@
+<view class="container">
+  <view class="btn-primary" bindtap="goCreate" style="margin-bottom:24rpx;">+ 新建岗位</view>
+
+  <view wx:for="{{items}}" wx:key="id" class="card">
+    <view style="display:flex; justify-content:space-between;">
+      <view>
+        <view style="font-weight:bold;">{{item.title}}</view>
+        <view class="label">{{item.company}} · {{item.city}} · {{item.salary_min}}-{{item.salary_max}}K</view>
+      </view>
+      <view wx:if="{{item.is_deleted}}" class="label" style="color:red;">已删</view>
+      <view wx:elif="{{!item.is_online}}" class="label" style="color:orange;">下架</view>
+      <view wx:else class="label" style="color:green;">上架</view>
+    </view>
+    <view style="display:flex; gap:8rpx; margin-top:16rpx; flex-wrap:wrap;">
+      <view class="btn-secondary" bindtap="goEdit" data-id="{{item.id}}" style="flex:1; padding:8rpx;">编辑</view>
+      <view class="btn-secondary" bindtap="toggleOnline" data-id="{{item.id}}" data-online="{{item.is_online}}" style="flex:1; padding:8rpx;">{{item.is_online ? '下架' : '上架'}}</view>
+      <view wx:if="{{!item.is_deleted}}" class="btn-secondary" bindtap="deleteJob" data-id="{{item.id}}" style="flex:1; padding:8rpx; color:red;">删除</view>
+      <view wx:else class="btn-secondary" bindtap="restoreJob" data-id="{{item.id}}" style="flex:1; padding:8rpx; color:green;">恢复</view>
+    </view>
+  </view>
+
+  <view wx:if="{{loading}}" class="card">加载中...</view>
+  <view wx:elif="{{items.length === 0}}" class="card">暂无岗位</view>
+</view>
