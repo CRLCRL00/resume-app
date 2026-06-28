@@ -53,7 +53,16 @@
       "Bash(node --test --test-timeout=15000 --test-force-exit tests/admin-logs.test.js)",
       "Bash(node --test --test-timeout=15000 --test-force-exit tests/route-admin-placeholder.test.js tests/admin-jobs-crud.test.js tests/admin-prompts-crud.test.js tests/admin-logs.test.js)",
       "Bash(git -c user.name=CRL -c user.email=crl@crlcrl.com commit -m 'fix\\(mini-program\\): admin jobs edit + list bugs from Phase 4 Batch 3 review *)",
-      "Bash(node --test tests/admin-format.test.js tests/admin-validate.test.js)"
+      "Bash(node --test tests/admin-format.test.js tests/admin-validate.test.js)",
+      "Bash(git reset *)",
+      "Bash(rm .gitignore-test)",
+      "Bash(git -c user.name='CRL' -c user.email='crl@crlcrl.com' commit -m \"fix: ignore .claude/settings.json + backend/scripts/run-all-tests.js\")",
+      "Bash(git pull *)",
+      "Bash(mv .claude/settings.json /tmp/claude-settings.bak)",
+      "Bash(mv backend/scripts/run-all-tests.js /tmp/run-all-tests.bak)",
+      "Bash(rm -rf .claude/ backend/scripts/)",
+      "Bash(git -c user.name=CRL -c user.email=crl@crlcrl.com commit -m 'fix: remove .claude/ and backend/scripts/ from tracking *)",
+      "Bash(git -c user.name=CRL -c user.email=crl@crlcrl.com commit -m 'fix: untrack .claude/settings.json + backend/scripts/run-all-tests.js *)"
     ]
   }
 }
