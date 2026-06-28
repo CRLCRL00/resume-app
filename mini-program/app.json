@@ -2,7 +2,9 @@
   "pages": [
     "pages/index/index",
     "pages/form/form",
-    "pages/preview/preview"
+    "pages/preview/preview",
+    "pages/match/list",
+    "pages/match/detail"
   ],
   "subpackages": [{
     "root": "admin",

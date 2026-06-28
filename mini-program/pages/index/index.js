@@ -24,4 +24,8 @@ Page({
   goPreview() {
     wx.navigateTo({ url: '/pages/preview/preview' });
   },
+
+  goMatch() {
+    wx.navigateTo({ url: '/pages/match/list' });
+  },
 });

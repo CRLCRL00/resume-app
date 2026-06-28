@@ -5,5 +5,6 @@
   </view>
 
   <view wx:if="{{hasResume}}" class="btn-secondary" bindtap="goPreview">查看我的简历</view>
+  <view wx:if="{{hasResume}}" class="btn-primary" bindtap="goMatch" style="margin-top:24rpx;">找岗位</view>
   <view class="btn-primary" bindtap="goForm">{{hasResume ? '更新简历' : '开始填写'}}</view>
 </view>
