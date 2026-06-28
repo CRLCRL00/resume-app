@@ -502,6 +502,32 @@ detail.js 的 `onLoad` 改成 `onLoad(query) { this.load(query.id, query.score, 
 }
 ```
 
+### 3.5 `utils/constants.js`（score 颜色阈值）
+
+```js
+const SCORE_COLOR = {
+  HIGH: '#07c160',   // >= 80
+  MID:  '#ff9800',   // >= 60
+  LOW:  '#999',      // < 60
+};
+
+function scoreColor(score) {
+  if (score >= 80) return SCORE_COLOR.HIGH;
+  if (score >= 60) return SCORE_COLOR.MID;
+  return SCORE_COLOR.LOW;
+}
+
+module.exports = { SCORE_COLOR, scoreColor };
+```
+
+list.wxml / detail.wxml 用 `style="color:{{item.score >= 80 ? '#07c160' : ...}}"` 改成 wxs 函数引用，或 list.js / detail.js 里调 `scoreColor(score)` 算出 `color: '#xxx'` 后 setData。**简化**：list.js 里 `results` map 时附 `color` 字段：
+
+```js
+const enriched = (res.data.results || []).map(r => ({ ...r, color: require('../../utils/constants').scoreColor(r.score) }));
+```
+
+wxml 改成 `color:{{item.color}}`。
+
 ---
 
 ## §4 测试
@@ -597,6 +623,13 @@ ALTER TABLE matches ADD INDEX idx_match_batch (match_batch_id);
 ```
 
 （已有 `idx_user_resume_batch (user_id, resume_id, match_batch_id)` 复合索引，但单查 batch_id 不走复合索引前缀，加独立索引）
+
+**jobs 表索引已够用**（schema.sql 现有）：
+- `idx_online_city (is_online, is_deleted, city)` — 覆盖粗筛前 3 个条件
+- `idx_salary (salary_min, salary_max)` — salary 范围
+- `idx_degree (degree_required)` — 学位（但 CASE WHEN 不走索引，MVP 全扫可接受）
+
+Phase 5 MVP 阶段不新加 jobs 复合索引（岗位 < 100，全表扫比加索引快）。Phase 6 加固期视数据量决定加 `(is_online, is_deleted, salary_min, salary_max)`。
 
 ### 9.2 经验粗匹配 SQL（暂用模糊）
 
