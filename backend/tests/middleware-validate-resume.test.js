@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { resumeSchema } = require('../src/middleware/validate');
+const { resumeSchema, jobSchema, promptUpdateSchema } = require('../src/middleware/validate');
 
 test('resumeSchema accepts valid form', () => {
   const form = {
@@ -38,4 +38,31 @@ test('resumeSchema rejects empty skills', () => {
   };
   const { error } = resumeSchema.validate(form);
   assert.ok(error);
+});
+
+test('jobSchema accepts valid job', () => {
+  const j = {
+    title: '前端工程师', company: '字节', city: '深圳',
+    salary_min: 15, salary_max: 25,
+    description_md: '负责小程序',
+  };
+  const { error } = jobSchema.validate(j);
+  assert.equal(error, undefined);
+});
+
+test('jobSchema rejects salary_max < salary_min', () => {
+  const j = {
+    title: 't', company: 'c', city: 'x',
+    salary_min: 25, salary_max: 15, description_md: 'd',
+  };
+  const { error } = jobSchema.validate(j);
+  assert.ok(error);
+  assert.match(error.message, /salary_max/);
+});
+
+test('promptUpdateSchema requires content', () => {
+  const { error: e1 } = promptUpdateSchema.validate({});
+  assert.ok(e1);
+  const { error: e2 } = promptUpdateSchema.validate({ content: 'x' });
+  assert.equal(e2, undefined);
 });

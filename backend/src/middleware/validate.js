@@ -37,4 +37,20 @@ const resumeSchema = Joi.object({
   skills: Joi.array().items(Joi.string()).min(1).max(20).required(),
 });
 
-module.exports = { resumeSchema };
+const jobSchema = Joi.object({
+  title: Joi.string().max(128).required(),
+  company: Joi.string().max(128).required(),
+  city: Joi.string().max(64).required(),
+  salary_min: Joi.number().integer().min(0).required(),
+  salary_max: Joi.number().integer().min(Joi.ref('salary_min')).required(),
+  degree_required: Joi.string().max(16).default('不限'),
+  experience_required: Joi.string().max(16).default('不限'),
+  skills_required: Joi.array().items(Joi.string()).default([]),
+  description_md: Joi.string().max(20000).required(),
+});
+
+const promptUpdateSchema = Joi.object({
+  content: Joi.string().max(50000).required(),
+});
+
+module.exports = { resumeSchema, jobSchema, promptUpdateSchema };
