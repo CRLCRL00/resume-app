@@ -1,0 +1,22 @@
+<view class="container">
+  <view class="card">
+    <view class="section-title">基本信息</view>
+    <input class="input" placeholder="岗位名" value="{{form.title}}" bindinput="setField" data-field="title" />
+    <input class="input" placeholder="公司" value="{{form.company}}" bindinput="setField" data-field="company" />
+    <input class="input" placeholder="城市" value="{{form.city}}" bindinput="setField" data-field="city" />
+    <view style="display:flex; gap:16rpx;">
+      <input class="input" type="number" placeholder="薪资下限 K" value="{{form.salary_min}}" bindinput="setField" data-field="salary_min" />
+      <input class="input" type="number" placeholder="薪资上限 K" value="{{form.salary_max}}" bindinput="setField" data-field="salary_max" />
+    </view>
+    <input class="input" placeholder="学历要求（默认不限）" value="{{form.degree_required}}" bindinput="setField" data-field="degree_required" />
+    <input class="input" placeholder="经验要求（默认不限）" value="{{form.experience_required}}" bindinput="setField" data-field="experience_required" />
+    <input class="input" placeholder="技能（逗号分隔）" value="{{skillsInput}}" bindinput="setSkillsInput" />
+  </view>
+
+  <view class="card">
+    <view class="section-title">岗位描述 (Markdown)</view>
+    <textarea class="input" placeholder="岗位描述..." value="{{form.description_md}}" bindinput="setField" data-field="description_md" style="height:400rpx;" />
+  </view>
+
+  <view class="btn-primary" bindtap="submit">保存</view>
+</view>
