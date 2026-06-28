@@ -1,0 +1,7 @@
+<view class="container">
+  <view class="card">
+    <view class="label">Code: {{code}} · 当前 v{{version}}</view>
+    <textarea class="input" placeholder="Prompt 内容..." value="{{content}}" bindinput="setContent" style="height:800rpx;" />
+  </view>
+  <view class="btn-primary" bindtap="save">保存为新版本</view>
+</view>

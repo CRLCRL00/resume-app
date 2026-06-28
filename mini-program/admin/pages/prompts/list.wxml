@@ -1,0 +1,6 @@
+<view class="container">
+  <view wx:for="{{items}}" wx:key="code" class="card" bindtap="goEdit" data-code="{{item.code}}">
+    <view style="font-weight:bold;">{{item.code}}</view>
+    <view class="label">v{{item.version}} · {{item.updated_at}}</view>
+  </view>
+</view>
