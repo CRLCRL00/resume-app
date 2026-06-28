@@ -1,10 +1,9 @@
 const express = require('express');
 const router = express.Router();
-const { userAuth } = require('../../middleware/auth');
-const { adminAuth } = require('../../middleware/adminAuth');
 
-router.get('/check', userAuth, adminAuth, (req, res) => {
-  res.json({ code: 0, data: { isAdmin: true } });
-});
+router.use(require('./check'));
+router.use(require('./jobs'));
+router.use(require('./prompts'));
+router.use(require('./logs'));
 
 module.exports = router;
