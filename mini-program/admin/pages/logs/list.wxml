@@ -1,0 +1,11 @@
+<view class="container">
+  <view wx:for="{{items}}" wx:key="id" class="card">
+    <view style="display:flex; justify-content:space-between;">
+      <view style="font-weight:bold;">{{item.action}}</view>
+      <view class="label">{{item.created_at}}</view>
+    </view>
+    <view class="label">admin: {{item.admin_openid}}</view>
+    <view wx:if="{{item.target_id}}" class="label">target: {{item.target_type}}#{{item.target_id}}</view>
+  </view>
+  <view wx:if="{{loading}}" class="card">加载中...</view>
+</view>
