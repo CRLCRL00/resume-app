@@ -54,7 +54,7 @@ function coarseFilter(jobs, userForm) {
 module.exports = { coarseFilter };
 ```
 
-#### `services/matchPrompt.js`（读 match_rerank prompt）
+#### `services/matchPrompt.js`（读 match_rerank prompt + 占位符替换）
 
 ```js
 const pool = require('../config/db');
@@ -66,33 +66,39 @@ async function build(resumeContent, jobs) {
   );
   if (!rows.length) throw new AppError(1200, 'match_rerank prompt not configured', 500);
 
-  const prompt = rows[0].content;
-  const system = prompt.replace('{resume}', '').replace('{jobs}', '').trim();
-  const user = JSON.stringify({
-    resume: resumeContent,
-    jobs: jobs.map(j => ({
-      job_id: j.id, title: j.title, company: j.company, city: j.city,
-      salary_min: j.salary_min, salary_max: j.salary_max,
-      degree_required: j.degree_required, experience_required: j.experience_required,
-      skills_required: j.skills_required,
-    })),
-  }, null, 2);
+  const jobsJson = JSON.stringify(jobs.map(j => ({
+    job_id: j.id, title: j.title, company: j.company, city: j.city,
+    salary_min: j.salary_min, salary_max: j.salary_max,
+    degree_required: j.degree_required, experience_required: j.experience_required,
+    skills_required: j.skills_required,
+  })), null, 2);
 
-  return { system, user };
+  // 模板示例：「你是资深HR，简历：{resume} 岗位：{jobs} 严格JSON输出」
+  const fullPrompt = rows[0].content
+    .replace('{resume}', resumeContent)
+    .replace('{jobs}', jobsJson);
+
+  return {
+    system: '你是专业的岗位匹配专家，严格按要求的 JSON 格式输出结果。',
+    user: fullPrompt,
+  };
 }
 
 module.exports = { build };
 ```
 
-#### `services/matchService.js`（两阶段匹配 + 缓存）
+#### `services/matchService.js`（两阶段匹配 + 缓存 + 校验）
 
 ```js
 const pool = require('../config/db');
 const redis = require('../config/redis');
 const rateLimit = require('./rateLimit');
-const { coarseFilter } = require('./jobFilter');
+const { coarseFilter } = require('./jobFilter');  // 兜底 JS 校验
 const { build: buildPrompt } = require('./matchPrompt');
 const llm = require('./llm');
+
+// 学历排序（宽松匹配：用户学历 >= 岗位要求）
+const DEGREE_RANK = { '不限': 0, '高中': 1, '大专': 2, '本科': 3, '硕士': 4, '博士': 5 };
 
 async function match(userId, resumeId) {
   // 1. 取 resume
@@ -106,45 +112,80 @@ async function match(userId, resumeId) {
     ? JSON.parse(resume.source_form)
     : resume.source_form;
 
-  // 2. 限流
+  // 2. 限流（缓存命中由路由层短路，这里只算真实 LLM 调用）
   const rl = await rateLimit.check(`match:${userId}`, 4, 60);
   if (!rl.allowed) throw new AppError(1429, '请求过于频繁，请稍后再试', 429);
 
-  // 3. 粗筛
-  const [allJobs] = await pool.query(
-    'SELECT id, title, company, city, salary_min, salary_max, degree_required, experience_required, skills_required FROM jobs WHERE is_online = 1 AND is_deleted = 0 ORDER BY sort_weight DESC, id ASC'
-  );
-  const filtered = coarseFilter(allJobs, sourceForm);
-  const top5 = filtered.slice(0, 5);
+  // 3. SQL 下推粗筛（city + salary 宽 + 学历宽松 + 经验粗匹配）
+  const userCity = sourceForm.expected?.city || '';
+  const uMin = sourceForm.expected?.salary_min || 0;
+  const uMax = sourceForm.expected?.salary_max || 0;
+  const userDegreeRank = DEGREE_RANK[sourceForm.degree] || 0;
 
-  if (!top5.length) {
+  const sqlFilters = ['is_online = 1', 'is_deleted = 0'];
+  const sqlParams = [];
+  if (userCity) {
+    sqlFilters.push('city = ?');
+    sqlParams.push(userCity);
+  }
+  if (uMax > 0) {
+    sqlFilters.push('salary_min <= ?');
+    sqlParams.push(uMax * 1.5);
+  }
+  if (uMin > 0) {
+    sqlFilters.push('salary_max >= ?');
+    sqlParams.push(uMin * 0.8);
+  }
+  // 学历宽松：job.degree_required rank <= user.degree rank OR 不限
+  sqlFilters.push(`(degree_required = '不限' OR (${userDegreeRank} >= COALESCE(NULLIF(${userDegreeRank}, 0), 0) AND ${userDegreeRank} >= CASE degree_required
+    WHEN '不限' THEN 0 WHEN '高中' THEN 1 WHEN '大专' THEN 2 WHEN '本科' THEN 3 WHEN '硕士' THEN 4 WHEN '博士' THEN 5 ELSE 0 END))`);
+
+  const [candidates] = await pool.query(
+    `SELECT id, title, company, city, salary_min, salary_max, degree_required, experience_required, skills_required
+     FROM jobs WHERE ${sqlFilters.join(' AND ')}
+     ORDER BY sort_weight DESC, id ASC LIMIT 10`,
+    sqlParams
+  );
+
+  // JS 兜底再 filter 一遍（确保 top 5 干净）
+  const filtered = coarseFilter(candidates, sourceForm).slice(0, 5);
+
+  if (!filtered.length) {
     return { results: [], batch_id: null, message: '暂未找到匹配岗位' };
   }
 
   // 4. LLM 精排
   const batchId = `match_${Date.now()}_${userId}_${resumeId}`;
-  const { system, user } = await buildPrompt(resume.content_md, top5);
+  const { system, user } = await buildPrompt(resume.content_md, filtered);
   const llmResp = await llm.chatJson(
     [{ role: 'system', content: system }, { role: 'user', content: user }],
     { maxTokens: 1500, temperature: 0.5 }
   );
 
-  // 5. 写 matches 表（事务外）
-  const results = llmResp.parsed.results || [];
-  if (results.length) {
-    const values = results.map(r => [userId, resumeId, r.job_id, batchId, r.score || 0, r.reason || '']);
+  // 5. 结果校验 + 排序
+  const validJobIds = new Set(filtered.map(j => j.id));
+  const validResults = (llmResp.parsed.results || [])
+    .filter(r => validJobIds.has(r.job_id))
+    .filter(r => typeof r.score === 'number' && r.score >= 0 && r.score <= 100)
+    .map(r => ({ job_id: r.job_id, score: Math.round(r.score), reason: String(r.reason || '').slice(0, 60) }))
+    .sort((a, b) => b.score - a.score)
+    .slice(0, 5);
+
+  // 6. 写 matches 表
+  if (validResults.length) {
+    const values = validResults.map(r => [userId, resumeId, r.job_id, batchId, r.score, r.reason]);
     await pool.query(
       'INSERT INTO matches (user_id, resume_id, job_id, match_batch_id, score, reason) VALUES ?',
       [values]
     );
   }
 
-  // 6. 缓存 batch_id (24h)
+  // 7. 缓存 batch_id (24h)
   await redis.set(`match:batch:${userId}:${resumeId}`, batchId, 'EX', 24 * 3600);
 
-  // 7. 关联 job 详情（title/company/city/salary）
-  const jobMap = new Map(top5.map(j => [j.id, j]));
-  const enriched = results
+  // 8. 关联 job 详情
+  const jobMap = new Map(filtered.map(j => [j.id, j]));
+  const enriched = validResults
     .map(r => {
       const j = jobMap.get(r.job_id);
       if (!j) return null;
@@ -159,7 +200,7 @@ async function match(userId, resumeId) {
   return { results: enriched, batch_id: batchId };
 }
 
-// 24h 复用：检查同 resume_id 最近 batch_id
+// 24h 复用
 async function checkCache(userId, resumeId) {
   const batchId = await redis.get(`match:batch:${userId}:${resumeId}`);
   if (!batchId) return null;
@@ -168,7 +209,7 @@ async function checkCache(userId, resumeId) {
     `SELECT m.job_id, m.score, m.reason, j.title, j.company, j.city, j.salary_min, j.salary_max
      FROM matches m JOIN jobs j ON j.id = m.job_id
      WHERE m.match_batch_id = ? AND m.user_id = ?
-     ORDER BY m.score DESC`,
+     ORDER BY m.score DESC LIMIT 5`,
     [batchId, userId]
   );
   if (!rows.length) return null;
@@ -183,18 +224,7 @@ async function checkCache(userId, resumeId) {
   };
 }
 
-// 历史匹配列表
-async function history(userId, limit = 10) {
-  const [rows] = await pool.query(
-    `SELECT DISTINCT match_batch_id, MAX(created_at) AS created_at
-     FROM matches WHERE user_id = ?
-     GROUP BY match_batch_id ORDER BY created_at DESC LIMIT ?`,
-    [userId, limit]
-  );
-  return rows;
-}
-
-module.exports = { match, checkCache, history };
+module.exports = { match, checkCache };
 ```
 
 ### 2.2 新增 routes
@@ -213,21 +243,13 @@ router.post('/', userAuth, async (req, res, next) => {
     const { resume_id } = req.body;
     if (!resume_id) throw new AppError(1000, 'resume_id required', 400);
 
-    // 先检查缓存
+    // 先查缓存（命中不扣限流）
     const cached = await matchService.checkCache(req.user.userId, resume_id);
-    if (cached) {
-      return res.json({ code: 0, data: cached });
-    }
+    if (cached) return res.json({ code: 0, data: cached });
 
+    // 缓存未命中 → 真实 LLM 调用 → 扣限流
     const result = await matchService.match(req.user.userId, resume_id);
     res.json({ code: 0, data: result });
-  } catch (err) { next(err); }
-});
-
-router.get('/history', userAuth, async (req, res, next) => {
-  try {
-    const history = await matchService.history(req.user.userId);
-    res.json({ code: 0, data: { items: history } });
   } catch (err) { next(err); }
 });
 
@@ -250,12 +272,10 @@ router.get('/:id', async (req, res, next) => {
       `SELECT id, title, company, city, salary_min, salary_max,
               degree_required, experience_required, skills_required, description_md,
               is_online, is_deleted, created_at
-       FROM jobs WHERE id = ? LIMIT 1`,
+       FROM jobs WHERE id = ? AND is_online = 1 AND is_deleted = 0 LIMIT 1`,
       [id]
     );
-    if (!rows.length || rows[0].is_deleted) {
-      throw new AppError(1004, 'job not found', 404);
-    }
+    if (!rows.length) throw new AppError(1004, 'job not found', 404);
     const j = rows[0];
     if (typeof j.skills_required === 'string') j.skills_required = JSON.parse(j.skills_required);
     res.json({ code: 0, data: j });
@@ -301,9 +321,13 @@ const { request } = require('../../utils/request');
 const { loadingStages } = require('../../utils/loading');
 
 Page({
-  data: { results: [], batchId: '', loading: true, error: '', stage: 0 },
+  data: { results: [], batchId: '', loading: true, error: '', message: '' },
 
   onShow() { this.load(); },
+
+  onPullDownRefresh() {
+    this.load();
+  },
 
   async load() {
     // 先取 resume_id
@@ -313,6 +337,7 @@ Page({
       this.match(resumeId);
     } catch (e) {
       this.setData({ loading: false, error: '请先生成简历' });
+      wx.stopPullDownRefresh();
     }
   },
 
@@ -326,22 +351,28 @@ Page({
       const res = await request({ url: '/match', method: 'POST', data: { resume_id: resumeId } });
       wx.hideLoading();
       clearTimeout(timer1); clearTimeout(timer2);
+      wx.stopPullDownRefresh();
       this.setData({
         loading: false,
         results: res.data.results,
         batchId: res.data.batch_id,
-        message: res.data.message,
+        message: res.data.message || '',
       });
     } catch (e) {
       wx.hideLoading();
       clearTimeout(timer1); clearTimeout(timer2);
+      wx.stopPullDownRefresh();
       this.setData({ loading: false, error: '匹配失败，请重试' });
     }
   },
 
   goDetail(e) {
-    const id = e.currentTarget.dataset.id;
-    wx.navigateTo({ url: `/pages/match/detail?id=${id}` });
+    const { id, score, reason } = e.currentTarget.dataset;
+    wx.navigateTo({ url: `/pages/match/detail?id=${id}&score=${score}&reason=${encodeURIComponent(reason || '')}` });
+  },
+
+  goForm() {
+    wx.navigateTo({ url: '/pages/form/form' });
   },
 });
 ```
@@ -357,21 +388,31 @@ Page({
   <view wx:elif="{{results.length === 0}}" class="card">
     <view>{{message || '暂未找到匹配岗位'}}</view>
     <view class="label">试试调整期望城市或薪资范围</view>
+    <view class="btn-primary" bindtap="goForm" style="margin-top:24rpx;">修改期望</view>
   </view>
   <view wx:else>
-    <view wx:for="{{results}}" wx:key="job_id" class="card" bindtap="goDetail" data-id="{{item.job_id}}">
+    <view wx:for="{{results}}" wx:key="job_id" class="card" bindtap="goDetail" data-id="{{item.job_id}}" data-score="{{item.score}}" data-reason="{{item.reason}}">
       <view style="display:flex; justify-content:space-between;">
         <view style="font-weight:bold;">{{item.title}}</view>
         <view style="font-size:36rpx; color:{{item.score >= 80 ? '#07c160' : (item.score >= 60 ? '#ff9800' : '#999')}};">{{item.score}}</view>
       </view>
       <view class="label">{{item.company}} · {{item.city}} · {{item.salary_min}}-{{item.salary_max}}K</view>
-      <view wx:if="{{item.reason}}" class="label" style="margin-top:8rpx; color:#666;">{{item.reason}}</view>
+      <view wx:if="{{item.reason}}" class="label" style="margin-top:8rpx; color:#666;">💡 {{item.reason}}</view>
     </view>
   </view>
 </view>
 ```
 
-### 3.3 `pages/match/detail` 页面
+`list.json`（开启下拉刷新）：
+```json
+{
+  "navigationBarTitleText": "匹配结果",
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#f7f8fa"
+}
+```
+
+### 3.3 `pages/match/detail` 页面（带 score + reason）
 
 `detail.js`：
 ```js
@@ -379,17 +420,21 @@ const { request } = require('../../utils/request');
 const { mdToHtml } = require('../../utils/format');
 
 Page({
-  data: { job: null, mdHtml: '', loading: true },
+  data: { job: null, mdHtml: '', score: 0, reason: '', loading: true },
 
-  onLoad(query) { this.load(query.id); },
+  onLoad(query) {
+    this.load(query.id, query.score, query.reason);
+  },
 
-  async load(id) {
+  async load(id, score, reason) {
     try {
       const res = await request({ url: `/jobs/${id}` });
       const job = res.data;
       this.setData({
         loading: false,
         job,
+        score: parseInt(score || 0, 10),
+        reason: decodeURIComponent(reason || ''),
         mdHtml: mdToHtml(job.description_md || ''),
       });
     } catch (e) {
@@ -405,7 +450,16 @@ Page({
   <view wx:if="{{loading}}" class="card">加载中...</view>
   <view wx:elif="{{!job}}" class="card">岗位不存在</view>
   <view wx:else>
-    <view class="card">
+    <view class="card" wx:if="{{score > 0}}">
+      <view style="display:flex; justify-content:space-between; align-items:center;">
+        <view style="font-size:36rpx; font-weight:bold;">{{job.title}}</view>
+        <view style="font-size:48rpx; font-weight:bold; color:{{score >= 80 ? '#07c160' : (score >= 60 ? '#ff9800' : '#999')}};">{{score}}</view>
+      </view>
+      <view class="label">{{job.company}} · {{job.city}}</view>
+      <view class="label">{{job.salary_min}}-{{job.salary_max}}K · {{job.degree_required}} · {{job.experience_required}}</view>
+      <view wx:if="{{reason}}" class="label" style="margin-top:16rpx; color:#07c160;">💡 {{reason}}</view>
+    </view>
+    <view class="card" wx:else>
       <view style="font-size:36rpx; font-weight:bold;">{{job.title}}</view>
       <view class="label">{{job.company}} · {{job.city}}</view>
       <view class="label">{{job.salary_min}}-{{job.salary_max}}K · {{job.degree_required}} · {{job.experience_required}}</view>
@@ -420,6 +474,19 @@ Page({
   </view>
 </view>
 ```
+
+**列表跳详情传 score+reason**：list.wxml 的 `bindtap` 改成：
+```xml
+<view ... bindtap="goDetail" data-id="{{item.job_id}}" data-score="{{item.score}}" data-reason="{{item.reason}}">
+```
+list.js 的 `goDetail`：
+```js
+goDetail(e) {
+  const { id, score, reason } = e.currentTarget.dataset;
+  wx.navigateTo({ url: `/pages/match/detail?id=${id}&score=${score}&reason=${encodeURIComponent(reason)}` });
+}
+```
+detail.js 的 `onLoad` 改成 `onLoad(query) { this.load(query.id, query.score, query.reason); }`，load 里用 query.score / query.reason。
 
 ### 3.4 `app.json` 加 2 页
 
@@ -507,3 +574,33 @@ Page({
 
 **决策 6**（设计选择）：jobs 详情公开（不需 userAuth） — 设计选择
 **决策 7**（设计选择）：新 `routes/match.js`（不污染 resume.js） — 设计选择
+
+**决策 8**（review 采纳）：SQL 下推粗筛（不用 JS 全量过滤） — review 采纳
+**决策 9**（review 采纳）：LLM 返回结果做合法性校验（job_id in 候选 + score 0-100 + 排序 + slice 5） — review 采纳
+**决策 10**（review 采纳）：matches 表 `match_batch_id` 加单独索引 — review 采纳（schema 补丁）
+**决策 11**（review 采纳）：粗筛加学历宽松 + 经验粗匹配 — review 采纳
+**决策 12**（review 采纳）：限流前置（缓存命中不扣限流） — review 采纳（路由先 checkCache）
+**决策 13**（review 采纳）：详情页带 score + reason（query 传） — review 采纳
+**决策 14**（review 采纳）：列表页下拉刷新 — review 采纳
+**决策 15**（review 采纳）：空状态「修改期望」按钮 — review 采纳
+**决策 16**（review 采纳）：history 接口 YAGNI（移出 Phase 5） — review 采纳
+
+---
+
+## §9 配套修改
+
+### 9.1 schema.sql 增加索引（Phase 5 部署时打补丁）
+
+```sql
+-- matches 表新增索引
+ALTER TABLE matches ADD INDEX idx_match_batch (match_batch_id);
+```
+
+（已有 `idx_user_resume_batch (user_id, resume_id, match_batch_id)` 复合索引，但单查 batch_id 不走复合索引前缀，加独立索引）
+
+### 9.2 经验粗匹配 SQL（暂用模糊）
+
+Phase 5 MVP 简化处理：
+- 岗位经验要求 `1-3年`：用户填 0/1/2/3/5+ 都过
+- SQL 难精准表达区间，**MVP 跳过经验过滤**（靠 LLM 评分时考虑）
+- 学历宽松走 SQL（学位排序）
