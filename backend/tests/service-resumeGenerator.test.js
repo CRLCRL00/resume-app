@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { generate } = require('../src/services/resumeGenerator');
 const { chat } = require('../src/services/llm');
+const pool = require('../src/config/db');
 
 test('generate calls llm.chat with system+user and trims', async () => {
   const orig = chat;
@@ -50,4 +51,8 @@ test('generate uses full prompt as system (no duplicate)', async () => {
   assert.match(captured[1].content, /^\{[\s\S]*\}$/);
 
   require('../src/services/llm').chat = orig;
+});
+
+test.after(async () => {
+  await pool.end();
 });

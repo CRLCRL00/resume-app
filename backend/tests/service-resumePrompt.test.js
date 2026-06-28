@@ -37,6 +37,9 @@ test('build removes {user_form} placeholder completely', async () => {
 });
 
 test.after(async () => {
-  await pool.query("DELETE FROM prompts WHERE code = 'resume_generate' AND name = 'test'");
+  // 恢复默认 seed（避免污染后续测试）
+  await pool.query(
+    "UPDATE prompts SET content = '# 角色\\n你是一位资深 HR，专长把零散经历改写成有冲击力的简历段落。\\n\\n# 任务\\n根据用户提供的资料，生成一份结构化中文简历，输出 Markdown。\\n\\n# 用户资料\\n{user_form}\\n\\n# 输出格式（严格遵守）\\n```markdown\\n# {{姓名}}\\n\\n## 个人概况\\n- 期望城市：...\\n- 期望岗位：...\\n- 期望薪资：...K/月\\n\\n## 教育背景\\n...\\n\\n## 工作经历\\n...\\n\\n## 技能清单\\n...\\n\\n## 项目亮点\\n...\\n```\\n\\n# 约束\\n- 篇幅 ≤ 600 字\\n- 用动词开头，避免空洞形容\\n- 技能点必须从用户资料里出现，不要编造' WHERE code = 'resume_generate' AND is_active = 1"
+  );
   await pool.end();
 });
