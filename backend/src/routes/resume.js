@@ -3,7 +3,8 @@ const router = express.Router();
 const { userAuth } = require('../middleware/auth');
 const { resumeSchema } = require('../middleware/validate');
 const { AppError } = require('../middleware/errorHandler');
-const { renderResume } = require('../services/resumeTemplate');
+const resumeGenerator = require('../services/resumeGenerator');
+const rateLimit = require('../services/rateLimit');
 const pool = require('../config/db');
 
 router.post('/save', userAuth, async (req, res, next) => {
@@ -39,20 +40,37 @@ router.post('/generate', userAuth, async (req, res, next) => {
     if (!resume_id) throw new AppError(1000, 'resume_id required', 400);
 
     const userId = req.user.userId;
+
+    // 1. 限流
+    const rl = await rateLimit.check(`generate:${userId}`, 4, 60);
+    if (!rl.allowed) {
+      throw new AppError(1429, '请求过于频繁，请稍后再试', 429);
+    }
+
+    // 2. 取 resume（含 content_md）
     const [rows] = await pool.query(
-      'SELECT id, source_form FROM resumes WHERE id = ? AND user_id = ? LIMIT 1',
+      'SELECT id, source_form, content_md FROM resumes WHERE id = ? AND user_id = ? LIMIT 1',
       [resume_id, userId]
     );
     if (!rows.length) throw new AppError(1004, 'resume not found', 404);
 
-    const sourceForm = typeof rows[0].source_form === 'string'
-      ? JSON.parse(rows[0].source_form)
-      : rows[0].source_form;
-    const contentMd = renderResume(sourceForm);
+    const row = rows[0];
+    const sourceForm = typeof row.source_form === 'string'
+      ? JSON.parse(row.source_form)
+      : row.source_form;
 
+    // 3. DB 缓存命中
+    if (row.content_md && row.content_md.length > 0) {
+      return res.json({ code: 0, data: { resume_id, content_md: row.content_md, cached: true } });
+    }
+
+    // 4. 真调 LLM
+    const contentMd = await resumeGenerator.generate(sourceForm);
+
+    // 5. 写 DB
     await pool.query('UPDATE resumes SET content_md = ? WHERE id = ?', [contentMd, resume_id]);
 
-    res.json({ code: 0, data: { resume_id, content_md: contentMd } });
+    res.json({ code: 0, data: { resume_id, content_md: contentMd, cached: false } });
   } catch (err) {
     next(err);
   }
