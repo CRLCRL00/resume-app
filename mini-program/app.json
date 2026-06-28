@@ -4,10 +4,28 @@
     "pages/form/form",
     "pages/preview/preview"
   ],
+  "subpackages": [{
+    "root": "admin",
+    "pages": [
+      "pages/jobs/list",
+      "pages/jobs/edit",
+      "pages/prompts/list",
+      "pages/prompts/edit",
+      "pages/logs/list"
+    ]
+  }],
   "window": {
     "backgroundTextStyle": "light",
     "navigationBarBackgroundColor": "#ffffff",
     "navigationBarTitleText": "简历助手",
     "navigationBarTextStyle": "black"
+  },
+  "tabBar": {
+    "color": "#999",
+    "selectedColor": "#07c160",
+    "list": [
+      { "pagePath": "pages/index/index", "text": "首页" },
+      { "pagePath": "admin/pages/jobs/list", "text": "管理" }
+    ]
   }
 }
