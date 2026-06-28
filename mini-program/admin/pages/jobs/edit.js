@@ -1,5 +1,5 @@
 const { request } = require('../../../utils/request');
-const { parseSkills } = require('../../../utils/validate');
+const { parseSkills } = require('../../../utils/format');
 
 Page({
   data: {

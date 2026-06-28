@@ -39,8 +39,8 @@ Page({
 
   async deleteJob(e) {
     const id = e.currentTarget.dataset.id;
-    const ok = await wx.showModal({ title: '确认删除？', content: '软删除，可恢复' }).then(r => r.confirm);
-    if (!ok) return;
+    const modal = await wx.showModal({ title: '确认删除？', content: '软删除，可恢复' });
+    if (!modal.confirm) return;
     try {
       await request({ url: `/admin/jobs/${id}`, method: 'DELETE' });
       this.setData({ page: 1 });
