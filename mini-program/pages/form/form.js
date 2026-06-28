@@ -99,15 +99,25 @@ Page({
       return;
     }
 
-    wx.showLoading({ title: '生成中...' });
+    // 3 段 loading
+    const stages = require('../../utils/loading').loadingStages();
+    wx.showLoading({ title: stages[0].text, mask: true });
+    const timer1 = setTimeout(() => wx.showLoading({ title: stages[1].text, mask: true }), stages[1].at);
+    const timer2 = setTimeout(() => wx.showLoading({ title: stages[2].text, mask: true }), stages[2].at);
+
     try {
       const saveRes = await request({ url: '/resume/save', method: 'POST', data: { source_form: form } });
       const resumeId = saveRes.data.resume_id;
       await request({ url: '/resume/generate', method: 'POST', data: { resume_id: resumeId } });
       wx.hideLoading();
+      clearTimeout(timer1);
+      clearTimeout(timer2);
       wx.navigateTo({ url: '/pages/preview/preview' });
     } catch (e) {
       wx.hideLoading();
+      clearTimeout(timer1);
+      clearTimeout(timer2);
+      // request.js 已 toast 过错误
     }
   },
 });

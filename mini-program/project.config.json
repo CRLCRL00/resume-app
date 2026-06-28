@@ -34,5 +34,6 @@
     "include": []
   },
   "isGameTourist": false,
-  "editorSetting": {}
+  "editorSetting": {},
+  "libVersion": "3.16.1"
 }

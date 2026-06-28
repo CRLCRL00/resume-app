@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(node --test tests/service-resumeGenerator.test.js)",
+      "Bash(echo \"=== EXIT $? ===\")",
+      "Bash(node -e ' *)",
+      "Bash(node --test --test-reporter=tap tests/resume-generate.test.js)",
+      "Bash(cmd //c \"tasklist | findstr node\")",
+      "Bash(cmd //c \"taskkill /F /IM node.exe /T\")",
+      "Bash(npx eslint *)",
+      "Bash(node --test tests/route-resume-generate-llm.test.js)",
+      "Bash(git status *)",
+      "Bash(git rm *)",
+      "Bash(node --test tests/*.test.js)",
+      "Bash(node --test --test-reporter=tap tests/health.test.js)",
+      "Bash(timeout 30 node --test tests/route-resume-generate-llm.test.js)",
+      "Bash(timeout 60 node --test --test-concurrency=1 tests/health.test.js tests/route-auth.test.js)",
+      "Bash(node --test tests/loading.test.js)",
+      "Bash(node --test tests/loading.test.js tests/validate.test.js tests/format.test.js)"
+    ]
+  }
+}

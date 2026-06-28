@@ -1,5 +1,9 @@
 <view class="container">
   <view wx:if="{{loading}}" class="card">加载中...</view>
+  <view wx:elif="{{error}}" class="card">
+    <view>简历加载失败</view>
+    <view class="btn-primary" bindtap="goForm" style="margin-top:24rpx;">去重新填写</view>
+  </view>
   <view wx:elif="{{!contentMd}}" class="card">
     <view>暂无简历</view>
     <view class="btn-primary" bindtap="goForm" style="margin-top:24rpx;">去填写</view>
