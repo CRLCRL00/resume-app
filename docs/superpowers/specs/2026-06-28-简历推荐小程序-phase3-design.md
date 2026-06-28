@@ -46,16 +46,18 @@ async function build(sourceForm) {
   if (!rows.length) throw new AppError(1200, 'prompt not configured', 500);
 
   const promptContent = rows[0].content;
-  const userMessage = promptContent.replace('{user_form}', JSON.stringify(sourceForm, null, 2));
+  // 整个 prompt 内容（含 # 角色 / # 任务 / # 输出格式 / # 约束）作为 system
+  // {user_form} 替换后作为 user message
+  const system = promptContent.replace('{user_form}', '').trim();
+  const user = JSON.stringify(sourceForm, null, 2);
 
-  return {
-    system: '你是一位资深 HR，专长把零散经历改写成有冲击力的简历段落。',
-    user: userMessage,
-  };
+  return { system, user };
 }
 
 module.exports = { build };
 ```
+
+**说明**：避免 system 重复（之前 hardcode 一句「资深 HR」+ seed 里也有「资深 HR」= 两次）。整个 prompt 模板作为 system，`user_form` JSON 作为 user。
 
 ### 2.2 新增 `services/rateLimit.js`
 
@@ -239,7 +241,7 @@ async load() {
 
 | 文件 | case | 备注 |
 |------|------|------|
-| `tests/service-resumePrompt.test.js` | 4 | DB mock + `{user_form}` 替换 |
+| `tests/service-resumePrompt.test.js` | 4 | DB mock + `{user_form}` 替换 + system/user 分离 |
 | `tests/service-rateLimit.test.js` | 4 | Redis INCR/EXPIRE mock |
 | `tests/service-resumeGenerator.test.js` | 3 | llm mock + prompt 调用链 |
 | `tests/route-resume-generate-llm.test.js` | 7 | 缓存命中/未命中/限流/LLM 成功/LLM 失败/参数错/未授权 |
