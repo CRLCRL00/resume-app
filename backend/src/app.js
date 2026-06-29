@@ -6,6 +6,7 @@ const adminRouter = require('./routes/admin');
 const resumeRouter = require('./routes/resume');
 const matchRouter = require('./routes/match');
 const jobsRouter = require('./routes/jobs');
+const legalRouter = require('./routes/legal');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -20,6 +21,7 @@ function createApp() {
   app.use('/api/resume', resumeRouter);
   app.use('/api/match', matchRouter);
   app.use('/api/jobs', jobsRouter);
+  app.use('/api/legal', legalRouter);
 
   app.use(notFoundHandler);
   app.use(errorHandler);
