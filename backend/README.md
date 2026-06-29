@@ -18,6 +18,12 @@ npm run dev
 npm test
 ```
 
+## 测试要求
+
+`npm test` 使用 `--test-force-exit`（Node 22+ 特性）。生产脚本 `start` / `dev` 不需要 Node 22+。
+
+Node 22+ 安装方法：https://nodejs.org/zh-cn/download 或 `nvm install 22`。
+
 ## 部署
 
 见 `docs/operations/deploy.md`。
