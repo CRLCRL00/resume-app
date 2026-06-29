@@ -9,10 +9,10 @@ Page({
 
   async checkResume() {
     try {
-      const res = await request({ url: '/resume/current' });
+      const res = await request({ url: '/resume/current', silent: true });
       if (res.code === 0) this.setData({ hasResume: true });
     } catch (e) {
-      // 404 or other -> no resume
+      // 401/404/其他: 无 resume 或未登录 — 都视为无
       this.setData({ hasResume: false });
     }
   },

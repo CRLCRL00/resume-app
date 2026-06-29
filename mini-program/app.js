@@ -24,7 +24,11 @@ App({
     }
 
     const token = wx.getStorageSync('token');
-    if (token) return;
+    if (token) {
+      // 已有 token：检查 admin 状态供 'me' 页用
+      this.checkAdmin();
+      return;
+    }
 
     // 真机：wx.login 拿 code 换 token
     // 模拟器：跳过登录，开发者可手动在控制跑 setToken 调试
@@ -34,9 +38,6 @@ App({
     }
 
     this.login();
-
-    // 先把 index=1（管理 tab）隐藏，等 checkAdmin 返回再决定是否显示
-    setTimeout(() => this.checkAdmin(), 1500);
   },
 
   login() {
@@ -50,9 +51,16 @@ App({
             if (res.data?.code === 0) {
               wx.setStorageSync('token', res.data.data.token);
               wx.setStorageSync('user', res.data.data.user);
+              this.checkAdmin();
             }
           },
+          fail: () => {
+            // 网络错（IDE 沙箱常见），不弹 toast
+          },
         });
+      },
+      fail: () => {
+        // IDE 模拟器 wx.login fail 通常因 sandbox
       },
     });
   },
@@ -67,18 +75,13 @@ App({
     try {
       const res = await require('./utils/request').request({ url: '/admin/check' });
       if (res.data?.isAdmin) {
-        wx.setTabBarItem({
-          index: 1,
-          pagePath: 'admin/pages/jobs/list',
-          text: '管理',
-        });
-        wx.showTabBar({ index: 1, animation: false });
+        wx.setStorageSync('is_admin', true);
       } else {
-        wx.hideTabBar({ index: 1, animation: false });
+        wx.setStorageSync('is_admin', false);
       }
     } catch (e) {
-      // 非 admin 或网络错，不显示
-      wx.hideTabBar({ index: 1, animation: false });
+      // 非 admin 或网络错，不存储
+      wx.setStorageSync('is_admin', false);
     }
   },
 });
