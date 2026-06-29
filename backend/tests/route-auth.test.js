@@ -54,4 +54,5 @@ test('POST /api/auth/login with wechat error returns 400', async () => {
 test.after(async () => {
   require('../src/services/wechat').code2session = origCode2session;
   await pool.end();
+  await require('../src/config/redis').quit();
 });

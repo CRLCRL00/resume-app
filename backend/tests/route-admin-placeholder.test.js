@@ -37,4 +37,5 @@ test('GET /api/admin/check returns 401 without token', async () => {
 
 test.after(async () => {
   await pool.end();
+  await require('../src/config/redis').quit();
 });

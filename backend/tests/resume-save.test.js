@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const { createApp } = require('../src/app');
+const pool = require('../src/config/db');
 
 const validForm = {
   source_form: {
@@ -45,7 +46,6 @@ test('POST /api/resume/save with salary_max < salary_min returns 400', async () 
 
 test('POST /api/resume/save with valid form inserts row', async () => {
   const token = require('../src/services/token').sign({ userId: 1, openid: 'x' });
-  const pool = require('../src/config/db');
   await pool.query("DELETE FROM resumes WHERE user_id = 1");
 
   const res = await request(createApp())
@@ -59,5 +59,9 @@ test('POST /api/resume/save with valid form inserts row', async () => {
   assert.ok(res.body.data.created_at);
 
   await pool.query("DELETE FROM resumes WHERE user_id = 1");
+});
+
+test.after(async () => {
   await pool.end();
+  await require('../src/config/redis').quit();
 });

@@ -45,5 +45,9 @@ test('GET /api/resume/current with active resume returns content', async () => {
   assert.equal(res.body.data.source_form.name, 'Current');
 
   await pool.query('DELETE FROM resumes WHERE id = ?', [r.insertId]);
+});
+
+test.after(async () => {
   await pool.end();
+  await require('../src/config/redis').quit();
 });

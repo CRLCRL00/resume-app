@@ -19,3 +19,9 @@ test('GET /api/test/llm returns ok with token info', async () => {
 
   require('../src/services/llm').chat = orig;
 });
+
+test.after(async () => {
+  const pool = require('../src/config/db');
+  await pool.end();
+  await require('../src/config/redis').quit();
+});

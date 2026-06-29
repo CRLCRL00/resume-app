@@ -18,3 +18,7 @@ test('GET /api/health on unknown route returns 404', async () => {
   assert.equal(res.status, 404);
   assert.equal(res.body.code, 1404);
 });
+
+test.after(async () => {
+  // health endpoint doesn't use pool/redis, but include for consistency
+});
