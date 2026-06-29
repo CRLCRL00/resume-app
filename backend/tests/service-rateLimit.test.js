@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const redis = require('../src/config/redis');
 const { check } = require('../src/services/rateLimit');
+const { cleanup } = require('./helpers/db');
 
 const key = 'test:rl:' + Date.now();
 
@@ -45,5 +46,5 @@ test('check fails open on redis error', async () => {
 
 test.after(async () => {
   await redis.del(key);
-  await redis.quit();
+  await cleanup();
 });

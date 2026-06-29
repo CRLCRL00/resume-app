@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const redis = require('../src/config/redis');
+const { getRedis, cleanup } = require('./helpers/db');
+const redis = getRedis();
 
 test('redis can set and get', async () => {
   await redis.set('test:hello', 'world', 'EX', 10);
@@ -10,5 +11,5 @@ test('redis can set and get', async () => {
 });
 
 test.after(async () => {
-  await redis.quit();
+  await cleanup();
 });

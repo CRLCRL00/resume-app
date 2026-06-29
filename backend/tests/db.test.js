@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const pool = require('../src/config/db');
+const { getPool, cleanup } = require('./helpers/db');
+const pool = getPool();
 
 test('db pool can query', async () => {
   const [rows] = await pool.query('SELECT 1 AS n');
@@ -8,5 +9,5 @@ test('db pool can query', async () => {
 });
 
 test.after(async () => {
-  await pool.end();
+  await cleanup();
 });
