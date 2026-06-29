@@ -1,7 +1,8 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const pool = require('../src/config/db');
-const redis = require('../src/config/redis');
+const { getPool, getRedis, cleanup } = require('./helpers/db');
+const pool = getPool();
+const redis = getRedis();
 const llm = require('../src/services/llm');
 const matchService = require('../src/services/matchService');
 
@@ -14,6 +15,10 @@ test.before(async () => {
   await pool.query("DELETE FROM matches WHERE user_id = ?", [TEST_USER]);
   await pool.query("DELETE FROM resumes WHERE user_id = ?", [TEST_USER]);
   await pool.query("DELETE FROM jobs WHERE title = 'match_test_job'");
+  await redis.del(`match:${TEST_USER}`);
+});
+
+test.beforeEach(async () => {
   await redis.del(`match:${TEST_USER}`);
 });
 
@@ -117,6 +122,5 @@ test.after(async () => {
   await pool.query("DELETE FROM resumes WHERE user_id = ?", [TEST_USER]);
   await pool.query("DELETE FROM jobs WHERE title = 'match_test_job'");
   await pool.query("DELETE FROM users WHERE openid = ?", [TEST_OPENID]);
-  await pool.end();
-  await redis.quit();
+  await cleanup();
 });
