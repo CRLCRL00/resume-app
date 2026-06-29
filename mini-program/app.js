@@ -1,7 +1,28 @@
 // 工具栏 → 详情 → 本地设置 → 勾「不校验合法域名」才能访问 https://43.139.176.199
 // 真机预览时 wx.login 自动跑，模拟器 timeout 所以跳过
 App({
+  globalData: {
+    userInfo: null,
+    privacyAccepted: false,
+  },
+
   onLaunch() {
+    // 隐私同意状态
+    const accepted = wx.getStorageSync('privacy_accepted');
+    this.globalData.privacyAccepted = !!accepted;
+
+    // 延迟显示让首页先加载
+    if (!accepted) {
+      setTimeout(() => {
+        const pages = getCurrentPages();
+        if (pages.length > 0) {
+          const cur = pages[pages.length - 1];
+          const popup = cur.selectComponent('#privacy-popup');
+          if (popup) popup.show();
+        }
+      }, 500);
+    }
+
     const token = wx.getStorageSync('token');
     if (token) return;
 

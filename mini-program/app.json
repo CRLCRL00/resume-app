@@ -4,7 +4,9 @@
     "pages/form/form",
     "pages/preview/preview",
     "pages/match/list",
-    "pages/match/detail"
+    "pages/match/detail",
+    "pages/legal/privacy",
+    "pages/legal/terms"
   ],
   "subpackages": [{
     "root": "admin",

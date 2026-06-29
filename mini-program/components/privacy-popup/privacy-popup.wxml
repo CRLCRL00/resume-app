@@ -1,0 +1,16 @@
+<view class="popup-mask" wx:if="{{visible}}">
+  <view class="popup-card">
+    <view class="popup-title">用户协议与隐私政策</view>
+    <view class="popup-content">
+      欢迎使用「智能简历助手」。在使用前，请阅读并同意
+      <text class="link" bindtap="onTapPrivacy">《隐私协议》</text>
+      与
+      <text class="link" bindtap="onTapTerms">《服务条款》</text>
+      。我们将仅收集简历匹配所需的最小信息（微信 openid、您填写的简历、IP），数据存储于自有服务器，第三方共享仅 DeepSeek（用于 AI 简历生成）。
+    </view>
+    <view class="popup-actions">
+      <button class="btn-reject" bindtap="onReject">不同意</button>
+      <button class="btn-accept" bindtap="onAccept">同意并继续</button>
+    </view>
+  </view>
+</view>
