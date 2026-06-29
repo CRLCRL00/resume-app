@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const { createApp } = require('../src/app');
 const { sign } = require('../src/services/token');
-const pool = require('../src/config/db');
+const { getPool, cleanup } = require('./helpers/db');
+const pool = getPool();
 
 // 临时 admin openid（测试完清掉）
 const ADMIN_OPENID = 'admin_phase4_test';
@@ -136,5 +137,5 @@ test.after(async () => {
   await pool.query("DELETE FROM jobs WHERE title = 'test-job' OR title = 'updated'");
   await pool.query("DELETE FROM admins WHERE openid = ?", [ADMIN_OPENID]);
   await pool.query("DELETE FROM admin_operation_logs WHERE admin_openid = ?", [ADMIN_OPENID]);
-  await pool.end();
+  await cleanup();
 });

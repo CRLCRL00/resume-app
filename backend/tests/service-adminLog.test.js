@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const pool = require('../src/config/db');
+const { getPool, cleanup } = require('./helpers/db');
+const pool = getPool();
 const { record } = require('../src/services/adminLog');
 
 test('record inserts log with all fields', async () => {
@@ -39,5 +40,5 @@ test('record handles numeric target_id by stringifying', async () => {
 
 test.after(async () => {
   await pool.query("DELETE FROM admin_operation_logs WHERE admin_openid IN ('test_admin_log', 'test_null', 'test_num')");
-  await pool.end();
+  await cleanup();
 });
