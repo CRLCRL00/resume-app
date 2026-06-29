@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { getPool, getRedis, cleanup } = require('./helpers/db');
+const { stubChatJson, restoreAll } = require('./helpers/llm');
 const pool = getPool();
 const redis = getRedis();
 const llm = require('../src/services/llm');
@@ -19,6 +20,7 @@ test.before(async () => {
 });
 
 test.beforeEach(async () => {
+  restoreAll();
   await redis.del(`match:${TEST_USER}`);
 });
 
@@ -38,9 +40,13 @@ async function insertResume(contentMd = '') {
 }
 
 test('match returns empty when no candidates', async () => {
+  // Defensive cleanup: clear any 深圳 jobs (other than the test job) that could match
+  await pool.query("DELETE FROM jobs WHERE city = '深圳' AND title <> 'match_test_job'");
   await pool.query("DELETE FROM jobs WHERE title = 'match_test_job'");
   await pool.query("DELETE FROM matches WHERE user_id = ?", [TEST_USER]);
   await redis.del(`match:batch:${TEST_USER}:1`);
+  // Defensive stub: even if coarseFilter returns candidates, no real LLM call
+  stubChatJson(async () => ({ parsed: { results: [] }, usage: {} }));
   const resumeId = await insertResume('');
   const result = await matchService.match(TEST_USER, resumeId);
   assert.deepEqual(result.results, []);
@@ -57,11 +63,10 @@ test('match calls LLM and stores results', async () => {
   await redis.del(`match:batch:${TEST_USER}:2`);
   const resumeId = await insertResume('# mock resume');
 
-  const orig = llm.chatJson;
-  llm.chatJson = async () => ({
+  stubChatJson(async () => ({
     parsed: { results: [{ job_id: jobId, score: 85, reason: 'good match' }] },
     usage: { total_tokens: 100 },
-  });
+  }));
 
   const result = await matchService.match(TEST_USER, resumeId);
   assert.ok(result.results.length >= 1);
@@ -72,7 +77,6 @@ test('match calls LLM and stores results', async () => {
   assert.ok(rows.length >= 1);
   assert.equal(rows[0].score, 85);
 
-  llm.chatJson = orig;
   await pool.query('DELETE FROM jobs WHERE id = ?', [jobId]);
   await pool.query('DELETE FROM resumes WHERE id = ?', [resumeId]);
   await pool.query('DELETE FROM matches WHERE user_id = ?', [TEST_USER]);
@@ -87,22 +91,20 @@ test('match rejects invalid job_ids from LLM', async () => {
   await redis.del(`match:batch:${TEST_USER}:3`);
   const resumeId = await insertResume('# mock resume');
 
-  const orig = llm.chatJson;
-  llm.chatJson = async () => ({
+  stubChatJson(async () => ({
     parsed: { results: [
       { job_id: jobId, score: 80, reason: 'valid' },
       { job_id: 99999, score: 90, reason: 'invalid job_id, should be filtered' },
       { job_id: jobId, score: 150, reason: 'score out of range, should be filtered' },
     ]},
     usage: {},
-  });
+  }));
 
   const result = await matchService.match(TEST_USER, resumeId);
   // 只保留 1 个有效结果
   assert.equal(result.results.length, 1);
   assert.equal(result.results[0].job_id, jobId);
 
-  llm.chatJson = orig;
   await pool.query('DELETE FROM jobs WHERE id = ?', [jobId]);
   await pool.query('DELETE FROM resumes WHERE id = ?', [resumeId]);
 });

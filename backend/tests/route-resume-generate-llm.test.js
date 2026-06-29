@@ -4,9 +4,9 @@ const request = require('supertest');
 const { createApp } = require('../src/app');
 const { sign } = require('../src/services/token');
 const { getPool, getRedis, cleanup } = require('./helpers/db');
+const { stubChat, restoreAll } = require('./helpers/llm');
 const pool = getPool();
 const redis = getRedis();
-const { chat } = require('../src/services/llm');
 
 const validForm = {
   name: 'Test', gender: 'male', degree: '本科', phone: '',
@@ -23,6 +23,10 @@ async function insertResume(userId, contentMd = '') {
   );
   return r.insertId;
 }
+
+test.beforeEach(() => {
+  restoreAll();
+});
 
 test('POST /api/resume/generate without token returns 401', async () => {
   const res = await request(createApp()).post('/api/resume/generate').send({ resume_id: 1 });
@@ -53,11 +57,10 @@ test('POST /api/resume/generate hits DB cache when content_md exists', async () 
   const id = await insertResume(1, '# 缓存内容');
 
   let llmCalled = false;
-  const orig = chat;
-  require('../src/services/llm').chat = async () => {
+  stubChat(async () => {
     llmCalled = true;
     return { content: 'NEW', usage: {} };
-  };
+  });
 
   const res = await request(createApp())
     .post('/api/resume/generate')
@@ -69,7 +72,6 @@ test('POST /api/resume/generate hits DB cache when content_md exists', async () 
   assert.equal(res.body.data.cached, true);
   assert.equal(llmCalled, false, 'LLM should NOT be called when cache hit');
 
-  require('../src/services/llm').chat = orig;
   await pool.query('DELETE FROM resumes WHERE id = ?', [id]);
 });
 
@@ -78,10 +80,9 @@ test('POST /api/resume/generate calls LLM when no cache and stores result', asyn
   await pool.query('DELETE FROM resumes WHERE user_id = 1');
   const id = await insertResume(1, '');
 
-  const orig = chat;
-  require('../src/services/llm').chat = async () => ({
+  stubChat(async () => ({
     content: '# LLM 生成\n## 内容', usage: { total_tokens: 100 },
-  });
+  }));
 
   const res = await request(createApp())
     .post('/api/resume/generate')
@@ -96,7 +97,6 @@ test('POST /api/resume/generate calls LLM when no cache and stores result', asyn
   const [rows] = await pool.query('SELECT content_md FROM resumes WHERE id = ?', [id]);
   assert.equal(rows[0].content_md, '# LLM 生成\n## 内容');
 
-  require('../src/services/llm').chat = orig;
   await pool.query('DELETE FROM resumes WHERE id = ?', [id]);
 });
 
@@ -105,11 +105,10 @@ test('POST /api/resume/generate returns 502 on LLM failure', async () => {
   await pool.query('DELETE FROM resumes WHERE user_id = 1');
   const id = await insertResume(1, '');
 
-  const orig = chat;
-  require('../src/services/llm').chat = async () => {
+  stubChat(async () => {
     const { AppError } = require('../src/middleware/errorHandler');
     throw new AppError(1100, 'llm api error', 502);
-  };
+  });
 
   const res = await request(createApp())
     .post('/api/resume/generate')
@@ -119,7 +118,6 @@ test('POST /api/resume/generate returns 502 on LLM failure', async () => {
   assert.equal(res.status, 502);
   assert.match(res.body.message, /llm/);
 
-  require('../src/services/llm').chat = orig;
   await pool.query('DELETE FROM resumes WHERE id = ?', [id]);
 });
 
@@ -133,8 +131,7 @@ test('POST /api/resume/generate rate limits at 4/min', async () => {
   const ids = [];
   for (let i = 0; i < 4; i++) ids.push(await insertResume(userId, ''));
 
-  const orig = chat;
-  require('../src/services/llm').chat = async () => ({ content: 'ok', usage: {} });
+  stubChat(async () => ({ content: 'ok', usage: {} }));
 
   for (let i = 0; i < 4; i++) {
     const res = await request(createApp())
@@ -151,7 +148,6 @@ test('POST /api/resume/generate rate limits at 4/min', async () => {
     .send({ resume_id: ids[0] });
   assert.equal(res.status, 429);
 
-  require('../src/services/llm').chat = orig;
   await pool.query('DELETE FROM resumes WHERE user_id = ?', [userId]);
   await redis.del(`generate:${userId}`);
 });
