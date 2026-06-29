@@ -6,7 +6,8 @@ const { userAuth } = require('../src/middleware/auth');
 const { adminAuth } = require('../src/middleware/adminAuth');
 const { sign } = require('../src/services/token');
 const { errorHandler } = require('../src/middleware/errorHandler');
-const pool = require('../src/config/db');
+const { getPool, cleanup } = require('./helpers/db');
+const pool = getPool();
 
 function makeApp() {
   const app = express();
@@ -46,5 +47,5 @@ test('GET /api/admin/check returns 401 without token', async () => {
 });
 
 test.after(async () => {
-  await pool.end();
+  await cleanup();
 });
