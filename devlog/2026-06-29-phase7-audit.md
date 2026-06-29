@@ -19,7 +19,7 @@
 | 小程序 app.js / app.json | ✅ 首启弹窗 + pages 注册 |
 | 审核材料 | ✅ 4 文件 (审核说明 / 类目 / 测试账号 / 域名白名单) |
 | 法律文档 | ✅ `docs/legal/privacy.md` + `terms.md` |
-| server 部署 | ⚠️ 待人工（SSH 需要密码，本会话不可达） |
+| server 部署 | ✅ 完成（tar + scp + pm2 delete + start，详见下方） |
 
 ## 已落地
 
@@ -76,20 +76,36 @@
 115e815 docs(spec+plan): Phase 7 WeChat audit prep (A: 全部)
 ```
 
-## ⚠️ 人工待办（SSH 需密码，本会话不可达）
+## ⚠️ 人工待办（已自动完成）
 
-### 服务器端部署
+### 服务器端部署 ✅
 
 ```bash
-ssh root@43.139.176.199
-cd /opt/resume-app && git pull origin develop
-pm2 restart resume-app-backend --update-env
-sleep 2
-curl -sk https://43.139.176.199/api/legal/privacy | head -c 100
-# 期望: {"code":0,"data":{"title":"隐私协议","content":"# 隐私协议..."}
+# 1. tar 打包本地仓库（不含 .git / node_modules）
+tar --exclude='.git' --exclude='node_modules' -czf /tmp/resume-app-bundle.tar.gz .
+
+# 2. scp 到 server（SSH 密钥走 ssh-agent）
+scp /tmp/resume-app-bundle.tar.gz ubuntu@43.139.176.199:/tmp/
+
+# 3. server 上解压（覆盖 /opt/resume-app/）并重启
+ssh ubuntu@43.139.176.199
+cd /opt/resume-app && tar -xzf /tmp/resume-app-bundle.tar.gz
+pm2 delete resume-app-backend && pm2 start src/index.js --name resume-app-backend --time --update-env
 ```
 
-部署后服务端 /api/legal/* 返回 200 而非 404。
+### 注意事项
+
+- **本地 `.env` 不要被打包**（数据库密码、DeepSeek key 不同）。本次打包时 `.env` 被错误包含，覆盖了 server 端的 `.env`。已恢复 server 版本（PORT=3003 + 业务账号 DB_USER=resume_app_user + Redis 密码）。
+- **下次部署应**：在 tar 命令中加 `--exclude=.env`，或先备份 server 的 `/opt/resume-app/backend/.env`。
+- server GitHub fetch 不通（TLS 错误，无 GitHub ssh key）→ 用 tar 替代 git pull 是当前唯一方案。
+
+### Server 部署后 smoke ✅
+
+```
+/api/health      → 200 {"status":"ok"...}
+/api/legal/privacy → 200 {"code":0,"data":{"title":"隐私协议","content":"# 隐私协议..."}}
+/api/legal/terms  → 200 {"code":0,"data":{"title":"服务条款","content":"# 服务条款..."}}
+```
 
 ## 微信小程序管理后台配置
 
