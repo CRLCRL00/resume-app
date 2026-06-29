@@ -3,7 +3,8 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const { createApp } = require('../src/app');
 const { sign } = require('../src/services/token');
-const pool = require('../src/config/db');
+const { getPool, cleanup } = require('./helpers/db');
+const pool = getPool();
 
 test('GET /api/admin/check returns ok for admin', async () => {
   const openid = 'admin_check_test_' + Date.now();
@@ -36,6 +37,5 @@ test('GET /api/admin/check returns 401 without token', async () => {
 });
 
 test.after(async () => {
-  await pool.end();
-  await require('../src/config/redis').quit();
+  await cleanup();
 });

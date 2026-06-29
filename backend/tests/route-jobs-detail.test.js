@@ -2,7 +2,8 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const request = require('supertest');
 const { createApp } = require('../src/app');
-const pool = require('../src/config/db');
+const { getPool, cleanup } = require('./helpers/db');
+const pool = getPool();
 
 test('GET /api/jobs/:id with invalid id returns 400', async () => {
   const res = await request(createApp()).get('/api/jobs/abc');
@@ -23,5 +24,8 @@ test('GET /api/jobs/:id returns job with parsed skills', async () => {
   assert.equal(res.body.data.title, 'route_test');
   assert.deepEqual(res.body.data.skills_required, ['React', 'Vue']);
   await pool.query('DELETE FROM jobs WHERE id = ?', [r.insertId]);
-  await pool.end();
+});
+
+test.after(async () => {
+  await cleanup();
 });

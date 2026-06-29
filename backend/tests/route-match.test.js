@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const { createApp } = require('../src/app');
 const { sign } = require('../src/services/token');
+const { cleanup } = require('./helpers/db');
 
 test('POST /api/match without token returns 401', async () => {
   const res = await request(createApp()).post('/api/match').send({ resume_id: 1 });
@@ -43,4 +44,9 @@ test('POST /api/match rate limits at 4/min', async () => {
     .set('Authorization', `Bearer ${token}`)
     .send({ resume_id: 99999 });
   assert.ok([404, 429].includes(res.status));
+});
+
+// app 转引 load 了单例 pool/redis，需要 cleanup 终止进程
+test.after(async () => {
+  await cleanup();
 });

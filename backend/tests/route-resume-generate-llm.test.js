@@ -3,8 +3,9 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const { createApp } = require('../src/app');
 const { sign } = require('../src/services/token');
-const pool = require('../src/config/db');
-const redis = require('../src/config/redis');
+const { getPool, getRedis, cleanup } = require('./helpers/db');
+const pool = getPool();
+const redis = getRedis();
 const { chat } = require('../src/services/llm');
 
 const validForm = {
@@ -157,6 +158,5 @@ test('POST /api/resume/generate rate limits at 4/min', async () => {
 
 test.after(async () => {
   await pool.query('DELETE FROM resumes WHERE user_id IN (1, 999)');
-  await pool.end();
-  await redis.quit();
+  await cleanup();
 });

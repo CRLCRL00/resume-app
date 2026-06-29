@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const request = require('supertest');
 const { createApp } = require('../src/app');
 const { chat } = require('../src/services/llm');
+const { cleanup } = require('./helpers/db');
 
 test('GET /api/test/llm returns ok with token info', async () => {
   const orig = chat;
@@ -21,7 +22,5 @@ test('GET /api/test/llm returns ok with token info', async () => {
 });
 
 test.after(async () => {
-  const pool = require('../src/config/db');
-  await pool.end();
-  await require('../src/config/redis').quit();
+  await cleanup();
 });
