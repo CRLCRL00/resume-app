@@ -1,18 +1,23 @@
 const Redis = require('ioredis');
 const config = require('./index');
 
-const redis = new Redis({
-  host: config.REDIS.host,
-  port: config.REDIS.port,
-  password: config.REDIS.password || undefined,
-  maxRetriesPerRequest: 3,
-  enableReadyCheck: true,
-  lazyConnect: false,
-});
+function createRedis() {
+  return new Redis({
+    host: config.REDIS.host,
+    port: config.REDIS.port,
+    password: config.REDIS.password || undefined,
+    maxRetriesPerRequest: 3,
+    enableReadyCheck: true,
+    lazyConnect: false,
+  });
+}
 
-redis.on('error', (err) => {
+const defaultRedis = createRedis();
+
+defaultRedis.on('error', (err) => {
   // eslint-disable-next-line no-console
   console.error('[redis] error:', err.message);
 });
 
-module.exports = redis;
+module.exports = defaultRedis;
+module.exports.createRedis = createRedis;
