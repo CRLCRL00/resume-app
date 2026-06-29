@@ -1,6 +1,6 @@
 # 后端
 
-简历推荐小程序后端，Node 20 + Express 4。
+简历推荐小程序后端，Node 22+ / Express 4（`npm test` 需 Node 22+；`start`/`dev` 在 Node 20+ 也能跑）。
 
 ## 本地跑
 
