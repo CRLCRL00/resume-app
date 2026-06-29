@@ -24,8 +24,9 @@ async function insertResume(userId, contentMd = '') {
   return r.insertId;
 }
 
-test.beforeEach(() => {
+test.beforeEach(async () => {
   restoreAll();
+  await redis.del('generate:1');
 });
 
 test('POST /api/resume/generate without token returns 401', async () => {
