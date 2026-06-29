@@ -6,7 +6,8 @@
     "pages/match/list",
     "pages/match/detail",
     "pages/legal/privacy",
-    "pages/legal/terms"
+    "pages/legal/terms",
+    "pages/me/me"
   ],
   "subpackages": [{
     "root": "admin",
@@ -29,7 +30,7 @@
     "selectedColor": "#07c160",
     "list": [
       { "pagePath": "pages/index/index", "text": "首页" },
-      { "pagePath": "admin/pages/jobs/list", "text": "管理" }
+      { "pagePath": "pages/me/me", "text": "我的" }
     ]
   }
 }

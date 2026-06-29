@@ -1,0 +1,35 @@
+<view class="container">
+  <view class="header">
+    <view class="title">我的</view>
+  </view>
+
+  <view class="section">
+    <view class="row" bindtap="onAbout">
+      <text>关于简历助手</text>
+      <text class="arrow">›</text>
+    </view>
+    <view class="row" bindtap="onPrivacy">
+      <text>隐私协议</text>
+      <text class="arrow">›</text>
+    </view>
+    <view class="row" bindtap="onTerms">
+      <text>服务条款</text>
+      <text class="arrow">›</text>
+    </view>
+  </view>
+
+  <view class="section admin-only" wx:if="{{isAdmin}}">
+    <view class="row admin-row" bindtap="onAdminJobs">
+      <text class="admin-text">⚙ 岗位管理</text>
+      <text class="arrow">›</text>
+    </view>
+    <view class="row admin-row" bindtap="onAdminPrompts">
+      <text class="admin-text">⚙ 提示词管理</text>
+      <text class="arrow">›</text>
+    </view>
+    <view class="row admin-row" bindtap="onAdminLogs">
+      <text class="admin-text">⚙ 操作日志</text>
+      <text class="arrow">›</text>
+    </view>
+  </view>
+</view>
