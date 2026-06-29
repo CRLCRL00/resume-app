@@ -1,6 +1,9 @@
 {
   "navigationBarTitleText": "简历助手",
   "usingComponents": {
-    "privacy-popup": "/components/privacy-popup/privacy-popup"
+    "privacy-popup": {
+      "path": "/components/privacy-popup/privacy-popup",
+      "placeholder": "/components/privacy-popup-placeholder/placeholder"
+    }
   }
 }

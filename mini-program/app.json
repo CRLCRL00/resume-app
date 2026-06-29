@@ -25,6 +25,7 @@
     "navigationBarTitleText": "简历助手",
     "navigationBarTextStyle": "black"
   },
+  "lazyCodeLoading": "requiredComponents",
   "tabBar": {
     "color": "#999",
     "selectedColor": "#07c160",
