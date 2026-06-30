@@ -37,3 +37,5 @@ Thumbs.db
 # 微信开发者工具本地配置（含本机路径，不应入仓）
 mini-program/project.private.config.json
 .claude/
+简历key.txt
+*.key.txt
