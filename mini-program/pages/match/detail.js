@@ -12,7 +12,7 @@ Page({
   async load(id, score, reason) {
     try {
       const res = await request({ url: `/jobs/${id}` });
-      const job = res.data;
+      const job = res.data.data;
       this.setData({
         loading: false,
         job,

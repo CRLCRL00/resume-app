@@ -8,7 +8,7 @@ Page({
   async load() {
     try {
       const res = await request({ url: '/admin/prompts' });
-      this.setData({ items: res.data.items });
+      this.setData({ items: res.data.data.items });
     } catch (e) {}
   },
 

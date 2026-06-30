@@ -23,7 +23,7 @@ Page({
   async load(id) {
     try {
       const res = await request({ url: `/admin/jobs?page=1&pageSize=100` });
-      const job = res.data.items.find(j => String(j.id) === String(id));
+      const job = res.data.data.items.find(j => String(j.id) === String(id));
       if (job) {
         // 注意：列表不返 description_md，需要 GET /api/jobs/:id（Phase 5 加）
         // MVP: 这里先用列表里有的字段，description_md 留空让用户重新填

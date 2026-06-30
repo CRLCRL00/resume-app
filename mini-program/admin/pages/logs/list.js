@@ -9,8 +9,8 @@ Page({
     this.setData({ loading: true });
     try {
       const res = await request({ url: `/admin/logs?page=${this.data.page}&pageSize=${this.data.pageSize}` });
-      const all = this.data.page === 1 ? res.data.items : this.data.items.concat(res.data.items);
-      this.setData({ items: all, total: res.data.total, loading: false });
+      const all = this.data.page === 1 ? res.data.data.items : this.data.items.concat(res.data.data.items);
+      this.setData({ items: all, total: res.data.data.total, loading: false });
     } catch (e) { this.setData({ loading: false }); }
   },
 

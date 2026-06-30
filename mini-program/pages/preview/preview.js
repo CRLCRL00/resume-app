@@ -19,8 +19,8 @@ Page({
     this.setData({ loading: true, error: false });
     try {
       const res = await request({ url: '/resume/current' });
-      const contentMd = (res && res.data && res.data.content_md) || '';
-      const resumeId = (res && res.data && res.data.resume_id) || null;
+      const contentMd = (res && res.data && res.data.data && res.data.data.content_md) || '';
+      const resumeId = (res && res.data && res.data.data && res.data.data.resume_id) || null;
       this.setData({ loading: false, error: false, contentMd, resumeId, mdHtml: mdToHtml(contentMd) });
     } catch (e) {
       this.setData({ loading: false, error: true });

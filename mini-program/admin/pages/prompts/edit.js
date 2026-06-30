@@ -11,7 +11,7 @@ Page({
   async load(code) {
     try {
       const res = await request({ url: `/admin/prompts/${code}` });
-      this.setData({ content: res.data.content, version: res.data.version });
+      this.setData({ content: res.data.data.content, version: res.data.data.version });
     } catch (e) {}
   },
 

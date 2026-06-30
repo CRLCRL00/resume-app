@@ -74,7 +74,7 @@ App({
   async checkAdmin() {
     try {
       const res = await require('./utils/request').request({ url: '/admin/check' });
-      if (res.data?.isAdmin) {
+      if (res.data.data.isAdmin) {
         wx.setStorageSync('is_admin', true);
       } else {
         wx.setStorageSync('is_admin', false);
