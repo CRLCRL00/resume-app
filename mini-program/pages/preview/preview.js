@@ -31,8 +31,8 @@ Page({
     if (this.data.resumeId) return this.data.resumeId;
     const res = await request({ url: '/resume/current' });
     if (res && res.data && res.data.resume_id) {
-      this.setData({ resumeId: res.data.resume_id });
-      return res.data.resume_id;
+      this.setData({ resumeId: res.data.data.resume_id });
+      return res.data.data.resume_id;
     }
     throw new Error('无 resume_id：请先填写并保存表单');
   },

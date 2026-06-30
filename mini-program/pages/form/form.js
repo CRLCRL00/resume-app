@@ -120,7 +120,7 @@ Page({
 
     try {
       const saveRes = await request({ url: '/resume/save', method: 'POST', data: { source_form: form } });
-      const resumeId = saveRes.data.resume_id;
+      const resumeId = saveRes.data.data.resume_id;
       await request({ url: '/resume/generate', method: 'POST', data: { resume_id: resumeId } });
       wx.hideLoading();
       clearTimeout(timer1);
