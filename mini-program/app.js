@@ -38,6 +38,26 @@ App({
     }
 
     this.login();
+
+    // 检查小程序版本 — 新版本强制重启
+    if (wx.getUpdateManager) {
+      const updateManager = wx.getUpdateManager();
+      updateManager.onCheckForUpdate((res) => {
+        // 后端 res.hasUpdate → 触发 onUpdateReady
+      });
+      updateManager.onUpdateReady(() => {
+        wx.showModal({
+          title: '更新提示',
+          content: '新版本已准备好，是否重启应用？',
+          success: (r) => {
+            if (r.confirm) updateManager.applyUpdate();
+          },
+        });
+      });
+      updateManager.onUpdateFailed(() => {
+        // 静默
+      });
+    }
   },
 
   login() {

@@ -1,6 +1,21 @@
 const axios = require('axios');
 const config = require('../config');
 const { AppError } = require('../middleware/errorHandler');
+const logger = require('../utils/logger');
+
+/**
+ * 记录 LLM 调用 token 用量（用于成本监控 + 异常 spike 告警）
+ */
+function logUsage(callPath, usage, model) {
+  if (!usage || typeof usage.total_tokens !== 'number') return;
+  logger.info({
+    llm: callPath,
+    model: model || config.DEEPSEEK.model,
+    prompt_tokens: usage.prompt_tokens || 0,
+    completion_tokens: usage.completion_tokens || 0,
+    total_tokens: usage.total_tokens,
+  }, 'llm usage');
+}
 
 async function chat(messages, opts = {}) {
   try {
@@ -21,6 +36,7 @@ async function chat(messages, opts = {}) {
         },
       }
     );
+    logUsage('chat', data.usage, opts.model);
     return {
       content: data.choices[0].message.content,
       usage: data.usage,
