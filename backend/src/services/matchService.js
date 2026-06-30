@@ -4,7 +4,20 @@ const { AppError } = require('../middleware/errorHandler');
 const rateLimit = require('./rateLimit');
 const { coarseFilter } = require('./jobFilter');
 const { build: buildPrompt } = require('./matchPrompt');
+const logger = require('../utils/logger');
 const llm = require('./llm');
+
+/**
+ * 安全包装 redis 操作，失败时记 warn 日志（fail-open）。
+ */
+async function safeRedis(op, fn) {
+  try {
+    return await fn();
+  } catch (err) {
+    logger.warn({ err: err.message, op }, 'redis fail-open');
+    return null;
+  }
+}
 
 const DEGREE_RANK = { '不限': 0, '高中': 1, '大专': 2, '本科': 3, '硕士': 4, '博士': 5 };
 
@@ -78,8 +91,9 @@ async function match(userId, resumeId) {
     );
   }
 
-  // 缓存 batch_id (24h)
-  await redis.set(`match:batch:${userId}:${resumeId}`, batchId, 'EX', 24 * 3600);
+  // 缓存 batch_id (24h) — redis 失败容忍
+  await safeRedis('match.setBatchId',
+    () => redis.set(`match:batch:${userId}:${resumeId}`, batchId, 'EX', 24 * 3600));
 
   // 关联 job 详情
   const jobMap = new Map(filtered.map(j => [j.id, j]));
@@ -97,7 +111,8 @@ async function match(userId, resumeId) {
 }
 
 async function checkCache(userId, resumeId) {
-  const batchId = await redis.get(`match:batch:${userId}:${resumeId}`);
+  const batchId = await safeRedis('match.checkBatchId',
+    () => redis.get(`match:batch:${userId}:${resumeId}`));
   if (!batchId) return null;
 
   const [rows] = await pool.query(
