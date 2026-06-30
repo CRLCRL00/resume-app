@@ -19,8 +19,8 @@ Page({
     this.setData({ loading: true, error: false });
     try {
       const res = await request({ url: '/resume/current' });
-      const contentMd = res.data.content_md || '';
-      const resumeId = res.data.resume_id || null;
+      const contentMd = (res && res.data && res.data.content_md) || '';
+      const resumeId = (res && res.data && res.data.resume_id) || null;
       this.setData({ loading: false, error: false, contentMd, resumeId, mdHtml: mdToHtml(contentMd) });
     } catch (e) {
       this.setData({ loading: false, error: true });
@@ -30,7 +30,7 @@ Page({
   async ensureResumeId() {
     if (this.data.resumeId) return this.data.resumeId;
     const res = await request({ url: '/resume/current' });
-    if (res.data && res.data.resume_id) {
+    if (res && res.data && res.data.resume_id) {
       this.setData({ resumeId: res.data.resume_id });
       return res.data.resume_id;
     }
@@ -45,9 +45,13 @@ Page({
       wx.showLoading({ title: '生成中...', mask: true });
       const res = await request({ url: '/resume/generate', method: 'POST', data: { resume_id: resumeId } });
       wx.hideLoading();
-      const md = res.data.content_md || '';
+      const md = (res && res.data && res.data.content_md) || '';
       this.setData({ generating: false, contentMd: md, mdHtml: mdToHtml(md) });
-      wx.showToast({ title: '生成成功', icon: 'success' });
+      if (!md) {
+        wx.showToast({ title: '返回内容为空', icon: 'none' });
+      } else {
+        wx.showToast({ title: '生成成功', icon: 'success' });
+      }
     } catch (e) {
       wx.hideLoading();
       this.setData({ generating: false });
