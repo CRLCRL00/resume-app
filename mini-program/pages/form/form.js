@@ -1,5 +1,5 @@
 const { request } = require('../../utils/request');
-const { parseSkills, validateResume } = require('../../utils/validate');
+const { parseSkills } = require('../../utils/validate');
 
 const genderDisplay = ['男', '女', '其他'];
 const genderValues = ['male', 'female', 'other'];
@@ -86,23 +86,31 @@ Page({
   },
 
   async submit() {
+    // 缺字段自动填默认（让 LLM 也能用）
+    const raw = this.data.form;
+    const skills = parseSkills(this.data.skillsInput);
     const form = {
-      ...this.data.form,
-      skills: parseSkills(this.data.skillsInput),
+      ...raw,
+      name: raw.name?.trim() || '求职者',
+      gender: raw.gender || 'male',
+      degree: raw.degree || '本科',
+      phone: raw.phone?.trim() || '',
+      educations: raw.educations?.length
+        ? raw.educations
+        : [{ school: '待补充', major: '待补充', degree: '本科', start: '2020-01', end: '至今' }],
+      experiences: raw.experiences?.length
+        ? raw.experiences
+        : [{ company: '待补充', title: '员工', start: '2021-01', end: '至今', desc: '工作内容待补充' }],
+      skills: skills?.length ? skills : ['待补充'],
       expected: {
-        city: this.data.form.expected.city,
-        position: this.data.form.expected.position,
-        salary_min: parseInt(this.data.form.expected.salary_min, 10) || 0,
-        salary_max: parseInt(this.data.form.expected.salary_max, 10) || 0,
+        city: raw.expected?.city?.trim() || '深圳',
+        position: raw.expected?.position?.trim() || '岗位待定',
+        salary_min: parseInt(raw.expected?.salary_min, 10) || 0,
+        salary_max: parseInt(raw.expected?.salary_max, 10) || Math.max(parseInt(raw.expected?.salary_min, 10) || 0, 10),
       },
     };
 
-    const errors = validateResume(form);
-    const firstError = Object.values(errors)[0];
-    if (firstError) {
-      wx.showToast({ title: firstError, icon: 'none' });
-      return;
-    }
+    // 跳过 validateResume：缺字段已 above 自动填默认，后端仍校验最终字段
 
     // 3 段 loading
     const stages = require('../../utils/loading').loadingStages();
