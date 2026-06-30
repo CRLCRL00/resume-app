@@ -1,12 +1,13 @@
 const { request } = require('../../utils/request');
 const { parseSkills, validateResume } = require('../../utils/validate');
 
-const genderOptions = ['male', 'female', 'other'];
+const genderDisplay = ['男', '女', '其他'];
+const genderValues = ['male', 'female', 'other'];
 const degreeOptions = ['高中', '大专', '本科', '硕士', '博士'];
 
 Page({
   data: {
-    genderOptions,
+    genderOptions: genderDisplay,
     degreeOptions,
     genderIndex: -1,
     degreeIndex: -1,
@@ -27,7 +28,11 @@ Page({
 
   setGender(e) {
     const idx = parseInt(e.detail.value, 10);
-    this.setData({ genderIndex: idx, 'form.gender': genderOptions[idx] });
+    this.setData({
+      genderIndex: idx,
+      'form.gender': genderValues[idx],
+      genderDisplay: genderDisplay[idx],
+    });
   },
 
   setDegree(e) {

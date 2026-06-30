@@ -3,7 +3,7 @@
     <view class="section-title">基本信息</view>
     <input class="input" placeholder="姓名" value="{{form.name}}" bindinput="setField" data-field="name" />
     <picker mode="selector" range="{{genderOptions}}" value="{{genderIndex}}" bindchange="setGender">
-      <view class="input">性别：{{form.gender || '请选择'}}</view>
+      <view class="input">性别：{{genderOptions[genderIndex] || '请选择'}}</view>
     </picker>
     <picker mode="selector" range="{{degreeOptions}}" value="{{degreeIndex}}" bindchange="setDegree">
       <view class="input">学历：{{form.degree || '请选择'}}</view>
