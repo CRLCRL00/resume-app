@@ -18,6 +18,7 @@ Component({
     onAccept() {
       wx.setStorageSync('privacy_accepted', true);
       wx.setStorageSync('privacy_accepted_at', Date.now());
+      wx.removeStorageSync('privacy_need_reaccept');
       this.setData({ visible: false });
       this.triggerEvent('accepted');
     },

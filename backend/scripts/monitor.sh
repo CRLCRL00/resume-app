@@ -11,6 +11,8 @@
 set -uo pipefail
 
 URL="${HEALTH_URL:-https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/health/deep}"
+ALERT_URL="${HEALTH_WEBHOOK:-https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/internal/alert}"
+ALERT_TOKEN="${ALERT_TOKEN:-dev-alert-token-change-me}"
 LOG="/var/log/resume-app-monitor.log"
 TIMEOUT=10
 STATE_FILE="/var/run/resume-app-monitor-state"
@@ -46,6 +48,7 @@ JSON
 )
   curl -m 5 -X POST "$HEALTH_WEBHOOK" \
     -H 'Content-Type: application/json' \
+    -H "X-Alert-Token: $ALERT_TOKEN" \
     -d "$PAYLOAD" 2>/dev/null || true
 fi
 

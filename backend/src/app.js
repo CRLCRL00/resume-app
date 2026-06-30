@@ -8,6 +8,7 @@ const matchRouter = require('./routes/match');
 const jobsRouter = require('./routes/jobs');
 const legalRouter = require('./routes/legal');
 const userRouter = require('./routes/user');
+const alertsRouter = require('./routes/alerts');
 const helmet = require('helmet');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
@@ -30,6 +31,7 @@ function createApp() {
   app.use('/api/jobs', jobsRouter);
   app.use('/api/legal', legalRouter);
   app.use('/api/user', userRouter);
+  app.use('/api/internal', alertsRouter);
   // OpenAPI docs
   const { openapiRouter } = require('./routes/openapi');
   app.use('/api/docs', openapiRouter);
