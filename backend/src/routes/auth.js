@@ -4,9 +4,15 @@ const wechatService = require('../services/wechat');
 const { sign } = require('../services/token');
 const pool = require('../config/db');
 const { AppError } = require('../middleware/errorHandler');
+const rateLimit = require('../services/rateLimit');
 const logger = require('../utils/logger');
 
 router.post('/login', async (req, res, next) => {
+  // IP 限流：每 IP 10 / 分钟（防爆破 + 减轻 code2session 调用）
+  const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() || req.ip || 'unknown';
+  const rl = await rateLimit.check(`login:ip:${ip}`, 10, 60);
+  if (!rl.allowed) throw new AppError(1429, '登录尝试过多，请稍后再试', 429);
+
   try {
     const { code } = req.body;
     if (!code) {
