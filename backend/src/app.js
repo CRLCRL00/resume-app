@@ -16,12 +16,28 @@ const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 function createApp() {
   const app = express();
 
-  // 安全头（默认配置）
+  // 安全头（HSTS preload + 强化 COOP/COEP + cross-origin 资源）
   app.use(helmet({
     contentSecurityPolicy: false,                 // API 不返回 HTML
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    strictTransportSecurity: {
+      maxAge: 31536000,        // 1 年
+      includeSubDomains: true,
+      preload: true,
+    },
+    referrerPolicy: { policy: 'no-referrer' },
+    permittedCrossDomainPolicies: false,
+    hidePoweredBy: true,
+    noSniff: true,
+    xssFilter: true,
   }));
   app.use(express.json({ limit: '1mb' }));
+
+  // Swagger UI inline HTML 需要 inline-block 资源；个别路由开放 cross-origin
+  app.use('/api/docs', (req, res, next) => {
+    res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');
+    next();
+  });
 
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);

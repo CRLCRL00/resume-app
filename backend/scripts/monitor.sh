@@ -40,15 +40,19 @@ fi
 echo "[$LOG_TS] FAIL HTTP=$HTTP body=$(head -c 200 /tmp/health.json)" >> "$LOG"
 echo "$(TS)" > "$STATE_FILE"
 
-# Optional webhook
+# Optional webhook — HMAC-SHA256 签 (防重放/伪造)
 if [ -n "${HEALTH_WEBHOOK:-}" ]; then
   PAYLOAD=$(cat <<JSON
 {"timestamp":"$LOG_TS","url":"$URL","http":$HTTP,"body":$(head -c 500 /tmp/health.json | jq -Rs .)}
 JSON
 )
+  TS_MS=$(date +%s%3N)
+  SIG=$(printf "%s" "$PAYLOAD$TS_MS" | openssl dgst -sha256 -hmac "$ALERT_TOKEN" | sed 's/^.* //')
   curl -m 5 -X POST "$HEALTH_WEBHOOK" \
     -H 'Content-Type: application/json' \
     -H "X-Alert-Token: $ALERT_TOKEN" \
+    -H "X-Alert-Timestamp: $TS_MS" \
+    -H "X-Alert-Signature: sha256=$SIG" \
     -d "$PAYLOAD" 2>/dev/null || true
 fi
 
