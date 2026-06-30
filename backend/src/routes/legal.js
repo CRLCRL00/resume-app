@@ -3,17 +3,29 @@ const router = express.Router();
 const legal = require('../services/legal');
 const pool = require('../config/db');
 
+const ALLOWED_ORIGINS = (process.env.CORS_ALLOWED_ORIGINS || '*')
+  .split(',')
+  .map(s => s.trim())
+  .filter(Boolean);
+
 /**
- * 公共缓存策略：法务文档改动频率低（按月），5 min 边缘缓存 + last-modified
- * docs/legal/terms.md / privacy.md 改 + 5 min 自动过
+ * 公共缓存：法务文档按月改动，5 min 边缘缓存
  */
 function setPublicCache(res) {
   res.setHeader('Cache-Control', 'public, max-age=300, must-revalidate');
 }
 
 router.use((req, res, next) => {
-  // 公共端点 CORS（mini-program 不需要，但浏览器调试 + 文档 + 第三方有用）
-  res.setHeader('Access-Control-Allow-Origin', '*');
+  const origin = req.headers.origin;
+  // 允许的 origin；'*' = 全放行（兼容开发）
+  if (ALLOWED_ORIGINS.includes('*')) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+  } else if (origin && ALLOWED_ORIGINS.includes(origin)) {
+    res.setHeader('Access-Control-Allow-Origin', origin);
+    res.setHeader('Vary', 'Origin');
+  } else if (origin) {
+    // 未知 origin：不返 CORS 头 → 浏览器 block
+  }
   res.setHeader('Access-Control-Allow-Methods', 'GET, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   next();
