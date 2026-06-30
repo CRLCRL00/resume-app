@@ -2,12 +2,17 @@ const axios = require('axios');
 const config = require('../config');
 const { AppError } = require('../middleware/errorHandler');
 const logger = require('../utils/logger');
+const metrics = require('../routes/metrics'); // Prometheus
 
 /**
  * 记录 LLM 调用 token 用量（用于成本监控 + 异常 spike 告警）
  */
 function logUsage(callPath, usage, model) {
   if (!usage || typeof usage.total_tokens !== 'number') return;
+  metrics.llmCalls.inc({ call_path: callPath, status: 'ok' });
+  metrics.llmTokens.inc({ call_path: callPath, kind: 'prompt' }, usage.prompt_tokens || 0);
+  metrics.llmTokens.inc({ call_path: callPath, kind: 'completion' }, usage.completion_tokens || 0);
+  metrics.llmTokens.inc({ call_path: callPath, kind: 'total' }, usage.total_tokens);
   logger.info({
     llm: callPath,
     model: model || config.DEEPSEEK.model,

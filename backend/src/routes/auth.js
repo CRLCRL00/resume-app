@@ -2,7 +2,9 @@ const express = require('express');
 const router = express.Router();
 const wechatService = require('../services/wechat');
 const { sign } = require('../services/token');
+const { userAuth } = require('../middleware/auth');
 const pool = require('../config/db');
+const redis = require('../config/redis');
 const { AppError } = require('../middleware/errorHandler');
 const rateLimit = require('../services/rateLimit');
 const securityLog = require('../services/securityLog');
@@ -60,6 +62,20 @@ router.post('/login', async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * POST /api/auth/logout — 把当前 JWT 加入 Redis 黑名单（同 token TTL）
+ * Body 无；返回 { code: 0 } 即视为已注销
+ */
+router.post('/logout', userAuth, async (req, res, next) => {
+  try {
+    const token = req.token;
+    const ttlSec = 30 * 24 * 3600; // 30 天上限（接近 JWT 默认）
+    await redis.set(`jwt:blacklist:${token}`, '1', 'EX', ttlSec);
+    securityLog.recordSync('logout', req, { userId: req.user.userId, openid: req.user.openid });
+    res.json({ code: 0, data: { revoked: true } });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;
