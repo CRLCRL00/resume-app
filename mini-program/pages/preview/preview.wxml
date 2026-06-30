@@ -2,13 +2,20 @@
   <view wx:if="{{loading}}" class="card">加载中...</view>
   <view wx:elif="{{error}}" class="card">
     <view>简历加载失败</view>
-    <view class="btn-primary" bindtap="goForm" style="margin-top:24rpx;">去重新填写</view>
+    <view class="btn-primary" bindtap="onRetry" style="margin-top:24rpx;">重试</view>
+    <view class="btn-secondary" bindtap="goForm" style="margin-top:24rpx;">去重新填写</view>
   </view>
   <view wx:elif="{{!contentMd}}" class="card">
-    <view>暂无简历</view>
-    <view class="btn-primary" bindtap="goForm" style="margin-top:24rpx;">去填写</view>
+    <view wx:if="{{generating}}">AI 正在生成您的简历（10-30 秒）...</view>
+    <view wx:else>
+      <view>暂无简历，点击下方按钮生成。</view>
+      <view class="btn-primary" bindtap="onGenerate" style="margin-top:24rpx;">生成简历</view>
+      <view class="btn-secondary" bindtap="goForm" style="margin-top:24rpx;">去修改表单</view>
+    </view>
   </view>
   <view wx:else class="card resume-body">
     <rich-text nodes="{{mdHtml}}" />
+    <view class="btn-secondary" bindtap="onRegenerate" style="margin-top:24rpx;">重新生成</view>
+    <view class="btn-primary" bindtap="goMatch" style="margin-top:16rpx;">去匹配岗位</view>
   </view>
 </view>
