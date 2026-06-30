@@ -1,6 +1,6 @@
 const { getToken, clearToken } = require('./auth');
 
-const BASE_URL = 'https://43.139.176.199/api';
+const BASE_URL = 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api';
 
 function request({ url, method = 'GET', data, silent = false } = {}) {
   return new Promise((resolve, reject) => {

@@ -1,4 +1,4 @@
-// 工具栏 → 详情 → 本地设置 → 勾「不校验合法域名」才能访问 https://43.139.176.199
+// 工具栏 → 详情 → 本地设置 → 勾「不校验合法域名」才能访问 https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com
 // 真机预览时 wx.login 自动跑，模拟器 timeout 所以跳过
 App({
   globalData: {
@@ -44,7 +44,7 @@ App({
     wx.login({
       success: ({ code }) => {
         wx.request({
-          url: 'https://43.139.176.199/api/auth/login',
+          url: 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/auth/login',
           method: 'POST',
           data: { code },
           success: (res) => {

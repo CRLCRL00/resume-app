@@ -6,7 +6,7 @@ Page({
   fetch() {
     this.setData({ loading: true, error: false });
     wx.request({
-      url: 'https://43.139.176.199/api/legal/terms',
+      url: 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/legal/terms',
       success: (res) => {
         if (res.data && res.data.code === 0) {
           this.setData({
