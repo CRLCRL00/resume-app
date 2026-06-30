@@ -41,13 +41,30 @@ router.get('/deep', async (req, res) => {
     checks.redis = { ok: false, error: err.message };
   }
 
-  const allOk = checks.db.ok && checks.redis.ok;
-  logger[allOk ? 'info' : 'warn'](checks, 'health/deep');
+  // 阈值告警：>500ms 视为 degraded，但仍 200
+  const LATENCY_WARN_MS = 500;
+  const dbLatency = checks.db.latency_ms || 0;
+  const redisLatency = checks.redis.latency_ms || 0;
+  if (checks.db.ok && dbLatency > LATENCY_WARN_MS) {
+    checks.db.degraded = true;
+    checks.db.note = `latency ${dbLatency}ms > ${LATENCY_WARN_MS}ms`;
+  }
+  if (checks.redis.ok && redisLatency > LATENCY_WARN_MS) {
+    checks.redis.degraded = true;
+    checks.redis.note = `latency ${redisLatency}ms > ${LATENCY_WARN_MS}ms`;
+  }
 
-  res.status(allOk ? 200 : 503).json({
+  const allOk = checks.db.ok && checks.redis.ok;
+  // 部分降级 → 199 自定义 status 让 LB 报警但不踢实例
+  const status = allOk ? 200 : 503;
+  const anyDegraded = checks.db.degraded || checks.redis.degraded;
+  logger[allOk ? (anyDegraded ? 'warn' : 'info') : 'error'](checks, 'health/deep');
+
+  res.status(status).json({
     code: allOk ? 0 : 1500,
     data: {
-      status: allOk ? 'ok' : 'degraded',
+      status: allOk ? 'ok' : 'down',
+      degraded: anyDegraded,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
       checks,

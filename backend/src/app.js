@@ -31,6 +31,10 @@ function createApp() {
     noSniff: true,
     xssFilter: true,
   }));
+
+  // /api/internal/* 单独 raw body（HMAC 计算需要原始字节）— 必须在 json parser 前
+  app.use('/api/internal/alert', alertsRouter.rawBodyMiddleware);
+
   app.use(express.json({ limit: '1mb' }));
 
   // Swagger UI inline HTML 需要 inline-block 资源；个别路由开放 cross-origin

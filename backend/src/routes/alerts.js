@@ -10,28 +10,26 @@ const logger = require('../utils/logger');
  * Headers:
  *   X-Alert-Token: shared secret
  *   X-Alert-Timestamp: epoch ms（5 分钟窗口防重放）
- *   X-Alert-Signature: 'sha256=<hex>'   # SHA256(secret, payload_body + timestamp)
+ *   X-Alert-Signature: 'sha256=<hex>'   # SHA256(secret, raw_request_body + timestamp)
  *
  * Body: { timestamp, url, http, body? }
+ *
+ * IMPORTANT: route mounted with express.raw({type:'application/json'}); we keep
+ *   req.body as Buffer/string and parse manually for content+sig verification.
  */
 const ALERT_TOKEN = process.env.ALERT_TOKEN || 'dev-alert-token-change-me';
 const MAX_SKEW_MS = 5 * 60 * 1000;
 
-function verifySig(payloadBody, tsMs, sigHeader) {
+function verifySig(rawBody, tsMs, sigHeader) {
   if (!sigHeader || !sigHeader.startsWith('sha256=')) return false;
   const expected = crypto.createHmac('sha256', ALERT_TOKEN)
-    .update(payloadBody + tsMs)
+    .update(rawBody + tsMs)
     .digest('hex');
   const provided = sigHeader.slice(7);
   if (expected.length !== provided.length) return false;
-  return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
-}
-
-function readBodyForSig(req) {
-  // express.json() 已解析；如果调用方在 body parser 后要拿到 raw body 难。
-  // 我们用 rebuilt JSON 字符串作为 canonical（与服务端 JSON 序列化结果一致）:
-  //   实际我们只是重新序列化 req.body — 对 server-side receiver 这 ok
-  return JSON.stringify(req.body || {});
+  try {
+    return crypto.timingSafeEqual(Buffer.from(expected), Buffer.from(provided));
+  } catch (_e) { return false; }
 }
 
 router.post('/alert', (req, res) => {
@@ -47,14 +45,15 @@ router.post('/alert', (req, res) => {
   if (!tsMs || Math.abs(nowMs - Number(tsMs)) > MAX_SKEW_MS) {
     return res.status(401).json({ code: 1002, message: 'timestamp skewed' });
   }
-  const bodyStr = readBodyForSig(req);
-  if (!verifySig(bodyStr, tsMs, sig)) {
+  const rawBody = req.body instanceof Buffer ? req.body.toString('utf8') : (req.body || '');
+  if (!verifySig(rawBody, tsMs, sig)) {
     return res.status(401).json({ code: 1002, message: 'bad signature' });
   }
 
-  const payload = req.body || {};
-  const line = JSON.stringify({ received_at: new Date().toISOString(), ...payload });
-  logger.warn({ alert: payload }, 'alert received');
+  let parsed = {};
+  try { parsed = rawBody ? JSON.parse(rawBody) : {}; } catch (_e) {}
+  const line = JSON.stringify({ received_at: new Date().toISOString(), ...parsed });
+  logger.warn({ alert: parsed }, 'alert received');
   try {
     require('fs').appendFileSync('/var/log/resume-app-alerts.log', line + '\n');
   } catch (e) {}
@@ -80,5 +79,11 @@ router.get('/alerts/recent', (req, res) => {
     res.status(500).json({ code: 1500, message: err.message });
   }
 });
+
+/**
+ * Express middleware: keep req.body as raw Buffer for this router (so HMAC sees unchanged body).
+ * Mount BEFORE express.json() in app.js.
+ */
+router.rawBodyMiddleware = express.raw({ type: '*/*', limit: '64kb' });
 
 module.exports = router;
