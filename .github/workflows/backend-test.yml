@@ -1,0 +1,87 @@
+name: backend-test
+
+on:
+  push:
+    branches: [develop, main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-test.yml'
+  pull_request:
+    branches: [develop, main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ROOT_PASSWORD: rootpw
+          MYSQL_DATABASE: resume_app
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      NODE_VERSION: '22'
+      DB_HOST: 127.0.0.1
+      DB_PORT: 3306
+      DB_USER: root
+      DB_PASSWORD: rootpw
+      DB_NAME: resume_app
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: 6379
+      JWT_SECRET: 'test-secret-only-in-ci'
+      JWT_EXPIRES_IN: '30d'
+      DEEPSEEK_API_KEY: 'sk-test-disabled-key'
+      DEEPSEEK_BASE_URL: 'https://api.deepseek.com/v1'
+      DEEPSEEK_MODEL: 'deepseek-chat'
+      WX_APPID: 'test_appid'
+      WX_SECRET: 'test_secret'
+      LOG_LEVEL: 'info'
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install
+        working-directory: backend
+        run: npm ci
+
+      - name: Init schema + seed test data
+        working-directory: backend
+        run: node scripts/db-init.js --test
+
+      - name: Run tests
+        working-directory: backend
+        run: npm test -- --test-force-exit --test-concurrency=1
+
+      - name: Run e2e smoke (optional)
+        working-directory: backend
+        run: |
+          node scripts/smoke-e2e.js || true
+        env:
+          BASE_URL: http://127.0.0.1:3003
+          NODE_TLS_REJECT_UNAUTHORIZED: '0'
+          JWT_SECRET_OVERRIDE: test-secret-only-in-ci
