@@ -144,7 +144,8 @@ INSERT IGNORE INTO `schema_migrations` (`name`) VALUES
   ('001-jobs-index'),
   ('002-privacy-versions'),
   ('003-audit-archive'),
-  ('004-admin-audit');
+  ('004-admin-audit'),
+  ('005-alerts-dead-letter');
 
 -- 004-admin-audit: admin 写操作审计（双跑安全）
 CREATE TABLE IF NOT EXISTS `admin_audit` (
@@ -162,5 +163,18 @@ CREATE TABLE IF NOT EXISTS `admin_audit` (
   PRIMARY KEY (`id`),
   KEY `idx_openid_created` (`openid`, `created_at`),
   KEY `idx_target` (`target_type`, `target_id`),
+  KEY `idx_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 005-alerts-dead-letter: outbound webhook 死信（重试耗尽后落库）
+CREATE TABLE IF NOT EXISTS `alerts_dead_letter` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `url` VARCHAR(512) NOT NULL,
+  `payload` JSON NOT NULL,
+  `last_status` INT DEFAULT NULL,
+  `last_error` TEXT,
+  `attempts` SMALLINT NOT NULL DEFAULT 0,
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
   KEY `idx_created` (`created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

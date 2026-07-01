@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const logger = require('../utils/logger');
+const { deliver } = require('../services/webhook');
 
 /**
  * POST /api/internal/alert — receive monitor webhooks
@@ -86,4 +87,19 @@ router.get('/alerts/recent', (req, res) => {
  */
 router.rawBodyMiddleware = express.raw({ type: '*/*', limit: '64kb' });
 
+/**
+ * 转发告警到下游 target URL（带 HMAC 签名 + 重试 + 死信）
+ * 用法：forwardAlert('https://target.example/webhook', alertPayload)
+ *   - 自动从 process.env.ALERT_TARGET_SECRET 取密钥
+ *   - 失败时落库 alerts_dead_letter，由后台任务回收
+ */
+async function forwardAlert(url, payload) {
+  return deliver({
+    url,
+    payload,
+    secret: process.env.ALERT_TARGET_SECRET,
+  });
+}
+
 module.exports = router;
+module.exports.forwardAlert = forwardAlert;
