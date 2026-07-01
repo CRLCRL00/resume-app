@@ -16,6 +16,12 @@
       </view>
       <view class="btn-danger" data-openid="{{item.openid}}" bindtap="remove">移除</view>
     </view>
-    <view wx:if="{{items.length === 0}}" class="empty">暂无 admin</view>
+    <view class="empty-wrap" wx:if="{{loading}}">
+      <text>加载中…</text>
+    </view>
+    <view class="empty-wrap" wx:elif="{{items.length === 0}}">
+      <text class="empty">{{emptyText || '暂无数据'}}</text>
+      <button class="btn-secondary empty-retry" bindtap="loadList">重试</button>
+    </view>
   </view>
 </view>

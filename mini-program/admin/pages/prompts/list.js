@@ -1,15 +1,16 @@
 const { request } = require('../../../utils/request');
 
 Page({
-  data: { items: [] },
+  data: { items: [], list: [], loading: false, emptyText: '暂无 prompt' },
 
-  onShow() { this.load(); },
+  onShow() { this.loadList(); },
 
-  async load() {
+  async loadList() {
+    this.setData({ loading: true });
     try {
       const res = await request({ url: '/admin/prompts' });
-      this.setData({ items: res.data.data.items });
-    } catch (e) {}
+      this.setData({ items: res.data.data.items, list: res.data.data.items, loading: false });
+    } catch (e) { this.setData({ loading: false }); }
   },
 
   goEdit(e) {

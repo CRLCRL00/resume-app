@@ -1,18 +1,18 @@
 const { request } = require('../../../utils/request');
 
 Page({
-  data: { items: [], total: 0, page: 1, pageSize: 20, loading: false },
+  data: { items: [], list: [], total: 0, page: 1, pageSize: 20, loading: false, emptyText: '暂无岗位' },
 
-  onShow() { this.load(); },
+  onShow() { this.loadList(); },
 
-  async load() {
+  async loadList() {
     this.setData({ loading: true });
     try {
       const res = await request({
         url: `/admin/jobs?page=${this.data.page}&pageSize=${this.data.pageSize}`,
       });
       const all = this.data.page === 1 ? res.data.data.items : this.data.items.concat(res.data.data.items);
-      this.setData({ items: all, total: res.data.data.total, loading: false });
+      this.setData({ items: all, list: all, total: res.data.data.total, loading: false });
     } catch (e) {
       this.setData({ loading: false });
     }
@@ -21,7 +21,7 @@ Page({
   onReachBottom() {
     if (this.data.items.length < this.data.total) {
       this.setData({ page: this.data.page + 1 });
-      this.load();
+      this.loadList();
     }
   },
 
@@ -33,7 +33,7 @@ Page({
     try {
       await request({ url: `/admin/jobs/${id}/online`, method: 'PATCH' });
       this.setData({ page: 1 });
-      this.load();
+      this.loadList();
     } catch (err) {}
   },
 
@@ -44,7 +44,7 @@ Page({
     try {
       await request({ url: `/admin/jobs/${id}`, method: 'DELETE' });
       this.setData({ page: 1 });
-      this.load();
+      this.loadList();
     } catch (err) {}
   },
 
@@ -53,7 +53,7 @@ Page({
     try {
       await request({ url: `/admin/jobs/${id}/restore`, method: 'PATCH' });
       this.setData({ page: 1 });
-      this.load();
+      this.loadList();
     } catch (err) {}
   },
 });

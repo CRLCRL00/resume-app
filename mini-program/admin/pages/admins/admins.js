@@ -2,18 +2,21 @@ const { request } = require('../../../utils/request');
 
 Page({
   data: {
-    items: [], total: 0, page: 1, pageSize: 20,
+    items: [], list: [], total: 0, page: 1, pageSize: 20, loading: false, emptyText: '暂无 admin',
     form: { openid: '', note: '' },
   },
 
-  onShow() { this.load(); },
+  onShow() { this.loadList(); },
 
-  async load() {
+  async loadList() {
+    this.setData({ loading: true });
     const { page, pageSize } = this.data;
     try {
       const res = await request({ url: `/admin/users?page=${page}&pageSize=${pageSize}` });
-      if (res.data.code === 0) this.setData({ items: res.data.data.items, total: res.data.data.total });
+      if (res.data.code === 0) this.setData({ items: res.data.data.items, list: res.data.data.items, total: res.data.data.total, loading: false });
+      else this.setData({ loading: false });
     } catch (e) {
+      this.setData({ loading: false });
       wx.showToast({ title: '加载失败', icon: 'none' });
     }
   },
@@ -34,7 +37,7 @@ Page({
       if (res.data.code === 0) {
         wx.showToast({ title: '已加', icon: 'success' });
         this.setData({ 'form.openid': '', 'form.note': '' });
-        this.load();
+        this.loadList();
       } else {
         wx.showToast({ title: res.data.message || '失败', icon: 'none' });
       }
@@ -54,7 +57,7 @@ Page({
       const res = await request({ url: `/admin/users/${encodeURIComponent(openid)}`, method: 'DELETE' });
       if (res.data.code === 0) {
         wx.showToast({ title: '删除成功', icon: 'success' });
-        this.load();
+        this.loadList();
       } else {
         wx.showToast({ title: res.data.message || '失败', icon: 'none' });
       }
