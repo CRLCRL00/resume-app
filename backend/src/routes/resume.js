@@ -6,6 +6,7 @@ const { AppError } = require('../middleware/errorHandler');
 const resumeGenerator = require('../services/resumeGenerator');
 const rateLimit = require('../services/rateLimit');
 const pool = require('../config/db');
+const { sanitizeForLlm, sanitizeForLlmDeep } = require('../utils/sanitize');
 
 router.post('/save', userAuth, async (req, res, next) => {
   try {
@@ -64,8 +65,9 @@ router.post('/generate', userAuth, async (req, res, next) => {
       return res.json({ code: 0, data: { resume_id, content_md: row.content_md, cached: true } });
     }
 
-    // 4. 真调 LLM
-    const contentMd = await resumeGenerator.generate(sourceForm);
+    // 4. 真调 LLM — 先 sanitize 用户文本（防 prompt injection）
+    const safeForm = sanitizeForLlmDeep(sourceForm);
+    const contentMd = await resumeGenerator.generate(safeForm);
 
     // 5. 写 DB
     await pool.query('UPDATE resumes SET content_md = ? WHERE id = ?', [contentMd, resume_id]);
