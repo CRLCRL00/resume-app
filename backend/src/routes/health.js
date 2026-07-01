@@ -4,8 +4,44 @@ const pool = require('../config/db');
 const redis = require('../config/redis');
 const logger = require('../utils/logger');
 
+/** Liveness: 进程在 = 200. No external deps. */
+router.get('/live', (_req, res) => {
+  res.json({ code: 0, status: 'live' });
+});
+
+async function dbOk() {
+  try {
+    const [r] = await pool.query('SELECT 1 AS ok');
+    return r[0] && r[0].ok === 1;
+  } catch (_e) {
+    return false;
+  }
+}
+async function redisOk() {
+  try {
+    const r = await redis.ping();
+    return r === 'PONG';
+  } catch (_e) {
+    return false;
+  }
+}
+
+/** Readiness: DB + Redis 都 OK 才 200；任一失败 503. */
+router.get('/ready', async (_req, res) => {
+  const [db, rd] = await Promise.all([dbOk(), redisOk()]);
+  const ok = db && rd;
+  logger[ok ? 'info' : 'error']({ db, rd }, 'health/ready');
+  res.status(ok ? 200 : 503).json({
+    code: ok ? 0 : 1503,
+    status: ok ? 'ready' : 'not_ready',
+    db: db ? 'ok' : 'down',
+    redis: rd ? 'ok' : 'down',
+  });
+});
+
 /**
- * GET /api/health — basic process status.
+ * GET /api/health — basic process status. (backward-compat)
+ * Cheap: no DB/Redis ping.
  */
 router.get('/', (req, res) => {
   res.json({
@@ -24,7 +60,6 @@ router.get('/', (req, res) => {
  */
 router.get('/deep', async (req, res) => {
   const checks = {};
-  // DB
   try {
     const t0 = Date.now();
     await pool.query('SELECT 1');
@@ -32,7 +67,6 @@ router.get('/deep', async (req, res) => {
   } catch (err) {
     checks.db = { ok: false, error: err.message };
   }
-  // Redis
   try {
     const t0 = Date.now();
     const r = await redis.ping();
@@ -41,7 +75,6 @@ router.get('/deep', async (req, res) => {
     checks.redis = { ok: false, error: err.message };
   }
 
-  // 阈值告警：>500ms 视为 degraded，但仍 200
   const LATENCY_WARN_MS = 500;
   const dbLatency = checks.db.latency_ms || 0;
   const redisLatency = checks.redis.latency_ms || 0;
@@ -55,7 +88,6 @@ router.get('/deep', async (req, res) => {
   }
 
   const allOk = checks.db.ok && checks.redis.ok;
-  // 部分降级 → 199 自定义 status 让 LB 报警但不踢实例
   const status = allOk ? 200 : 503;
   const anyDegraded = checks.db.degraded || checks.redis.degraded;
   logger[allOk ? (anyDegraded ? 'warn' : 'info') : 'error'](checks, 'health/deep');
