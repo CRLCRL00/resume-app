@@ -14,9 +14,18 @@ const helmet = require('helmet');
 const { corsMiddleware } = require('./middleware/cors');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { resumeLimiter, matchLimiter } = require('./middleware/rateLimit');
+const { adminAuditMiddleware } = require('./middleware/adminAudit');
+
+const { requestContextMiddleware } = require('./middleware/requestContext');
+const logger = require('./utils/logger');
+const pinoHttp = require('pino-http')({ logger, customLogLevel: (req, res, err) => err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info' });
 
 function createApp() {
   const app = express();
+
+  // 请求上下文 + 结构化日志（必须在所有其他 middleware 之前）
+  app.use(requestContextMiddleware);
+  app.use(pinoHttp);
 
   // 安全头（HSTS preload + 强化 COOP/COEP + cross-origin 资源）
   app.use(helmet({
@@ -73,6 +82,7 @@ function createApp() {
   app.use('/api/health', healthRouter);
   app.use('/api/auth', authRouter);
   app.use('/api/test', testRouter);
+  app.use('/api/admin', adminAuditMiddleware);
   app.use('/api/admin', adminRouter);
   // LLM 端点限流：仅作用于具体子路径
   app.use('/api/resume/generate', resumeLimiter);
