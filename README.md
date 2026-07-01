@@ -152,3 +152,38 @@ cd backend && npm test -- --test-concurrency=1
 - 仓库：https://github.com/CRLCRL00/resume-app
 - 微信小程序 AppID: `wx3c0c93a02f5d2356`
 - 服务部署：43.139.176.199:443（serveo.net tunnel）
+
+## Deploy
+
+服务器无 SSH key 访问 origin → 用 GH Actions 打包 → SCP 上传 → 服务器解压重启。
+
+### GH Actions 流程
+1. Repo → Settings → Secrets → Actions 新增：
+   - `SERVER_HOST`（e.g. `43.139.176.199`）
+   - `SERVER_USER`（e.g. `ubuntu`）
+   - `SERVER_SSH_KEY`（对应 `~/.ssh/authorized_keys` 的私钥）
+2. GitHub → Actions → Deploy → Run workflow → 选 ref
+3. 流水线：tar backend（排除 node_modules/.env/logs/tests）→ artifact → SCP → 服务器跑 `scripts/deploy.sh` → pm2 reload → `/api/health` smoke
+
+### 手动
+```bash
+# 本地打包
+tar --exclude='node_modules' --exclude='.env' --exclude='*.log' \
+    --exclude='tests' --exclude='coverage' \
+    -czf /tmp/release.tar.gz backend/
+scp /tmp/release.tar.gz ubuntu@43.139.176.199:/tmp/
+
+# 服务器执行
+bash /opt/resume-app/backend/scripts/deploy.sh /tmp/release.tar.gz
+```
+
+### 回滚
+服务器 `.deploy-backup/<ts>/` 保留最近 5 个版本：
+```bash
+cd /opt/resume-app/backend
+cp -p .deploy-backup/<previous-ts>/package.json .
+cp -pR .deploy-backup/<previous-ts>/src .
+pm2 reload resume-app-backend
+```
+
+> ⚠️ Windows 下 `git update-index --chmod=+x` 可能不持久，服务器上用 `bash scripts/deploy.sh` 显式调用即可。

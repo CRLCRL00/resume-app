@@ -1,0 +1,52 @@
+name: Deploy
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Git ref to deploy (branch or SHA)'
+        required: true
+        default: 'develop'
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref }}
+      - name: Tar backend (exclude node_modules, .env, logs)
+        run: |
+          tar --exclude='node_modules' --exclude='.env' --exclude='*.log' \
+              --exclude='tests' --exclude='coverage' \
+              -czf resume-app-backend.tar.gz backend/
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: resume-app-backend
+          path: resume-app-backend.tar.gz
+  deploy:
+    needs: package
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: resume-app-backend
+      - name: SCP to server
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: 'resume-app-backend.tar.gz'
+          target: '/tmp/'
+          command_timeout: '60s'
+      - name: Run deploy script on server
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            DEPLOY_TARBALL=/tmp/resume-app-backend.tar.gz \
+            PM2_NAME=resume-app-backend \
+            bash /opt/resume-app/backend/scripts/deploy.sh
