@@ -41,6 +41,18 @@ const dbPoolConnections = new client.Gauge({
   help: 'DB connection pool state',
   labelNames: ['state'], // all / free / used
 });
+// DB queries
+const dbQueries = new client.Counter({
+  name: 'db_queries_total',
+  help: 'DB queries by status',
+  labelNames: ['status'], // ok / err
+});
+const dbQueryDuration = new client.Histogram({
+  name: 'db_query_duration_seconds',
+  help: 'DB query duration',
+  labelNames: ['op'], // select / insert / update / delete
+  buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
+});
 // 周期采 DB pool + redis 状态
 setInterval(() => {
   try {
@@ -127,4 +139,6 @@ module.exports = {
   httpDuration,
   slowOps,
   dbPoolConnections,
+  dbQueries,
+  dbQueryDuration,
 };
