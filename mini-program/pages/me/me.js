@@ -32,4 +32,8 @@ Page({
   onAdminLegal() {
     wx.navigateTo({ url: '/admin/pages/legal/legal' });
   },
+
+  onAdminAdmins() {
+    wx.navigateTo({ url: '/admin/pages/admins/admins' });
+  },
 });

@@ -37,6 +37,25 @@ function createApp() {
 
   app.use(express.json({ limit: '1mb' }));
 
+  // HTTP timing metrics（记录每个请求耗时到 Prometheus histogram）
+  const m = metricsRouter;
+  app.use((req, res, next) => {
+    if (req.path === '/api/internal/metrics') return next();
+    const t0 = Date.now();
+    res.on('finish', () => {
+      const dur = (Date.now() - t0) / 1000;
+      // 路由高基数标签：用 req.baseUrl + route.path（无 route 时 fallback req.path）
+      const labelRoute = (req.route ? req.baseUrl + req.route.path : req.baseUrl || req.path) || 'unknown';
+      const status = String(res.statusCode);
+      try {
+        m.httpRequests.inc({ method: req.method, route: labelRoute, status });
+        m.httpDuration.observe({ method: req.method, route: labelRoute, status }, dur);
+        if (dur > 1) m.slowOps.inc({ route: labelRoute, op: 'slow_request' });
+      } catch (_e) { /* ignore */ }
+    });
+    next();
+  });
+
   // Swagger UI inline HTML 需要 inline-block 资源；个别路由开放 cross-origin
   app.use('/api/docs', (req, res, next) => {
     res.setHeader('Cross-Origin-Embedder-Policy', 'unsafe-none');

@@ -77,6 +77,11 @@ jobs:
         working-directory: backend
         run: npm test -- --test-force-exit --test-concurrency=1
 
+      - name: Dep audit (production)
+        working-directory: backend
+        run: |
+          npm audit --omit=dev --registry https://registry.npmjs.org/ || (echo '::warning::Dep audit reported vulnerabilities, please review'; exit 0)
+
       - name: Run e2e smoke (optional)
         working-directory: backend
         run: |

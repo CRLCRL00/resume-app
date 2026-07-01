@@ -35,5 +35,9 @@
       <text class="admin-text">⚖ 法务文档版本</text>
       <text class="arrow">›</text>
     </view>
+    <view class="row admin-row" bindtap="onAdminAdmins">
+      <text class="admin-text">⚙ Admin 用户管理</text>
+      <text class="arrow">›</text>
+    </view>
   </view>
 </view>

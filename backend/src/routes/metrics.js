@@ -22,6 +22,19 @@ const httpRequests = new client.Counter({
   help: 'HTTP requests by route + status',
   labelNames: ['method', 'route', 'status'],
 });
+// 延迟直方图：按 method + route + status
+const httpDuration = new client.Histogram({
+  name: 'http_request_duration_seconds',
+  help: 'HTTP request duration',
+  labelNames: ['method', 'route', 'status'],
+  buckets: [0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5, 10],
+});
+// 慢操作：> 1s 自动记到 slowOps
+const slowOps = new client.Counter({
+  name: 'slow_operations_total',
+  help: 'Operations exceeding 1s',
+  labelNames: ['route', 'op'],
+});
 
 /**
  * GET /api/internal/metrics — Prometheus exposition
@@ -42,4 +55,6 @@ module.exports = {
   llmCalls,
   llmTokens,
   httpRequests,
+  httpDuration,
+  slowOps,
 };

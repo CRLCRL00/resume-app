@@ -1,0 +1,21 @@
+<view class="container">
+  <view class="card">
+    <view class="section-title">新增 admin</view>
+    <input class="input" placeholder="openid" value="{{form.openid}}" bindinput="setField" data-field="openid" />
+    <input class="input" placeholder="备注 (可选)" value="{{form.note}}" bindinput="setField" data-field="note" />
+    <view class="btn-primary" bindtap="add">添加 admin</view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">当前 admin ({{items.length}} / {{total}})</view>
+    <view wx:for="{{items}}" wx:key="id" class="row">
+      <view class="row-info">
+        <view class="openid">{{item.openid}}</view>
+        <view class="note">{{item.note || '无备注'}} · {{item.nickname || '无昵称'}}</view>
+        <view class="time">{{item.created_at}}</view>
+      </view>
+      <view class="btn-danger" data-openid="{{item.openid}}" bindtap="remove">移除</view>
+    </view>
+    <view wx:if="{{items.length === 0}}" class="empty">暂无 admin</view>
+  </view>
+</view>
