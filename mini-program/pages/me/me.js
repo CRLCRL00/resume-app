@@ -28,4 +28,8 @@ Page({
   onAdminLogs() {
     wx.navigateTo({ url: '/admin/pages/logs/list' });
   },
+
+  onAdminLegal() {
+    wx.navigateTo({ url: '/admin/pages/legal/legal' });
+  },
 });

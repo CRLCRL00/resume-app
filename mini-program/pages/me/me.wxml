@@ -31,5 +31,9 @@
       <text class="admin-text">⚙ 操作日志</text>
       <text class="arrow">›</text>
     </view>
+    <view class="row admin-row" bindtap="onAdminLegal">
+      <text class="admin-text">⚖ 法务文档版本</text>
+      <text class="arrow">›</text>
+    </view>
   </view>
 </view>

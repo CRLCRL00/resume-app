@@ -40,7 +40,7 @@ fi
 echo "[$LOG_TS] FAIL HTTP=$HTTP body=$(head -c 200 /tmp/health.json)" >> "$LOG"
 echo "$(TS)" > "$STATE_FILE"
 
-# Optional webhook — HMAC-SHA256 签 (防重放/伪造)
+# Optional webhook — HMAC-SHA256 签 (防重放/伪造) + retry x3
 if [ -n "${HEALTH_WEBHOOK:-}" ]; then
   PAYLOAD=$(cat <<JSON
 {"timestamp":"$LOG_TS","url":"$URL","http":$HTTP,"body":$(head -c 500 /tmp/health.json | jq -Rs .)}
@@ -48,12 +48,22 @@ JSON
 )
   TS_MS=$(date +%s%3N)
   SIG=$(printf "%s" "$PAYLOAD$TS_MS" | openssl dgst -sha256 -hmac "$ALERT_TOKEN" | sed 's/^.* //')
-  curl -m 5 -X POST "$HEALTH_WEBHOOK" \
-    -H 'Content-Type: application/json' \
-    -H "X-Alert-Token: $ALERT_TOKEN" \
-    -H "X-Alert-Timestamp: $TS_MS" \
-    -H "X-Alert-Signature: sha256=$SIG" \
-    -d "$PAYLOAD" 2>/dev/null || true
+  # retry x3 with backoff (2s, 4s)
+  for attempt in 1 2 3; do
+    HTTP_C=$(curl -m 5 -s -o /dev/null -w '%{http_code}' -X POST "$HEALTH_WEBHOOK" \
+      -H 'Content-Type: application/json' \
+      -H "X-Alert-Token: $ALERT_TOKEN" \
+      -H "X-Alert-Timestamp: $TS_MS" \
+      -H "X-Alert-Signature: sha256=$SIG" \
+      -d "$PAYLOAD" 2>/dev/null || echo "000")
+    if [ "$HTTP_C" = "200" ]; then
+      echo "[$(TS)] webhook attempt $attempt OK ($HTTP_C)" >> "$LOG"
+      break
+    fi
+    echo "[$(TS)] webhook attempt $attempt fail ($HTTP_C)" >> "$LOG"
+    [ "$attempt" -eq 3 ] && break
+    sleep $((attempt * 2))
+  done
 fi
 
 # Console hints

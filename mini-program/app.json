@@ -16,7 +16,8 @@
       "pages/jobs/edit",
       "pages/prompts/list",
       "pages/prompts/edit",
-      "pages/logs/list"
+      "pages/logs/list",
+      "pages/legal/legal"
     ]
   }],
   "window": {
