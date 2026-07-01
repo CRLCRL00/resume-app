@@ -35,6 +35,31 @@ const slowOps = new client.Counter({
   help: 'Operations exceeding 1s',
   labelNames: ['route', 'op'],
 });
+// DB 连接池：Gauge（采集时读取 pool 状态）
+const dbPoolConnections = new client.Gauge({
+  name: 'db_pool_connections',
+  help: 'DB connection pool state',
+  labelNames: ['state'], // all / free / used
+});
+// 周期采 DB pool + redis 状态
+setInterval(() => {
+  try {
+    const pool = require('../config/db');
+    // mysql2 v3 private API：pool.pool._allConnections / _freeConnections
+    // 兼容兜底：拿不到就只报 config.connectionLimit
+    const all = pool.pool?._allConnections?.length
+      ?? pool.pool?.allConnections?.length
+      ?? pool.pool?.config?.connectionLimit
+      ?? 0;
+    const free = pool.pool?._freeConnections?.length
+      ?? pool.pool?.freeConnections?.length
+      ?? 0;
+    const used = Math.max(all - free, 0);
+    dbPoolConnections.set({ state: 'all' }, all);
+    dbPoolConnections.set({ state: 'free' }, free);
+    dbPoolConnections.set({ state: 'used' }, used);
+  } catch (_e) { /* 静默 */ }
+}, 10000).unref();
 
 /**
  * GET /api/internal/metrics — Prometheus exposition
@@ -57,4 +82,5 @@ module.exports = {
   httpRequests,
   httpDuration,
   slowOps,
+  dbPoolConnections,
 };

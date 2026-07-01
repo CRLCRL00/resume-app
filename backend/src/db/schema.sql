@@ -129,3 +129,18 @@ INSERT IGNORE INTO `privacy_versions` (`doc_type`, `version`, `note`) VALUES
   ('terms',   '2026-06-29', 'phase 7 initial');
 
 SET FOREIGN_KEY_CHECKS = 1;
+
+-- 9. 迁移记录（防重复跑）
+CREATE TABLE IF NOT EXISTS `schema_migrations` (
+  `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `name` VARCHAR(128) NOT NULL,
+  `applied_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uk_name` (`name`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='Schema migration tracking';
+
+-- 标记已有 migration 已应用（避免 db-init 重跑时冲突）
+INSERT IGNORE INTO `schema_migrations` (`name`) VALUES
+  ('001-jobs-index'),
+  ('002-privacy-versions'),
+  ('003-audit-archive');

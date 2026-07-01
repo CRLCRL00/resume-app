@@ -77,6 +77,13 @@ jobs:
         working-directory: backend
         run: npm test -- --test-force-exit --test-concurrency=1
 
+      - name: Run mini-program unit tests
+        working-directory: mini-program
+        run: |
+          for f in tests/*.test.js; do
+            node --test "$f"
+          done
+
       - name: Dep audit (production)
         working-directory: backend
         run: |
