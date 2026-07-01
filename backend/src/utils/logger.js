@@ -2,68 +2,40 @@ const pino = require('pino');
 const { getRequestId } = require('../middleware/requestContext');
 
 const isTest = process.env.NODE_ENV === 'test' || process.env.npm_lifecycle_event === 'test';
+const isProd = process.env.NODE_ENV === 'production';
 
-const REDACT_PATHS = [
-  'password',
-  'token',
-  'jwt',
-  'authorization',
-  'apikey',
-  'api_key',
-  'deepseek_api_key',
-  'wx_secret',
-  'code',
-  'openid',
-  'req.headers.authorization',
-  'req.headers.cookie',
-  'headers.authorization',
-  'headers.cookie',
-];
+// 开发/staging 用 pretty（如果装有 pino-pretty），否则 JSON line
+const usePretty = !isProd && !isTest && process.env.LOG_PRETTY !== 'false';
 
-const REDACT_STRING_PATTERNS = [
-  /Bearer\s+[A-Za-z0-9_.\-]+/gi,
-  /sk-[A-Za-z0-9]{20,}/g,
-  /\b1[3-9]\d{9}\b/g,
-];
-
-function redactString(v) {
-  if (typeof v !== 'string') return v;
-  let out = v;
-  for (const p of REDACT_STRING_PATTERNS) out = out.replace(p, '[REDACTED]');
-  return out;
-}
-
-function redactValue(v) {
-  if (v == null) return v;
-  if (typeof v === 'string') return redactString(v);
-  if (Array.isArray(v)) return v.map(redactValue);
-  if (typeof v === 'object') {
-    const out = {};
-    for (const [k, val] of Object.entries(v)) {
-      out[k] = REDACT_PATHS.includes(k.toLowerCase()) ? '[REDACTED]' : redactValue(val);
-    }
-    return out;
-  }
-  return v;
-}
+const transport = usePretty
+  ? { target: 'pino-pretty', options: { colorize: true, translateTime: 'SYS:HH:MM:ss.l', ignore: 'pid,hostname' } }
+  : undefined;
 
 const logger = pino({
-  level: process.env.LOG_LEVEL || 'info',
+  level: process.env.LOG_LEVEL || (isProd ? 'info' : 'debug'),
   base: { service: 'resume-app' },
-  formatters: {
-    level(label) { return { level: label }; },
-    log(obj) {
-      return redactValue(obj);
-    },
-  },
+  formatters: { level(label) { return { level: label }; } },
   mixin() {
     const rid = getRequestId();
     return rid ? { requestId: rid } : {};
   },
-  redact: {
-    paths: REDACT_PATHS,
-    censor: '[REDACTED]',
+  serializers: {
+    req(req) {
+      return {
+        method: req.method,
+        url: req.url,
+        remoteAddress: req.remoteAddress || req.ip,
+        headers: req.headers?.['user-agent'] ? { 'user-agent': req.headers['user-agent'] } : undefined,
+      };
+    },
+    res(res) {
+      return { statusCode: res.statusCode };
+    },
+    err(err) {
+      return { type: err.type || err.name, message: err.message, stack: err.stack };
+    },
   },
+  ...(transport ? { transport } : {}),
   ...(isTest ? { level: 'silent' } : {}),
 });
 

@@ -1,7 +1,7 @@
 /**
  * securityLog.js — 重要安全事件审计
  * 落到 admin_operation_logs 表（复用现有 schema，action 前缀 security.*）
- * 同时打 winston 日志（双写）
+ * 同时打 pino 日志（双写）
  *
  * 调用方：
  *   securityLog.record('login.fail', req, { reason: 'bad code' });

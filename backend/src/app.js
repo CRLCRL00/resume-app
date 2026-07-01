@@ -15,10 +15,27 @@ const { corsMiddleware } = require('./middleware/cors');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { resumeLimiter, matchLimiter } = require('./middleware/rateLimit');
 const { adminAuditMiddleware } = require('./middleware/adminAudit');
+const { lockoutMiddleware } = require('./middleware/authLockout');
 
 const { requestContextMiddleware } = require('./middleware/requestContext');
 const logger = require('./utils/logger');
-const pinoHttp = require('pino-http')({ logger, customLogLevel: (req, res, err) => err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info' });
+const pinoHttp = require('pino-http')({
+  logger,
+  customLogLevel: (req, res, err) => err || res.statusCode >= 500 ? 'error' : res.statusCode >= 400 ? 'warn' : 'info',
+  serializers: {
+    req(req) {
+      return {
+        id: req.id,
+        method: req.method,
+        url: req.url,
+        remoteAddress: req.socket?.remoteAddress,
+      };
+    },
+    res(res) {
+      return { statusCode: res.statusCode };
+    },
+  },
+});
 
 function createApp() {
   const app = express();
@@ -80,6 +97,7 @@ function createApp() {
   });
 
   app.use('/api/health', healthRouter);
+  app.use('/api/auth', lockoutMiddleware);
   app.use('/api/auth', authRouter);
   app.use('/api/test', testRouter);
   app.use('/api/admin', adminAuditMiddleware);
