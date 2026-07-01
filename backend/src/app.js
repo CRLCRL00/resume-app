@@ -13,6 +13,7 @@ const metricsRouter = require('./routes/metrics');
 const helmet = require('helmet');
 const { corsMiddleware } = require('./middleware/cors');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
+const { resumeLimiter, matchLimiter } = require('./middleware/rateLimit');
 
 function createApp() {
   const app = express();
@@ -73,6 +74,9 @@ function createApp() {
   app.use('/api/auth', authRouter);
   app.use('/api/test', testRouter);
   app.use('/api/admin', adminRouter);
+  // LLM 端点限流：仅作用于具体子路径
+  app.use('/api/resume/generate', resumeLimiter);
+  app.use('/api/match/generate', matchLimiter);
   app.use('/api/resume', resumeRouter);
   app.use('/api/match', matchRouter);
   app.use('/api/jobs', jobsRouter);
