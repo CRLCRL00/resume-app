@@ -11,6 +11,7 @@ const userRouter = require('./routes/user');
 const alertsRouter = require('./routes/alerts');
 const metricsRouter = require('./routes/metrics');
 const helmet = require('helmet');
+const { corsMiddleware } = require('./middleware/cors');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -20,6 +21,9 @@ function createApp() {
   app.use(helmet({
     contentSecurityPolicy: false,                 // API 不返回 HTML
     crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    dnsPrefetchControl: { allow: false },
+    xFrameOptions: { action: 'deny' },
     strictTransportSecurity: {
       maxAge: 31536000,        // 1 年
       includeSubDomains: true,
@@ -31,6 +35,9 @@ function createApp() {
     noSniff: true,
     xssFilter: true,
   }));
+
+  // 全局 CORS 白名单（基于 env CORS_ALLOWED_ORIGINS）
+  app.use(corsMiddleware);
 
   // /api/internal/* 单独 raw body（HMAC 计算需要原始字节）— 必须在 json parser 前
   app.use('/api/internal/alert', alertsRouter.rawBodyMiddleware);
