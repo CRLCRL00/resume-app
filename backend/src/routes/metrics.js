@@ -74,6 +74,50 @@ router.get('/metrics', async (req, res) => {
   }
 });
 
+/**
+ * GET /api/internal/metrics/summary — JSON snapshot for ops dashboard
+ * Returns last 5 minutes aggregates by reading Counter/Histogram values.
+ */
+router.get('/metrics/summary', async (req, res) => {
+  try {
+    const snapshot = {
+      generatedAt: new Date().toISOString(),
+      counters: {
+        httpRequests: await getCounterMap(httpRequests),
+        slowOps: await getCounterMap(slowOps),
+        llmCalls: await getCounterMap(llmCalls),
+        llmTokens: await getCounterMap(llmTokens),
+      },
+      gauges: {
+        dbPoolConnections: await getGaugeMap(dbPoolConnections),
+      },
+    };
+    res.json({ code: 0, data: snapshot });
+  } catch (err) {
+    res.status(500).json({ code: 500, message: 'snapshot failed' });
+  }
+});
+
+/**
+ * Prometheus client doesn't ship a JSON snapshot helper; gather values per label-set.
+ */
+async function getCounterMap(counter) {
+  const out = {};
+  const metrics = await counter.get();
+  for (const v of metrics.values) {
+    out[v.labels ? JSON.stringify(v.labels) : '{}'] = v.value;
+  }
+  return out;
+}
+async function getGaugeMap(gauge) {
+  const out = {};
+  const metrics = await gauge.get();
+  for (const v of metrics.values) {
+    out[v.labels ? JSON.stringify(v.labels) : '{}'] = v.value;
+  }
+  return out;
+}
+
 module.exports = {
   router,
   register,
