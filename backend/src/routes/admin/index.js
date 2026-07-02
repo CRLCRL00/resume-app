@@ -7,5 +7,6 @@ router.use(require('./prompts'));
 router.use(require('./logs'));
 router.use(require('./legal'));
 router.use(require('./admins'));
+router.use(require('./audit'));
 
 module.exports = router;
