@@ -1,4 +1,5 @@
 name: Deploy
+# 触发方式：Actions UI 手动 Run workflow
 on:
   workflow_dispatch:
     inputs:
