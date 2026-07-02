@@ -1,7 +1,8 @@
 const pool = require('../config/db');
 const { AppError } = require('./errorHandler');
+const { requireCsrf } = require('./csrf');
 
-async function adminAuth(req, res, next) {
+async function adminAuthFn(req, res, next) {
   try {
     const [rows] = await pool.query(
       'SELECT id FROM admins WHERE openid = ? LIMIT 1',
@@ -16,4 +17,5 @@ async function adminAuth(req, res, next) {
   }
 }
 
-module.exports = { adminAuth };
+// adminAuth 作为中间件数组：先校验 admin 身份，再校验 CSRF（mutating 方法）
+module.exports = { adminAuth: [adminAuthFn, requireCsrf], adminAuthFn };
