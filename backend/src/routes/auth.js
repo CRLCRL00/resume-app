@@ -3,6 +3,7 @@ const router = express.Router();
 const wechatService = require('../services/wechat');
 const { sign, signRefresh, verify, decode, revoke, isRevoked, rotateFamily, detectReuse, burnFamily } = require('../services/token');
 const { userAuth } = require('../middleware/auth');
+const { issueCsrf } = require('../middleware/csrf');
 const pool = require('../config/db');
 const redis = require('../config/redis');
 const { AppError } = require('../middleware/errorHandler');
@@ -55,14 +56,16 @@ router.post('/login', checkLockout, async (req, res, next) => {
       user = { id: result.insertId, openid: wx.openid, nickname: null, avatar_url: null };
     }
 
-    const token = sign({ userId: user.id, openid: user.openid });
+    const access = sign({ userId: user.id, openid: user.openid });
+    const decodedAccess = decode(access);
+    const csrf = await issueCsrf(user.openid, decodedAccess.jti);
     // 签 refresh token（family 关联，便于 logout 烧链 + 复用检测）
     const refreshToken = signRefresh({ userId: user.id, openid: user.openid }, user.id);
     securityLog.recordSync('login.ok', req, { userId: user.id, openid: user.openid });
     logger.info({ userId: user.id, openid: user.openid }, 'user login');
 
     await recordSuccess(req);
-    res.json({ code: 0, data: { token, refreshToken, user } });
+    res.json({ code: 0, data: { token: access, refreshToken, csrfToken: csrf, user } });
   } catch (err) {
     recordFailure(req).catch(() => {});
     next(err);
