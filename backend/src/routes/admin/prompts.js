@@ -3,7 +3,7 @@ const router = express.Router();
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
 const { AppError } = require('../../middleware/errorHandler');
-const { promptUpdateSchema } = require('../../middleware/validate');
+const { promptUpdateSchema, validateBody } = require('../../middleware/validate');
 const pool = require('../../config/db');
 const adminLog = require('../../services/adminLog');
 
@@ -27,11 +27,9 @@ router.get('/prompts/:code', userAuth, adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/prompts/:code', userAuth, adminAuth, async (req, res, next) => {
+router.put('/prompts/:code', userAuth, adminAuth, validateBody(promptUpdateSchema), async (req, res, next) => {
   try {
-    const { error, value } = promptUpdateSchema.validate(req.body);
-    if (error) throw new AppError(1000, error.message, 400);
-
+    const value = req.body;
     const code = req.params.code;
     const conn = await pool.getConnection();
     try {

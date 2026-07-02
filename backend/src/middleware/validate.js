@@ -53,4 +53,32 @@ const promptUpdateSchema = Joi.object({
   content: Joi.string().max(50000).required(),
 });
 
-module.exports = { resumeSchema, jobSchema, promptUpdateSchema };
+/**
+ * validateBody(schema, { source = 'body', stripUnknown = false } = {})
+ * Express middleware: validate req[source] against joi schema.
+ * On success: req[source] is replaced with the cleaned value (Joi strips unknown keys if configured).
+ * On failure: 400 with { code: 400, message, details }.
+ */
+function validateBody(schema, { source = 'body', stripUnknown = false } = {}) {
+  if (!schema || typeof schema.validate !== 'function') {
+    throw new Error('validateBody requires a Joi schema');
+  }
+  return (req, res, next) => {
+    const data = req[source];
+    const opts = {
+      abortEarly: false,
+      stripUnknown,
+      convert: true,
+      errors: { wrap: { label: false } },
+    };
+    const { error, value } = schema.validate(data, opts);
+    if (error) {
+      const details = error.details.map(d => ({ path: d.path.join('.'), message: d.message }));
+      return res.status(400).json({ code: 400, message: '请求参数错误', details });
+    }
+    req[source] = value;
+    next();
+  };
+}
+
+module.exports = { resumeSchema, jobSchema, promptUpdateSchema, validateBody };
