@@ -6,7 +6,30 @@ on:
         description: 'Git ref to deploy (branch or SHA)'
         required: true
         default: 'develop'
+      validate_only:
+        description: 'Validate secrets + connectivity only (skip package/deploy)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
 jobs:
+  validate:
+    if: ${{ inputs.validate_only == 'true' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH connectivity check
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          script: |
+            echo "[validate] host=$(hostname)"
+            echo "[validate] uptime=$(uptime -p)"
+            pm2 show resume-app-backend 2>&1 | grep -E 'status|uptime' | head -5
+            curl -sS -m 5 -o /dev/null -w '[validate] /api/health => %{http_code}\n' http://127.0.0.1:3000/api/health || true
   package:
     runs-on: ubuntu-latest
     steps:
@@ -24,6 +47,7 @@ jobs:
           name: resume-app-backend
           path: resume-app-backend.tar.gz
   deploy:
+    if: ${{ inputs.validate_only != 'true' }}
     needs: package
     runs-on: ubuntu-latest
     steps:
