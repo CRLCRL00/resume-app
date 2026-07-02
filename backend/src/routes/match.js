@@ -5,8 +5,9 @@ const { AppError } = require('../middleware/errorHandler');
 const matchService = require('../services/matchService');
 const pool = require('../config/db');
 const { sanitizeForLlm } = require('../utils/sanitize');
+const { idempotency, idempotencyCapture, captureBody } = require('../middleware/idempotency');
 
-router.post('/', userAuth, async (req, res, next) => {
+async function matchHandler(req, res, next) {
   try {
     const { resume_id } = req.body;
     if (!resume_id) throw new AppError(1000, 'resume_id required', 400);
@@ -34,6 +35,8 @@ router.post('/', userAuth, async (req, res, next) => {
     const result = await matchService.match(req.user.userId, resume_id);
     res.json({ code: 0, data: result });
   } catch (err) { next(err); }
-});
+}
+
+router.post('/', userAuth, idempotency({ prefix: 'match' }), captureBody(), matchHandler, idempotencyCapture());
 
 module.exports = router;

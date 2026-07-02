@@ -7,6 +7,7 @@ const resumeGenerator = require('../services/resumeGenerator');
 const rateLimit = require('../services/rateLimit');
 const pool = require('../config/db');
 const { sanitizeForLlm, sanitizeForLlmDeep } = require('../utils/sanitize');
+const { idempotency, idempotencyCapture, captureBody } = require('../middleware/idempotency');
 
 router.post('/save', userAuth, async (req, res, next) => {
   try {
@@ -35,7 +36,7 @@ router.post('/save', userAuth, async (req, res, next) => {
   }
 });
 
-router.post('/generate', userAuth, async (req, res, next) => {
+async function generateHandler(req, res, next) {
   try {
     const { resume_id } = req.body;
     if (!resume_id) throw new AppError(1000, 'resume_id required', 400);
@@ -76,7 +77,9 @@ router.post('/generate', userAuth, async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-});
+}
+
+router.post('/generate', userAuth, idempotency({ prefix: 'resume' }), captureBody(), generateHandler, idempotencyCapture());
 
 router.get('/current', userAuth, async (req, res, next) => {
   try {
