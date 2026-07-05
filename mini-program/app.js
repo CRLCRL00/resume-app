@@ -1,14 +1,34 @@
 // 工具栏 → 详情 → 本地设置 → 勾「不校验合法域名」才能访问 https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com
 // 真机预览时 wx.login 自动跑，模拟器 timeout 所以跳过
+const { reportClientError } = require('./utils/monitor');
+
 App({
   globalData: {
     userInfo: null,
     privacyAccepted: false,
   },
 
+  onError(err) {
+    // App 生命周期里捕获的脚本错误 — 上报到后端 client_errors
+    reportClientError('app_onerror', err);
+  },
+
   onLaunch() {
     const accepted = wx.getStorageSync('privacy_accepted');
     this.globalData.privacyAccepted = !!accepted;
+
+    // 全局 wx.onError（promise reject 之外的脚本异常）
+    if (typeof wx.onError === 'function') {
+      wx.onError((err) => {
+        reportClientError('wx_onerror', err);
+      });
+    }
+    // 全局未处理 Promise 拒绝
+    if (typeof wx.onUnhandledRejection === 'function') {
+      wx.onUnhandledRejection((res) => {
+        reportClientError('unhandled_rejection', (res && res.reason) || res);
+      });
+    }
 
     // 隐私版本检查 — 后端版本 newer → 清旧 accept + 设 reaccept flag
     this.checkPrivacyVersion(accepted);

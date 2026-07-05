@@ -10,6 +10,7 @@ const legalRouter = require('./routes/legal');
 const userRouter = require('./routes/user');
 const alertsRouter = require('./routes/alerts');
 const metricsRouter = require('./routes/metrics');
+const clientErrorsRouter = require('./routes/clientErrors');
 const helmet = require('helmet');
 const { corsMiddleware } = require('./middleware/cors');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
@@ -112,6 +113,7 @@ function createApp() {
   app.use('/api/user', userRouter);
   app.use('/api/internal', alertsRouter);
   app.use('/api/internal', metricsRouter.router);
+  app.use('/api/internal', clientErrorsRouter);
   // OpenAPI docs
   const { openapiRouter } = require('./routes/openapi');
   app.use('/api/docs', openapiRouter);

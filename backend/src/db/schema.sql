@@ -145,7 +145,8 @@ INSERT IGNORE INTO `schema_migrations` (`name`) VALUES
   ('002-privacy-versions'),
   ('003-audit-archive'),
   ('004-admin-audit'),
-  ('005-alerts-dead-letter');
+  ('005-alerts-dead-letter'),
+  ('028-client-errors');
 
 -- 004-admin-audit: admin 写操作审计（双跑安全）
 CREATE TABLE IF NOT EXISTS `admin_audit` (
@@ -177,4 +178,23 @@ CREATE TABLE IF NOT EXISTS `alerts_dead_letter` (
   `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_created` (`created_at`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+-- 028-client-errors: 小程序前端运行时错误（App.onError / wx.onError / request_fail）
+CREATE TABLE IF NOT EXISTS `client_errors` (
+  `id` BIGINT UNSIGNED NOT NULL AUTO_INCREMENT,
+  `openid` VARCHAR(64) DEFAULT NULL,
+  `appid` VARCHAR(64) DEFAULT 'wx3c0c93a02f5d2356',
+  `version` VARCHAR(32) DEFAULT NULL,
+  `platform` VARCHAR(32) DEFAULT NULL,
+  `error_type` VARCHAR(64) DEFAULT NULL COMMENT 'app_onerror | wx_onerror | request_fail | unhandled_rejection',
+  `message` TEXT,
+  `stack` TEXT,
+  `url` VARCHAR(512) DEFAULT NULL,
+  `metadata` JSON DEFAULT NULL COMMENT 'statusCode, requestId 等扩展上下文',
+  `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (`id`),
+  KEY `idx_openid_created` (`openid`, `created_at`),
+  KEY `idx_type_created` (`error_type`, `created_at`),
+  KEY `idx_appid_version` (`appid`, `version`, `created_at`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;

@@ -10,6 +10,7 @@
  * @returns {Promise} resolves with res.data, rejects with res.data or err
  */
 const { getToken, clearToken } = require('./auth');
+const { reportClientError } = require('./monitor');
 
 const BASE_URL = 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api';
 
@@ -50,6 +51,8 @@ function doRequest(opts) {
         }
       },
       fail: (err) => {
+        // 上报请求失败到后端 client_errors（业务级错误不报，只报网络层 fail）
+        reportClientError('request_fail', err, { url: opts.url, statusCode: (err && err.statusCode) || null });
         if (!opts.silent) {
           showToast(opts._retried ? '网络异常，已重试' : '网络错误，请检查网络');
         }
