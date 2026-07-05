@@ -19,6 +19,16 @@ test('GET /api/health returns enriched shape', async () => {
   assert.ok(res.body.data.redis);
 });
 
+test('GET /api/health exposes redis.persistence section', async () => {
+  const app = createApp();
+  const res = await request(app).get('/api/health');
+  assert.ok(res.body.data.redis);
+  assert.ok(res.body.data.redis.persistence);
+  // persistence may be 'unknown' when CONFIG GET is disabled (test env)
+  assert.ok('aof' in res.body.data.redis.persistence);
+  assert.ok('rdb' in res.body.data.redis.persistence);
+});
+
 test('GET /api/health/live always 200', async () => {
   const app = createApp();
   const res = await request(app).get('/api/health/live');

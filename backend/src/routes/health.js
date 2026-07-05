@@ -11,6 +11,32 @@ const VERSION = require('../../package.json').version || '0.1.0';
 
 const START_TIME = Date.now();
 
+// Cached Redis persistence info — read once at startup, cached for /api/health.
+// Falls back to 'unknown' when not yet populated or CONFIG GET unavailable.
+let PERSISTENCE_CACHE = { aof: 'unknown', rdb: 'unknown' };
+let PERSISTENCE_POPULATED = false;
+
+async function populatePersistenceCache() {
+  if (PERSISTENCE_POPULATED) return PERSISTENCE_CACHE;
+  try {
+    const aofRes = await redis.call('CONFIG', 'GET', 'appendonly');
+    const saveRes = await redis.call('CONFIG', 'GET', 'save');
+    PERSISTENCE_CACHE = {
+      aof: Array.isArray(aofRes) ? (aofRes[1] || 'unknown') : 'unknown',
+      rdb: Array.isArray(saveRes) ? (saveRes[1] || '') : '',
+    };
+    PERSISTENCE_POPULATED = true;
+  } catch (err) {
+    // CONFIG GET may be disabled in test/managed Redis — keep cache as 'unknown'
+    logger.warn({ err: err.message }, 'redis persistence cache populate failed');
+    PERSISTENCE_POPULATED = true; // don't retry every health check
+  }
+  return PERSISTENCE_CACHE;
+}
+
+// Eagerly populate on module load (non-blocking)
+populatePersistenceCache().catch(() => {});
+
 async function pingDb() {
   const start = Date.now();
   try {
@@ -37,6 +63,7 @@ async function pingRedis() {
  */
 router.get('/', async (_req, res) => {
   const [db, rdb] = await Promise.all([pingDb(), pingRedis()]);
+  const persistence = await populatePersistenceCache();
   const ok = db.ok && rdb.ok;
   logger[ok ? 'info' : 'error']({ db: db.ok, redis: rdb.ok }, 'health/');
   res.status(ok ? 200 : 503).json({
@@ -52,7 +79,13 @@ router.get('/', async (_req, res) => {
       dbPingMs: db.latencyMs,
       redisPingMs: rdb.latencyMs,
       db: db,
-      redis: rdb,
+      redis: {
+        ...rdb,
+        persistence: {
+          aof: persistence.aof,
+          rdb: persistence.rdb,
+        },
+      },
     },
   });
 });

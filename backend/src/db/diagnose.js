@@ -1,5 +1,7 @@
 const pool = require('../config/db');
+const redis = require('../config/redis');
 const logger = require('../utils/logger');
+const { checkRedisPersistence } = require('./redisCheck');
 
 // 关键表列表（应用主路径用到的）
 const REQUIRED_TABLES = [
@@ -86,6 +88,16 @@ async function diagnose() {
     warnings.push(`[diagnose] db connect/inspect failed: ${err.message}`);
   }
 
+  // 5. Redis persistence (AOF + RDB) — only outside test env
+  if (!isTest()) {
+    try {
+      const redisResult = await checkRedisPersistence(redis);
+      for (const w of redisResult.warnings) warnings.push(w);
+    } catch (err) {
+      warnings.push(`[diagnose] redis persistence check threw: ${err.message}`);
+    }
+  }
+
   for (const w of warnings) {
     logger.warn(w);
   }
@@ -93,4 +105,4 @@ async function diagnose() {
   return { ok: warnings.length === 0, warnings };
 }
 
-module.exports = { diagnose, REQUIRED_TABLES };
+module.exports = { diagnose, REQUIRED_TABLES, checkRedisPersistence };
