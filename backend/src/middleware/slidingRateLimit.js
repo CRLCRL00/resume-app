@@ -1,5 +1,19 @@
 const redis = require('../config/redis');
 const logger = require('../utils/logger');
+const client = require('prom-client');
+
+// Prometheus counter：每次 allow/block/fail-open 决策 +1
+// 用 globalThis 单例防护：测试 require.cache 重复 require 时不会重复注册
+const slidingRateLimitDecisions = (() => {
+  if (globalThis.__slidingRateLimitCounter) return globalThis.__slidingRateLimitCounter;
+  const c = new client.Counter({
+    name: 'sliding_rate_limit_decisions_total',
+    help: 'Sliding window rate limit decisions',
+    labelNames: ['name', 'decision'], // decision ∈ {allowed, blocked, failopen}
+  });
+  globalThis.__slidingRateLimitCounter = c;
+  return c;
+})();
 
 /**
  * Sliding window rate limiter via Redis ZSET.
@@ -23,9 +37,11 @@ const logger = require('../utils/logger');
  * @param {string} opts.key      Redis key（通常已含 prefix + name + identity）
  * @param {number} opts.limit    窗口内允许最大请求数
  * @param {number} opts.windowMs 窗口大小（毫秒）
+ * @param {string} [opts.metricName] metrics label 用的 name（默认 'unknown'）
  * @returns {Promise<{allowed:boolean, count:number, limit:number, retryAfterMs?:number, error?:string}>}
  */
-async function slidingRateLimit({ key, limit, windowMs }) {
+async function slidingRateLimit({ key, limit, windowMs, metricName }) {
+  const name = metricName || 'unknown';
   const now = Date.now();
   const cutoff = now - windowMs;
   try {
@@ -42,15 +58,18 @@ async function slidingRateLimit({ key, limit, windowMs }) {
       const oldest = await redis.zrange(key, 0, 0, 'WITHSCORES');
       const oldestTs = oldest.length === 2 ? parseInt(oldest[1], 10) : now;
       const retryAfterMs = Math.max(0, oldestTs + windowMs - now);
+      slidingRateLimitDecisions.inc({ name: `sliding:${name}`, decision: 'blocked' });
       return { allowed: false, count, limit, retryAfterMs };
     }
 
     // 放行 + 写入本次请求
     const member = `${now}-${Math.random().toString(36).slice(2, 10)}`;
     await redis.multi().zadd(key, now, member).pexpire(key, windowMs).exec();
+    slidingRateLimitDecisions.inc({ name: `sliding:${name}`, decision: 'allowed' });
     return { allowed: true, count: count + 1, limit };
   } catch (err) {
     logger.warn({ err: err.message, key }, 'sliding rate limit: redis error, fail-open');
+    slidingRateLimitDecisions.inc({ name: `sliding:${name}`, decision: 'failopen' });
     return { allowed: true, count: 0, limit, error: err.message };
   }
 }
@@ -59,7 +78,7 @@ async function slidingRateLimit({ key, limit, windowMs }) {
  * Express middleware factory。
  *
  * @param {object} opts
- * @param {string} opts.name      路由名（用于 Redis key namespace + 日志）
+ * @param {string} opts.name      路由名（用于 Redis key namespace + 日志 + metrics label）
  * @param {number} opts.limit     窗口内最大请求数
  * @param {number} opts.windowMs  窗口大小（毫秒）
  * @param {(req:any)=>string} opts.keyFn  从 req 提取 identity（IP / openid 等）
@@ -69,7 +88,7 @@ function slidingRateLimitMiddleware({ name, limit, windowMs, keyFn }) {
     try {
       const identity = keyFn(req);
       const key = `rl:sliding:${name}:${identity}`;
-      const result = await slidingRateLimit({ key, limit, windowMs });
+      const result = await slidingRateLimit({ key, limit, windowMs, metricName: name });
 
       res.set('X-RateLimit-Limit', String(limit));
       res.set('X-RateLimit-Remaining', String(Math.max(0, limit - result.count)));
@@ -92,4 +111,9 @@ function slidingRateLimitMiddleware({ name, limit, windowMs, keyFn }) {
   };
 }
 
-module.exports = { slidingRateLimitMiddleware, slidingRateLimit };
+module.exports = {
+  slidingRateLimitMiddleware,
+  slidingRateLimit,
+  // 暴露 counter 便于测试 / summary endpoint 引用
+  slidingRateLimitDecisions,
+};
