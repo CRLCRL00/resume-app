@@ -11,10 +11,12 @@ const userRouter = require('./routes/user');
 const alertsRouter = require('./routes/alerts');
 const metricsRouter = require('./routes/metrics');
 const clientErrorsRouter = require('./routes/clientErrors');
+const sentryDebugRouter = require('./routes/sentryDebug');
 const helmet = require('helmet');
 const { corsMiddleware } = require('./middleware/cors');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { resumeLimiter, matchLimiter } = require('./middleware/rateLimit');
+const { slidingRateLimitMiddleware } = require('./middleware/slidingRateLimit');
 const { adminAuditMiddleware } = require('./middleware/adminAudit');
 const { lockoutMiddleware } = require('./middleware/authLockout');
 
@@ -98,14 +100,50 @@ function createApp() {
   });
 
   app.use('/api/health', healthRouter);
+
+  // Sliding-window 限流（Round 29 — Redis ZSET，per-IP/per-user）
+  // 必须注册在 `/api/auth` 等宽匹配之前，否则会被宽匹配提前消费
+  const loginIpLimiter = slidingRateLimitMiddleware({
+    name: 'auth-login',
+    limit: 5,
+    windowMs: 60_000,
+    keyFn: (req) => req.ip || req.socket?.remoteAddress || 'unknown',
+  });
+  const refreshIpLimiter = slidingRateLimitMiddleware({
+    name: 'auth-refresh',
+    limit: 10,
+    windowMs: 60_000,
+    keyFn: (req) => req.ip || req.socket?.remoteAddress || 'unknown',
+  });
+  app.use('/api/auth/login', loginIpLimiter);
+  app.use('/api/auth/refresh', refreshIpLimiter);
+
   app.use('/api/auth', lockoutMiddleware);
   app.use('/api/auth', authRouter);
   app.use('/api/test', testRouter);
   app.use('/api/admin', adminAuditMiddleware);
   app.use('/api/admin', adminRouter);
   // LLM 端点限流：仅作用于具体子路径
+  // - 旧固定窗口（Round 19）保留：每 IP 10 min 30 req
+  // - 新滑动窗口：每用户 60s 10 req，AFTER userAuth（用户级配额更精准）
   app.use('/api/resume/generate', resumeLimiter);
   app.use('/api/match/generate', matchLimiter);
+  const resumeGenUserLimiter = slidingRateLimitMiddleware({
+    name: 'resume-generate',
+    limit: 10,
+    windowMs: 60_000,
+    keyFn: (req) => req.user?.openid || req.user?.userId || req.ip || 'unknown',
+  });
+  const matchGenUserLimiter = slidingRateLimitMiddleware({
+    name: 'match-generate',
+    limit: 10,
+    windowMs: 60_000,
+    keyFn: (req) => req.user?.openid || req.user?.userId || req.ip || 'unknown',
+  });
+  // 注意：userAuth 在 router 内部（POST /generate 第一段），所以这里按 IP 兜底限流，
+  // 真正的 per-user 配额在路由内由 services/rateLimit.check 覆盖。两者叠加防护。
+  app.use('/api/resume/generate', resumeGenUserLimiter);
+  app.use('/api/match/generate', matchGenUserLimiter);
   app.use('/api/resume', resumeRouter);
   app.use('/api/match', matchRouter);
   app.use('/api/jobs', jobsRouter);
@@ -114,6 +152,7 @@ function createApp() {
   app.use('/api/internal', alertsRouter);
   app.use('/api/internal', metricsRouter.router);
   app.use('/api/internal', clientErrorsRouter);
+  app.use('/api/internal', sentryDebugRouter);
   // OpenAPI docs
   const { openapiRouter } = require('./routes/openapi');
   app.use('/api/docs', openapiRouter);

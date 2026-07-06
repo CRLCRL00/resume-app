@@ -67,6 +67,8 @@ function load() {
       model: process.env.DEEPSEEK_MODEL,
     },
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+    // 可选：Sentry DSN。未设置时 sentry.js initSentry() 返回 false，整体 no-op
+    SENTRY_DSN: process.env.SENTRY_DSN || '',
   };
 }
 

@@ -5,8 +5,17 @@ const pool = require('./config/db');
 const redis = require('./config/redis');
 const { diagnose } = require('./db/diagnose');
 const { setupGracefulShutdown } = require('./lifecycle');
+const { initSentry, Sentry } = require('./sentry');
+
+// Sentry 必须在 createApp() 之前 init（让 Express error handler 能注册）
+const sentryEnabled = initSentry();
 
 const app = createApp();
+
+// Sentry v8+: Express error handler（覆盖所有 5xx，统一上报到 Sentry）
+if (sentryEnabled && typeof Sentry.setupExpressErrorHandler === 'function') {
+  Sentry.setupExpressErrorHandler(app);
+}
 
 let isShuttingDown = false;
 
@@ -44,7 +53,14 @@ setupGracefulShutdown(server, {
 
 process.on('uncaughtException', (err) => {
   logger.error({ err: err.message }, 'uncaughtException');
+  if (sentryEnabled) {
+    try { Sentry.captureException(err); } catch (_e) { /* never throw in handler */ }
+  }
 });
 process.on('unhandledRejection', (reason) => {
-  logger.error({ reason: String(reason) }, 'unhandledRejection');
+  const err = reason instanceof Error ? reason : new Error(String(reason));
+  logger.error({ reason: err.message }, 'unhandledRejection');
+  if (sentryEnabled) {
+    try { Sentry.captureException(err); } catch (_e) { /* never throw in handler */ }
+  }
 });
