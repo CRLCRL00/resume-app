@@ -74,7 +74,9 @@ resume-app/
 │   └── audit/
 ├── devlog/                        # 每日开发日志（按日期组织）
 ├── .github/
-│   └── workflows/backend-test.yml # CI 跑测试
+│   ├── workflows/backend-test.yml      # CI 跑测试
+│   ├── workflows/deploy.yml            # 后端 SSH 部署
+│   └── workflows/upload-miniprogram.yml # 体验版上传 (miniprogram-ci)
 ├── RUNBOOK.md                     # 运维 runbook
 └── README.md
 ```
@@ -98,6 +100,7 @@ cat /var/log/resume-app-backup.log
 
 # 微信小程序
 # IDE 中：工具 → 上传 → 体验版 → mp.weixin.qq.com 后台 → 提交审核
+# CI 自动上传：git push 到 develop（见下方 Mini-Program Auto-Upload）
 ```
 
 ## 关键环境变量
@@ -176,6 +179,55 @@ scp /tmp/release.tar.gz ubuntu@43.139.176.199:/tmp/
 # 服务器执行
 bash /opt/resume-app/backend/scripts/deploy.sh /tmp/release.tar.gz
 ```
+
+### Mini-Program Auto-Upload
+
+体验版上传通过 `.github/workflows/upload-miniprogram.yml` 自动完成（基于 `miniprogram-ci`）。
+
+**触发条件**
+
+- 自动：`push` 到 `develop` 且变更涉及 `mini-program/**` 或本 workflow 文件本身（`paths` 过滤避免无关提交触发）
+- 手动：GH UI → Actions → "Upload Mini-Program" → Run workflow（可填 `version` / `desc` 两个 input）
+
+**流水线**
+
+1. checkout → `actions/setup-node@v4` (Node 20, npm cache from `mini-program/package-lock.json`)
+2. `npm ci` 安装 `miniprogram-ci`（已是 mini-program 的 devDep）
+3. 从 `secrets.WX_MINIPROGRAM_KEY_BASE64` 解 base64 出 `D:\小程序密钥.key` 到 `/tmp/wx_private.key`
+4. `npx miniprogram-ci upload --pp ./ --pkp /tmp/wx_private.key --appid wx3c0c93a02f5d2356 --uv "$VERSION" --udata "$DESC"`
+5. `if: always()` 清理密钥文件
+6. `if: success()` 写 $GITHUB_STEP_SUMMARY
+
+**版本号规则**
+
+- 手动触发：用 workflow_dispatch 输入的 `version`（默认 `1.0.0`）
+- 自动触发：`format('1.0.{0}', github.run_number)` —— 每次 push 递增
+- desc 同理：`GH Actions auto upload #<run_number>`
+
+**前置 GH Secret**
+
+| Secret | 来源 | 说明 |
+|--------|------|------|
+| `WX_MINIPROGRAM_KEY_BASE64` | `D:\小程序密钥.key` 的 base64 编码 | 微信小程序代码上传私钥（**绝不入仓**）|
+
+**设置命令**（Git Bash / WSL）
+
+```bash
+# GitHub CLI 会自动 base64 编码（注意 -w 0 去掉换行）
+base64 -w 0 "D:/小程序密钥.key" | gh secret set WX_MINIPROGRAM_KEY_BASE64 -
+
+# 或者 process substitution
+gh secret set WX_MINIPROGRAM_KEY_BASE64 < <(base64 -w 0 "D:/小程序密钥.key")
+
+# PowerShell 用户
+[Convert]::ToBase64String([IO.File]::ReadAllBytes('D:\小程序密钥.key')) | gh secret set WX_MINIPROGRAM_KEY_BASE64 -
+```
+
+**安全注意**
+
+- 密钥仅在 runner 临时目录 `/tmp/wx_private.key` 存在；`if: always()` step 保证上传成功/失败都 `rm -f`
+- 任何 step 都不应 `echo` 密钥内容；`secrets.*` 在 log 中默认被 mask
+- 如怀疑泄露：在 mp.weixin.qq.com → 开发管理 → 开发设置 → 重置「小程序代码上传」密钥
 
 ### 回滚
 服务器 `.deploy-backup/<ts>/` 保留最近 5 个版本：
