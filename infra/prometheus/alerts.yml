@@ -1,0 +1,143 @@
+# PrometheusRule — Resume App Backend
+# Round 31-C: Critical alert definitions for Prometheus + Alertmanager.
+#
+# How to import:
+#   1. Drop this file on the Prometheus host (or commit to ops repo).
+#   2. Reference in prometheus.yml:
+#        rule_files:
+#          - /etc/prometheus/rules/alerts.yml
+#      (or load via prometheus-operator CRD if using kube-prometheus-stack:
+#        kubectl apply -f alerts.yml  # as a PrometheusRule resource).
+#   3. Alertmanager picks up alerts matching its routing tree; severity label
+#      lets you route critical to PagerDuty / warning to Slack.
+#
+# Notes:
+#   - Backend does not expose a `up{}` series; `RedisDown` is illustrative.
+#     Use an external blackbox/probe to scrape /api/internal/health and emit `up`.
+#   - `ClientErrorsSpike` depends on a future Sentry / client-error feed metric.
+#     Kept as a stub so the rule list is comprehensive.
+#   - Thresholds in the YAML are SRE-facing; the in-process evaluator
+#     (backend/src/routes/metricsAlerts.js) uses simpler absolute-counter
+#     thresholds (env-overridable) since prom-client counters lack
+#     time-window deltas without a TSDB.
+
+groups:
+  - name: resume-app.http
+    interval: 30s
+    rules:
+      - alert: HighErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+          sum(rate(http_requests_total[5m]))
+            > 0.05
+        for: 5m
+        labels:
+          severity: critical
+          service: resume-app-backend
+        annotations:
+          summary: "HTTP 5xx error rate > 5% for 5m"
+          description: "Sustained server errors: > 5% of requests in the last 5 minutes returned 5xx. Investigate backend logs and recent deploys."
+          runbook_url: "https://runbooks.example.com/resume-app/high-error-rate"
+
+      - alert: ElevatedErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            /
+          sum(rate(http_requests_total[5m]))
+            > 0.01
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app-backend
+        annotations:
+          summary: "HTTP 5xx error rate > 1% for 5m"
+          description: "Server error rate is above 1% but below the 5% critical threshold. Watch for further degradation."
+          runbook_url: "https://runbooks.example.com/resume-app/elevated-error-rate"
+
+  - name: resume-app.ratelimit
+    interval: 30s
+    rules:
+      - alert: RateLimitSpike
+        # > 0.5 blocks/sec = > 30 blocks/min sustained for 5m
+        expr: sum(rate(sliding_rate_limit_decisions_total{decision="blocked"}[5m])) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app-backend
+        annotations:
+          summary: "Rate-limit blocks exceed 30/min for 5m"
+          description: "Sliding-window rate limiter is blocking > 0.5 req/sec sustained. Could be attack or misconfigured client. Inspect sliding_rate_limit_decisions_total by {name}."
+          runbook_url: "https://runbooks.example.com/resume-app/rate-limit-spike"
+
+  - name: resume-app.infra
+    interval: 30s
+    rules:
+      - alert: RedisDown
+        # NOTE: backend doesn't emit `up{job="backend"}`. Pair with an external
+        # probe (blackbox_exporter /api/internal/health) so `up` is exposed.
+        expr: up{job="backend"} == 0
+        for: 1m
+        labels:
+          severity: critical
+          service: resume-app-backend
+        annotations:
+          summary: "Backend / Redis health probe failed"
+          description: "External probe reports the backend scrape target down for 1m. Check Redis connectivity (ioredis), MySQL pool, and the node process."
+          runbook_url: "https://runbooks.example.com/resume-app/redis-down"
+
+      - alert: DBPoolExhausted
+        expr: db_pool_connections{state="used"} / db_pool_connections{state="all"} > 0.9
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app-backend
+        annotations:
+          summary: "DB connection pool > 90% used for 5m"
+          description: "MySQL pool saturation: > 90% of connections are in use. Either connectionLimit is too low or queries are slow / hanging. Inspect slow_operations_total and recent schema changes."
+          runbook_url: "https://runbooks.example.com/resume-app/db-pool-exhausted"
+
+  - name: resume-app.llm
+    interval: 30s
+    rules:
+      - alert: LLMFailureSpike
+        expr: |
+          sum(rate(llm_calls_total{status="error"}[5m]))
+            /
+          sum(rate(llm_calls_total[5m]))
+            > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app-backend
+        annotations:
+          summary: "LLM API error rate > 20% for 5m"
+          description: "More than 20% of LLM provider calls have failed over the last 5 minutes. Check provider status page and llmRetry / circuit-breaker logs."
+          runbook_url: "https://runbooks.example.com/resume-app/llm-failure-spike"
+
+      - alert: SlowRequestRate
+        # > 0.1 slow/sec = sustained slow traffic
+        expr: sum(rate(slow_operations_total[5m])) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app-backend
+        annotations:
+          summary: "> 0.1 slow ops/sec for 5m"
+          description: "Operations taking > 1s are happening at > 0.1/sec sustained. Likely DB, LLM, or upstream slowdown. Check slow_operations_total{route}."
+          runbook_url: "https://runbooks.example.com/resume-app/slow-request-rate"
+
+      # NOTE: Depends on a future Sentry / client-error feed metric (e.g.
+      # sentry_issues_total or client_errors_reported_total). The label and
+      # metric name are placeholders so ops can wire them up when the feed
+      # lands. Left as commented YAML for self-documentation.
+      #
+      # - alert: ClientErrorsSpike
+      #   expr: sum(rate(client_errors_reported_total[5m])) > 1
+      #   for: 5m
+      #   labels:
+      #     severity: warning
+      #     service: resume-app-backend
+      #   annotations:
+      #     summary: "Client-side error rate > 1/sec for 5m"
+      #     description: "Mini-program is reporting errors at > 1/sec. Check Sentry issues and recent client releases."

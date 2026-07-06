@@ -10,6 +10,7 @@ const legalRouter = require('./routes/legal');
 const userRouter = require('./routes/user');
 const alertsRouter = require('./routes/alerts');
 const metricsRouter = require('./routes/metrics');
+const metricsAlertsRouter = require('./routes/metricsAlerts');
 const clientErrorsRouter = require('./routes/clientErrors');
 const sentryDebugRouter = require('./routes/sentryDebug');
 const helmet = require('helmet');
@@ -160,6 +161,7 @@ function createApp() {
   app.use('/api/user', userRouter);
   app.use('/api/internal', alertsRouter);
   app.use('/api/internal', metricsRouter.router);
+  app.use('/api/internal', metricsAlertsRouter.router);
   app.use('/api/internal', clientErrorsRouter);
   app.use('/api/internal', sentryDebugRouter);
   // OpenAPI docs
