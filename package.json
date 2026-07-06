@@ -1,0 +1,14 @@
+{
+  "name": "resume-app",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Root workspace — wraps scripts across backend/ and mini-program/.",
+  "scripts": {
+    "smoke": "node scripts/smoke.js",
+    "smoke:prod": "node scripts/smoke.js",
+    "smoke:help": "node scripts/smoke.js --help"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}

@@ -239,3 +239,22 @@ pm2 reload resume-app-backend
 ```
 
 > ⚠️ Windows 下 `git update-index --chmod=+x` 可能不持久，服务器上用 `bash scripts/deploy.sh` 显式调用即可。
+
+### Smoke test
+
+每次部署后跑一次端点存活探测（不依赖 shell，纯 Node 20+，Windows / Linux 通用）：
+
+```bash
+# 默认指向 serveo 生产 tunnel
+pnpm smoke                     # 或 npm run smoke
+npm run smoke:prod             # 等价，显式语义
+
+# 自定义目标（本地 / 预发）
+BASE_URL=http://localhost:3000 npm run smoke
+BASE_URL=https://staging.example.com ALERT_TOKEN=xxx npm run smoke
+
+# 帮助
+npm run smoke:help             # 或 node scripts/smoke.js --help
+```
+
+详见 [docs/smoke-test.md](./docs/smoke-test.md)。
