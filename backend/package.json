@@ -10,7 +10,7 @@
     "dev": "node --watch src/index.js",
     "check:env": "node scripts/check-env.js",
     "check-env": "node scripts/check-env.js",
-    "test": "node scripts/clear-test-rate-limit.js && node --test --test-force-exit --test-concurrency=1 tests/*.test.js",
+    "test": "node scripts/clear-test-rate-limit.js && node run-tests.js",
     "test:watch": "node --test --watch tests/*.test.js",
     "lint": "eslint src/ tests/",
     "db:init": "node scripts/db-init.js"

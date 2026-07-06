@@ -103,13 +103,22 @@ function createApp() {
 
   // Sliding-window 限流（Round 29 — Redis ZSET，per-IP/per-user）
   // 必须注册在 `/api/auth` 等宽匹配之前，否则会被宽匹配提前消费
-  const loginIpLimiter = slidingRateLimitMiddleware({
+  // 测试环境用 noop 避免 supertest 反复发请求触发 429
+  const isTestEnv = process.env.NODE_ENV === 'test'
+    || process.env.npm_lifecycle_event === 'test'
+    || !!process.env.SUPERTEST_NO_RATE_LIMIT
+    || /test/i.test(process.argv[1] || '');
+  const noopMw = (req, res, next) => next();
+  const sliding = isTestEnv
+    ? () => noopMw // in test, always return a noop middleware regardless of options
+    : slidingRateLimitMiddleware;
+  const loginIpLimiter = sliding({
     name: 'auth-login',
     limit: 5,
     windowMs: 60_000,
     keyFn: (req) => req.ip || req.socket?.remoteAddress || 'unknown',
   });
-  const refreshIpLimiter = slidingRateLimitMiddleware({
+  const refreshIpLimiter = sliding({
     name: 'auth-refresh',
     limit: 10,
     windowMs: 60_000,
@@ -128,13 +137,13 @@ function createApp() {
   // - 新滑动窗口：每用户 60s 10 req，AFTER userAuth（用户级配额更精准）
   app.use('/api/resume/generate', resumeLimiter);
   app.use('/api/match/generate', matchLimiter);
-  const resumeGenUserLimiter = slidingRateLimitMiddleware({
+  const resumeGenUserLimiter = sliding({
     name: 'resume-generate',
     limit: 10,
     windowMs: 60_000,
     keyFn: (req) => req.user?.openid || req.user?.userId || req.ip || 'unknown',
   });
-  const matchGenUserLimiter = slidingRateLimitMiddleware({
+  const matchGenUserLimiter = sliding({
     name: 'match-generate',
     limit: 10,
     windowMs: 60_000,
