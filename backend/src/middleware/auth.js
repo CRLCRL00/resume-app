@@ -1,6 +1,7 @@
 const { verify, isRevoked } = require('../services/token');
 const redis = require('../config/redis');
 const { AppError } = require('./errorHandler');
+const logger = require('../utils/logger');
 
 // 用户态校验：access token 路径。
 // 注意：production 登录响应现在同时返回 refreshToken（见 routes/auth.js /login）。
@@ -35,7 +36,10 @@ async function userAuth(req, res, next) {
 async function safeCheckJti(jti) {
   try {
     return await isRevoked(jti);
-  } catch (_e) {
+  } catch (e) {
+    // Round 33 chaos follow-up #2: observability — fail-open preserved,
+    // but emit a warn so operators can correlate 401 with Redis outage.
+    logger.warn({ jti, err: e.message }, 'token revocation check failed; failing open');
     return false; // redis 故障 fail-open
   }
 }

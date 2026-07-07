@@ -398,3 +398,64 @@ test('chaos #8: redis stub without .ping → /ready 503, redis=down, no TypeErro
     delete require.cache[require.resolve('../../src/app')];
   }
 });
+
+// ============================================================
+//  Test 9 — Round 33 chaos follow-up #2: when isRevoked throws,
+//  userAuth currently fails open silently. Add observability:
+//  a logger.warn must be emitted with jti + error.message.
+//  Behavior must still be fail-open (next() called, no error).
+// ============================================================
+test('chaos #9: userAuth logs warn on isRevoked throw, still fail-open', async () => {
+  const { sign } = require('../../src/services/token');
+  const token = sign({ userId: 42, openid: 'chaos-openid-9' });
+
+  // Install failing redis so isRevoked (which calls redis.get) throws.
+  chaos.installRedis();
+
+  const logger = require('../../src/utils/logger');
+  const origWarn = logger.warn;
+  const warnCalls = [];
+  logger.warn = (...args) => {
+    warnCalls.push(args);
+    // do not actually log
+  };
+
+  // Re-require userAuth so it picks up the stubbed isRevoked path.
+  // (safeCheckJti catches and returns false — fail-open path.)
+  let userAuth;
+  try {
+    delete require.cache[require.resolve('../../src/middleware/auth')];
+    ({ userAuth } = require('../../src/middleware/auth'));
+
+    let nextErr = null;
+    let nextCalled = false;
+    const req = { headers: { authorization: `Bearer ${token}` } };
+    const res = { status: () => res, json: () => res };
+    await new Promise((resolve) => {
+      userAuth(req, res, (err) => {
+        if (err) nextErr = err;
+        else nextCalled = true;
+        resolve();
+      });
+    });
+    // Behavior preserved: fail-open (next() with no error, req.user set).
+    assert.equal(nextErr, null, 'userAuth must not propagate redis error');
+    assert.equal(nextCalled, true, 'userAuth must call next() (fail-open)');
+    assert.equal(req.user.userId, 42, 'req.user should be set from token');
+
+    // Observability: warn was logged with the expected key + jti marker.
+    const found = warnCalls.some((args) => {
+      const payload = args[0] || {};
+      const msg = args[1] || '';
+      return (
+        payload.jti && typeof payload.jti === 'string' &&
+        typeof payload.err === 'string' &&
+        /token revocation check failed; failing open/i.test(msg)
+      );
+    });
+    assert.ok(found, `expected warn with jti + err + 'token revocation check failed'; failing open' message. got: ${JSON.stringify(warnCalls)}`);
+  } finally {
+    logger.warn = origWarn;
+    chaos.restoreAll();
+  }
+});
