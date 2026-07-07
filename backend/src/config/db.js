@@ -47,16 +47,19 @@ if (!defaultPool.__metricsWrapped) {
         m.dbQueryDuration.observe({ op }, (Date.now() - t0) / 1000);
       } catch (_e) { /* metrics best-effort */ }
       // 喂慢查询仪表（ring buffer + operation/table 维度直方图）
-      try {
-        const qm = require('../services/queryMetrics');
-        const sqlStr = (typeof args[0] === 'string' ? args[0] : args[0]?.sql) || '';
-        qm.recordQuery({
-          sql: sqlStr,
-          durationMs: Date.now() - t0,
-          operation: op,
-          table: qm.extractTable(sqlStr),
-        });
-      } catch (_e) { /* queryMetrics best-effort */ }
+      // test env 短路 — 不污染测试（测试自己用 _resetForTests/_recordQueryCore 隔离）
+      if (process.env.NODE_ENV !== 'test') {
+        try {
+          const qm = require('../services/queryMetrics');
+          const sqlStr = (typeof args[0] === 'string' ? args[0] : args[0]?.sql) || '';
+          qm.recordQuery({
+            sql: sqlStr,
+            durationMs: Date.now() - t0,
+            operation: op,
+            table: qm.extractTable(sqlStr),
+          });
+        } catch (_e) { /* queryMetrics best-effort */ }
+      }
     };
     const p = orig.apply(this, args);
     if (p && typeof p.then === 'function') {

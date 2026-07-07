@@ -61,9 +61,8 @@ function extractTable(sql) {
 }
 
 function recordQuery({ sql, durationMs, operation, table }) {
-  // test env 短路 — 不污染 test 指标
-  if (process.env.NODE_ENV === 'test') return;
-
+  // NOTE: test env 短路在调用方（db.js wrap）做，不在本函数。
+  // 本函数永远工作，让 tests/_recordQueryCore 等内部调用直接走逻辑。
   if (shouldSkip(sql)) return;
 
   const sqlStr = truncateSql(typeof sql === 'string' ? sql : '');
