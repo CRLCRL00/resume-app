@@ -106,6 +106,79 @@ the full report on failure so you can see what regressed.
   This mirrors `scripts/clear-test-rate-limit.js` so reruns within the
   same hour work.
 
+## Real-LLM mode
+
+Mock mode hides the dominant tail latency: every `/api/resume/generate` and
+`/api/match` request blocks on DeepSeek for 1-5 seconds in production, but
+the mock returns in <10ms. To capture the real picture, enable real-LLM mode:
+
+```bash
+npm run perf:bench:real            # sets --real-llm flag, 30s per endpoint @ 2 conn
+# or
+BENCH_REAL_LLM=1 npm run perf:bench
+BENCH_REAL_LLM=1 BENCH_DURATION=60 npm run perf:bench   # override duration
+BENCH_REAL_LLM=1 node scripts/perf-bench.js --real-llm  # explicit CLI flag wins over env
+```
+
+Real-mode behavior changes:
+- `services/llm.js` is NOT mocked; axios hits `https://api.deepseek.com/v1/chat/completions` directly.
+- Concurrency drops from 5 to 2 (DeepSeek default 60 RPM ≈ 1 req/s sustained).
+- Per-endpoint duration defaults to 30s (instead of 10s) so the LLM endpoints accumulate ≥5 samples even at low concurrency — enough for a meaningful p99.
+- Token usage (`prompt_tokens`, `completion_tokens`, `total_tokens`) is captured per endpoint via the `llm_tokens_total{kind=...}` Prometheus counter AND returned inline in the JSON row's `tokens_per_call` field.
+
+### Cost warning
+
+Each real-mode bench run bills DeepSeek tokens:
+- `resume/generate` ≈ 850 prompt + 220 completion = 1070 tokens/call (input ≈ 2kB, output ≈ 1kB).
+- `match` (chatJson) ≈ 1200 prompt + 180 completion = 1380 tokens/call.
+- At concurrency 2 × 30s ≈ 60-100 LLM calls per endpoint (LLM latency dominates autocannon throughput).
+- Per run: ~$0.01-$0.05 (DeepSeek v2.5 pricing as of 2026-Q3; check `https://api-docs.deepseek.com/quick_start/pricing`).
+
+**Do not run this in CI unattended** — set `BENCH_REAL_LLM=0` or just use
+`perf:bench` (mock) for automated gates. Reserve `perf:bench:real` for
+release-week manual runs and capacity planning.
+
+### Rate limit caveat
+
+DeepSeek free / standard tier: 60 RPM (≈1 req/s sustained). Real-mode bench
+uses concurrency 2; if you bump it, you risk 429s and retried calls (which
+we surface via `llm.llmCalls{status=...}`). For sustained >2 req/s, request
+a quota bump via DeepSeek support.
+
+### Sample real-mode output
+
+```
+Endpoint                    | p99 (ms) | Tokens/call (prompt/completion/total, calls)
+----------------------------|----------|-------------------------------------------------
+GET /api/health             |       36 | (no LLM)
+POST /api/resume/save       |      279 | (no LLM)
+POST /api/resume/generate   |     3200 | 850 / 220 / 1070 (3)
+POST /api/match             |     4100 | 1200 / 180 / 1380 (57)
+=== PERF BENCH COMPARISON (mode=real) ===
+```
+
+The `calls` count comes from `llm_request_duration_seconds{operation,model}`
+histogram — it is the actual number of upstream DeepSeek requests that
+hit the API, not autocannon's HTTP sample count. Cached `/resume/generate`
+requests (after the first) short-circuit before the LLM and don't count.
+
+### Programmatic API (for tests)
+
+```js
+const { runBench } = require('./scripts/perf-bench');
+const result = await runBench({
+  realLlm: true,
+  duration: 30,
+  llmConcurrency: 2,
+  skipTeardown: true,           // tests reuse the pool across runs
+});
+// result.mode === 'real'
+// result.endpoints[i].tokens_per_call = { prompt, completion, total, calls, per_call } | null
+```
+
+`backend/tests/perf-bench-real.test.js` shows the canonical usage with
+`globalThis.fetch` mocked to return DeepSeek-shaped responses.
+
 ## CI integration (optional)
 
 Not wired by default. To add as a manual gate:
