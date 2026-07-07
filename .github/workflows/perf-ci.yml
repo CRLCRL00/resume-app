@@ -1,0 +1,117 @@
+name: Backend perf CI
+
+# PR-only gate: benches the 4 hot endpoints against p99/p95 thresholds
+# and fails the PR if either threshold is breached OR any endpoint returns
+# errors > 0. Real-LLM mode is NOT enabled here — too slow + costly for
+# CI; mock LLM is fine because the threshold is calibrated against the
+# mock baseline (see docs/perf-bench.md "CI gate" section).
+#
+# Failed p99 = >1500ms. Adjust BENCH_P99_MS in env if infra improves.
+
+on:
+  pull_request:
+    branches: [develop, main]
+  # Manual run for ad-hoc capacity checks; does not gate any PR.
+  workflow_dispatch:
+
+concurrency:
+  group: perf-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  perf:
+    name: perf bench (mock LLM, 4 endpoints)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    services:
+      mysql:
+        image: mysql:8
+        env:
+          MYSQL_ROOT_PASSWORD: test
+          MYSQL_DATABASE: resume_app
+        ports:
+          - 3306:3306
+        options: >-
+          --health-cmd="mysqladmin ping -h 127.0.0.1 -uroot -ptest"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=20s
+
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd="redis-cli ping"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=10
+          --health-start-period=10s
+
+    env:
+      CI: 'true'
+      NODE_ENV: test
+      PORT: '3000'
+      DB_HOST: 127.0.0.1
+      DB_PORT: '3306'
+      DB_USER: root
+      DB_PASSWORD: test
+      DB_NAME: resume_app
+      DB_POOL_SIZE: '10'
+      DB_MAX_IDLE: '5'
+      DB_SLOW_QUERY_MS: '1000'
+      REDIS_HOST: 127.0.0.1
+      REDIS_PORT: '6379'
+      JWT_SECRET: test-secret-not-for-prod-do-not-use-anywhere-real
+      JWT_EXPIRES_IN: '30d'
+      WX_APPID: test_appid
+      WX_SECRET: test_secret
+      DEEPSEEK_API_KEY: sk-test-placeholder
+      DEEPSEEK_BASE_URL: https://api.deepseek.com/v1
+      DEEPSEEK_MODEL: deepseek-chat
+      LOG_LEVEL: info
+      CORS_ALLOWED_ORIGINS: https://servicewechat.com
+      SENTRY_DSN: ''
+      # Thresholds — overridable by editing this file or running
+      # `node scripts/perf-bench.js` with custom env locally.
+      BENCH_P99_MS: '1500'
+      BENCH_P95_MS: '800'
+      BENCH_DURATION: '5000'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        working-directory: backend
+        run: npm ci
+
+      - name: Initialize test schema and seed data
+        working-directory: backend
+        run: node scripts/db-init.js --test
+
+      - name: Run perf bench
+        id: bench
+        working-directory: backend
+        # Run via root npm script (env-vars + chdir to backend/). Writes
+        # perf-output.txt so the failure-upload step can attach it.
+        run: |
+          npm run perf:bench:ci 2>&1 | tee perf-output.txt
+
+      - name: Upload perf output on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-output
+          path: backend/perf-output.txt
+          if-no-files-found: ignore
+          retention-days: 7

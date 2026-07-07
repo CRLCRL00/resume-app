@@ -7,18 +7,22 @@
  *
  * Usage:
  *   npm run perf:bench              # mock, 10s per endpoint, p99=2000ms
- *   npm run perf:bench:ci           # mock, 5s per endpoint, p99=1500ms
+ *   npm run perf:bench:ci           # mock, 5s per endpoint, p99=1500ms, p95=800ms
  *   npm run perf:bench:real         # real LLM, 30s per endpoint @ 2 conn
- *   BENCH_P99_MS=1500 node scripts/perf-bench.js
+ *   BENCH_P99_MS=1500 BENCH_P95_MS=800 node scripts/perf-bench.js
  *
  * Boots createApp() on 127.0.0.1:0, drives autocannon sequentially, emits
  * JSON per endpoint + a final PERF BENCH REPORT. Exit 1 if any p99 over
- * BENCH_P99_MS. Rate-limit middleware bypassed via require.cache injection
- * so we measure route+DB+LLM latency, not 429 saturation.
+ * BENCH_P99_MS, any p95 over BENCH_P95_MS, or any endpoint has errors > 0.
+ * Emits a final `RESULT: ok|fail` line for CI parsing. CI mode (CI=true)
+ * suppresses ANSI color codes. Rate-limit middleware bypassed via
+ * require.cache injection so we measure route+DB+LLM latency, not 429
+ * saturation.
  *
  * Programmatic API (for tests):
- *   const { runBench } = require('./scripts/perf-bench');
+ *   const { runBench, main } = require('./scripts/perf-bench');
  *   const out = await runBench({ realLlm: true, duration: 30, llmConcurrency: 2 });
+ *   const code = await main({ runBench: async () => syntheticResult });
  */
 const path = require('node:path');
 
@@ -67,6 +71,17 @@ stubModule(path.join(backendRoot, 'src/middleware/rateLimit'), {
 require('dotenv').config({ path: path.join(backendRoot, '.env') });
 const autocannon = require('autocannon');
 const logger = require('../src/utils/logger');
+// CI mode: suppress ANSI color codes so log lines are grep-friendly.
+if (process.env.CI === 'true') {
+  process.env.FORCE_COLOR = '0';
+  process.env.NO_COLOR = '1';
+  if (process.stdout && typeof process.stdout.isTTY !== 'undefined') {
+    process.stdout.isTTY = false;
+  }
+  if (process.stderr && typeof process.stderr.isTTY !== 'undefined') {
+    process.stderr.isTTY = false;
+  }
+}
 if (CLI_MODE === 'real') {
   logger.warn('CLI real-LLM mode: DeepSeek calls enabled. Tokens will be billed.');
 }
@@ -213,7 +228,7 @@ async function saveResume(port, userJwt) {
 
 /**
  * Programmatic bench. Returns:
- *   { mode, threshold_p99_ms, duration_per_endpoint_s, job_id, resume_id, endpoints }
+ *   { mode, threshold_p99_ms, threshold_p95_ms, duration_per_endpoint_s, job_id, resume_id, endpoints }
  *
  * endpoints[i].tokens_per_call = null for non-LLM endpoints, else
  * {prompt, completion, total, calls} aggregated for that endpoint.
@@ -224,7 +239,8 @@ async function saveResume(port, userJwt) {
  * @param {number}  [opts.llmConcurrency]     - connections for LLM endpoints (5 / 2)
  * @param {number}  [opts.nonLlmConcurrency]  - connections for non-LLM endpoints (50 / 10)
  * @param {boolean} [opts.skipNonLlm]         - bench only LLM endpoints (real-mode convenience)
- * @param {number}  [opts.p99Ms]              - threshold; informational only here
+ * @param {number}  [opts.p99Ms]              - p99 threshold; informational only here
+ * @param {number}  [opts.p95Ms]              - p95 threshold; informational only here
  * @param {boolean} [opts.printJson]          - console.log each endpoint JSON (default true)
  * @param {boolean} [opts.skipTeardown]       - skip pool.end()/redis.quit() in finally
  */
@@ -347,6 +363,7 @@ async function runBench(opts = {}) {
     result = {
       mode,
       threshold_p99_ms: opts.p99Ms || Number(process.env.BENCH_P99_MS) || 2000,
+      threshold_p95_ms: opts.p95Ms || Number(process.env.BENCH_P95_MS) || 800,
       duration_per_endpoint_s: duration,
       job_id: jobId,
       resume_id: resumeId,
@@ -386,19 +403,38 @@ function printComparisonTable(result) {
   console.log(lines.join('\n'));
 }
 
-async function main() {
-  const p99Ms = Number(process.env.BENCH_P99_MS) || 2000;
+async function main(opts = {}) {
+  const p99Ms = opts.p99Ms ?? (Number(process.env.BENCH_P99_MS) || 2000);
+  const p95Ms = opts.p95Ms ?? (Number(process.env.BENCH_P95_MS) || 800);
+  // Allow tests to inject a fake runBench via module.exports.runBench —
+  // we resolve the runner through `exports` (not the closure-local `runBench`)
+  // so swapping the export before calling main() actually takes effect.
+  const exportsRef = module.exports;
+  const runner = opts.runBench || exportsRef.runBench || runBench;
   let exitCode = 0;
+  const failures = [];
   try {
-    const result = await runBench({
+    const result = await runner({
       realLlm: CLI_MODE === 'real',
       duration: Number(process.env.BENCH_DURATION) || undefined,
       p99Ms,
+      p95Ms,
     });
     printComparisonTable(result);
     for (const e of result.endpoints) {
       if (e.latency.p99 > p99Ms) {
         logger.warn({ endpoint: e.endpoint, p99: e.latency.p99, threshold: p99Ms }, 'p99 over threshold');
+        failures.push({ endpoint: e.endpoint, kind: 'p99', value: e.latency.p99, threshold: p99Ms });
+        exitCode = 1;
+      }
+      if (e.latency.p95 > p95Ms) {
+        logger.warn({ endpoint: e.endpoint, p95: e.latency.p95, threshold: p95Ms }, 'p95 over threshold');
+        failures.push({ endpoint: e.endpoint, kind: 'p95', value: e.latency.p95, threshold: p95Ms });
+        exitCode = 1;
+      }
+      if ((e.errors || 0) > 0) {
+        logger.warn({ endpoint: e.endpoint, errors: e.errors }, 'errors detected');
+        failures.push({ endpoint: e.endpoint, kind: 'errors', value: e.errors, threshold: 0 });
         exitCode = 1;
       }
     }
@@ -410,9 +446,15 @@ async function main() {
     }
   } catch (err) {
     logger.error({ err: err.message, stack: err.stack }, 'bench failed');
+    failures.push({ endpoint: 'bench', kind: 'crash', value: err.message, threshold: 0 });
     exitCode = 1;
   }
-  process.exit(exitCode);
+  // Emit structured final line for CI grep / artifact parsing.
+  // Plain text on its own line — no ANSI, no JSON. Format intentionally
+  // stable: callers should be able to `grep -E '^RESULT:' perf-output.txt`.
+  const status = exitCode === 0 ? 'ok' : 'fail';
+  console.log(`RESULT: ${status}` + (failures.length ? ` (failures=${JSON.stringify(failures)})` : ''));
+  return exitCode;
 }
 
 process.on('SIGINT', () => process.exit(130));
@@ -421,5 +463,8 @@ process.on('SIGTERM', () => process.exit(143));
 module.exports = { runBench, main, printComparisonTable };
 
 if (require.main === module) {
-  main();
+  main().then((code) => process.exit(code)).catch((err) => {
+    logger.error({ err: err.message, stack: err.stack }, 'bench main failed');
+    process.exit(1);
+  });
 }
