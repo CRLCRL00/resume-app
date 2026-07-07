@@ -26,32 +26,48 @@ router.post('/login', checkLockout, async (req, res, next) => {
       throw new AppError(1000, 'code is required', 400);
     }
 
+    // Round 33 chaos follow-up #3: distinguish upstream (wechat) vs own
+    // (DB) failures so operators can tell which dep is down. Existing
+    // AppError 1001 (invalid code/errmsg) is still a 400; only network /
+    // 5xx from WeChat is mapped to 1501.
     let wx;
     try {
       wx = await wechatService.code2session(code);
     } catch (e) {
       securityLog.recordSync('login.fail', req, { reason: 'code2session_failed', ip, msg: e.message?.slice(0, 200) });
-      throw e;
+      if (e instanceof AppError) throw e;
+      throw new AppError(1501, 'wechat upstream unavailable', 502);
     }
 
-    const [existing] = await pool.query(
-      'SELECT id, openid, nickname, avatar_url FROM users WHERE openid = ? LIMIT 1',
-      [wx.openid]
-    );
-
-    let user;
-    if (existing.length) {
-      user = existing[0];
-      await pool.query(
-        'UPDATE users SET last_login_at = NOW() WHERE id = ?',
-        [user.id]
-      );
-    } else {
-      const [result] = await pool.query(
-        'INSERT INTO users (openid, last_login_at) VALUES (?, NOW())',
+    let existing;
+    try {
+      [existing] = await pool.query(
+        'SELECT id, openid, nickname, avatar_url FROM users WHERE openid = ? LIMIT 1',
         [wx.openid]
       );
-      user = { id: result.insertId, openid: wx.openid, nickname: null, avatar_url: null };
+    } catch (e) {
+      securityLog.recordSync('login.fail', req, { reason: 'db_lookup_failed', ip, msg: e.message?.slice(0, 200) });
+      throw new AppError(1502, 'database unavailable', 503);
+    }
+
+    let user;
+    try {
+      if (existing.length) {
+        user = existing[0];
+        await pool.query(
+          'UPDATE users SET last_login_at = NOW() WHERE id = ?',
+          [user.id]
+        );
+      } else {
+        const [result] = await pool.query(
+          'INSERT INTO users (openid, last_login_at) VALUES (?, NOW())',
+          [wx.openid]
+        );
+        user = { id: result.insertId, openid: wx.openid, nickname: null, avatar_url: null };
+      }
+    } catch (e) {
+      securityLog.recordSync('login.fail', req, { reason: 'db_write_failed', ip, msg: e.message?.slice(0, 200) });
+      throw new AppError(1502, 'database unavailable', 503);
     }
 
     const access = sign({ userId: user.id, openid: user.openid });

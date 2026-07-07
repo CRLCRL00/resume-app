@@ -459,3 +459,76 @@ test('chaos #9: userAuth logs warn on isRevoked throw, still fail-open', async (
     chaos.restoreAll();
   }
 });
+
+// ============================================================
+//  Test 10 — Round 33 chaos follow-up #3a: /api/auth/login when
+//  WeChat API is down (axios throws) must return a DISTINCT 502
+//  with code 1501 ("wechat unavailable") — not a generic 500.
+// ============================================================
+test('chaos #10: wechat down on login → 502 with code 1501', async () => {
+  // Patch wechat BEFORE creating app so the require binds to the fake.
+  const wechat = require('../../src/services/wechat');
+  const origCode = wechat.code2session;
+  wechat.code2session = () => Promise.reject(
+    Object.assign(new Error('connect ECONNREFUSED api.weixin.qq.com:443'), { code: 'ECONNREFUSED' })
+  );
+
+  try {
+    delete require.cache[require.resolve('../../src/routes/auth')];
+    delete require.cache[require.resolve('../../src/app')];
+    const { createApp } = require('../../src/app');
+    const app = createApp();
+    const res = await Promise.race([
+      request(app).post('/api/auth/login').send({ code: 'chaos-wechat-down' }).timeout(3000),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('login hung')), 5000)),
+    ]);
+    assert.equal(res.status, 502, `expected 502, got ${res.status}`);
+    assert.equal(res.body.code, 1501, `expected code 1501 (wechat), got ${res.body.code}`);
+    assert.match(res.body.message || '', /wechat/i);
+  } finally {
+    wechat.code2session = origCode;
+  }
+});
+
+// ============================================================
+//  Test 11 — Round 33 chaos follow-up #3b: /api/auth/login when
+//  MySQL pool throws must return a DISTINCT 503 with code 1502
+//  ("database unavailable") — not a generic 500.
+// ============================================================
+test('chaos #11: db down on login → 503 with code 1502', async () => {
+  // Ensure rate-limit + wechat pass first; then DB throws on user lookup.
+  const wechat = require('../../src/services/wechat');
+  const origCode = wechat.code2session;
+  wechat.code2session = () => Promise.resolve({
+    openid: 'chaos-db-down-openid',
+    session_key: 'fake-session-key',
+  });
+  chaos.installDb();
+
+  // Wipe cache so app + auth route pick up the new wechat + DB bindings.
+  delete require.cache[require.resolve('../../src/routes/auth')];
+  delete require.cache[require.resolve('../../src/app')];
+  delete require.cache[require.resolve('../../src/services/wechat')];
+  // Re-require wechat FIRST (with fresh cache), then re-apply fake
+  // (delete + re-require wipes our monkeypatch).
+  const wechatFresh = require('../../src/services/wechat');
+  wechatFresh.code2session = () => Promise.resolve({
+    openid: 'chaos-db-down-openid',
+    session_key: 'fake-session-key',
+  });
+
+  try {
+    const { createApp } = require('../../src/app');
+    const app = createApp();
+    const res = await Promise.race([
+      request(app).post('/api/auth/login').send({ code: 'chaos-db-down' }).timeout(3000),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('login hung')), 5000)),
+    ]);
+    assert.equal(res.status, 503, `expected 503, got ${res.status}`);
+    assert.equal(res.body.code, 1502, `expected code 1502 (database), got ${res.body.code}`);
+    assert.match(res.body.message || '', /database/i);
+  } finally {
+    wechat.code2session = origCode;
+    chaos.restoreAll();
+  }
+});
