@@ -16,7 +16,8 @@
     "lint:fix": "eslint . --ext .js --fix",
     "db:init": "node scripts/db-init.js",
     "perf:bench": "node scripts/perf-bench.js",
-    "perf:bench:ci": "node -e \"process.env.BENCH_P99_MS=1500; process.env.BENCH_DURATION=5000; require('./scripts/perf-bench.js')\""
+    "perf:bench:ci": "node -e \"process.env.BENCH_P99_MS=1500; process.env.BENCH_DURATION=5000; require('./scripts/perf-bench.js')\"",
+    "perf:bench:real": "node scripts/perf-bench.js --real-llm"
   },
   "engines": {
     "node": ">=22"

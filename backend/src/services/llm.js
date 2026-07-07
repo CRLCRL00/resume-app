@@ -98,11 +98,14 @@ function logUsage(callPath, usage, model) {
 }
 
 async function chat(messages, opts = {}) {
+  const opName = opts.operation || 'chat';
+  const modelName = opts.model || config.DEEPSEEK.model;
+  const endTimer = metrics.llmRequestDuration.startTimer({ operation: opName, model: modelName });
   try {
     const { data } = await withRetry('llm.chat', () => axios.post(
       `${config.DEEPSEEK.baseURL}/chat/completions`,
       {
-        model: opts.model || config.DEEPSEEK.model,
+        model: modelName,
         messages,
         max_tokens: opts.maxTokens || 1000,
         temperature: opts.temperature ?? 0.7,
@@ -116,7 +119,7 @@ async function chat(messages, opts = {}) {
         },
       }
     ));
-    logUsage('chat', data.usage, opts.model);
+    logUsage('chat', data.usage, modelName);
     return {
       content: data.choices[0].message.content,
       usage: data.usage,
@@ -130,6 +133,8 @@ async function chat(messages, opts = {}) {
       );
     }
     throw new AppError(1100, `llm network error: ${err.message}`, 502);
+  } finally {
+    endTimer();
   }
 }
 
