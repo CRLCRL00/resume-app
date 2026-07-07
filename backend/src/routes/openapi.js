@@ -344,8 +344,8 @@ const openapiSpec = {
     },
     '/api/admin/2fa/status': {
       get: {
-        summary: 'admin 2FA 状态 (enabled / hasSecret / verifiedAt)',
-        responses: { 200: { description: 'data.enabled / data.hasSecret / data.verifiedAt' }, 403: { description: 'admin only' } },
+        summary: 'admin 2FA 状态 (enabled / hasSecret / verifiedAt / backupCodesRemaining)',
+        responses: { 200: { description: 'data.enabled / data.hasSecret / data.verifiedAt / data.backupCodesRemaining' }, 403: { description: 'admin only' } },
       },
     },
     '/api/admin/2fa/setup': {
@@ -356,20 +356,23 @@ const openapiSpec = {
     },
     '/api/admin/2fa/enable': {
       post: {
-        summary: '校验 code 后启用 2FA (admin)',
+        summary: '校验 code 后启用 2FA (admin) + 一次性返回 8 个 backup code',
         requestBody: {
           required: true,
           content: { 'application/json': { schema: { type: 'object', required: ['code'], properties: { code: { type: 'string', pattern: '^\\d{6}$' } } } } },
         },
-        responses: { 200: { description: 'data.enabled=true' }, 400: { description: 'code 错或未 setup' } },
+        responses: {
+          200: { description: 'data.enabled=true; data.backupCodes: string[] (format xxxx-xxxx, 仅此一次返回明文)' },
+          400: { description: 'code 错或未 setup' },
+        },
       },
     },
     '/api/admin/2fa/verify': {
       post: {
-        summary: '校验 code 签发 challengeToken (5 min, 单次)',
+        summary: '校验 code 签发 challengeToken (5 min, 单次) — 支持 TOTP 或 backup code',
         requestBody: {
           required: true,
-          content: { 'application/json': { schema: { type: 'object', required: ['code'], properties: { code: { type: 'string', pattern: '^\\d{6}$' } } } } },
+          content: { 'application/json': { schema: { type: 'object', required: ['code'], properties: { code: { type: 'string', description: '6 位数字 TOTP，或 xxxx-xxxx 备份码 (case+dash 不敏感)' } } } } },
         },
         responses: { 200: { description: 'data.challengeToken (32 hex)' }, 400: { description: 'code 错 / 未启用' } },
       },
@@ -382,6 +385,22 @@ const openapiSpec = {
           content: { 'application/json': { schema: { type: 'object', required: ['code'], properties: { code: { type: 'string', pattern: '^\\d{6}$' } } } } },
         },
         responses: { 200: { description: 'data.disabled=true' }, 400: { description: 'code 错' } },
+      },
+    },
+    '/api/admin/queries/slow': {
+      get: {
+        summary: '慢查询列表 (admin, ring buffer)',
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 20, maximum: 500 } },
+          { name: 'since', in: 'query', schema: { type: 'string', default: '1h', description: '时长串: 30s/15m/2h/1d 或纯数字 ms' } },
+        ],
+        responses: { 200: { description: 'data.items + total' }, 401: { description: 'no token' }, 403: { description: 'admin only' } },
+      },
+    },
+    '/api/admin/queries/stats': {
+      get: {
+        summary: '慢查询聚合统计 (admin)',
+        responses: { 200: { description: 'data: { slowQueryThresholdMs, totalTracked, slowCount, byTable }' }, 403: { description: 'admin only' } },
       },
     },
     '/api/internal/alert': {
