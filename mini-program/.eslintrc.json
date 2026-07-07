@@ -1,0 +1,52 @@
+{
+  "root": true,
+  "env": {
+    "es2023": true
+  },
+  "parserOptions": {
+    "ecmaVersion": 2023,
+    "sourceType": "script"
+  },
+  "extends": [
+    "eslint:recommended"
+  ],
+  "globals": {
+    "wx": "readonly",
+    "getApp": "readonly",
+    "getCurrentPages": "readonly",
+    "App": "readonly",
+    "Page": "readonly",
+    "Component": "readonly",
+    "Behavior": "readonly",
+    "wx": "readonly",
+    "require": "readonly",
+    "module": "readonly",
+    "exports": "writable",
+    "global": "readonly",
+    "process": "readonly",
+    "console": "readonly",
+    "setTimeout": "readonly",
+    "clearTimeout": "readonly",
+    "setInterval": "readonly",
+    "clearInterval": "readonly",
+    "Promise": "readonly",
+    "URL": "readonly",
+    "URLSearchParams": "readonly"
+  },
+  "rules": {
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-console": "off",
+    "no-process-exit": "off",
+    "eqeqeq": ["error", "smart"],
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-multi-spaces": "warn",
+    "no-trailing-spaces": "warn",
+    "semi": ["error", "always"],
+    "quotes": ["error", "single", { "avoidEscape": true, "allowTemplateLiterals": true }],
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-empty": ["error", { "allowEmptyCatch": true }]
+  },
+  "ignorePatterns": ["miniprogram_npm/", "node_modules/"]
+}

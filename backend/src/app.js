@@ -11,6 +11,7 @@ const userRouter = require('./routes/user');
 const alertsRouter = require('./routes/alerts');
 const metricsRouter = require('./routes/metrics');
 const metricsAlertsRouter = require('./routes/metricsAlerts');
+const alertWebhookRouter = require('./routes/alertWebhook');
 const clientErrorsRouter = require('./routes/clientErrors');
 const sentryDebugRouter = require('./routes/sentryDebug');
 const helmet = require('helmet');
@@ -50,13 +51,13 @@ function createApp() {
 
   // 安全头（HSTS preload + 强化 COOP/COEP + cross-origin 资源）
   app.use(helmet({
-    contentSecurityPolicy: false,                 // API 不返回 HTML
+    contentSecurityPolicy: false, // API 不返回 HTML
     crossOriginResourcePolicy: { policy: 'cross-origin' },
     crossOriginOpenerPolicy: { policy: 'same-origin' },
     dnsPrefetchControl: { allow: false },
     xFrameOptions: { action: 'deny' },
     strictTransportSecurity: {
-      maxAge: 31536000,        // 1 年
+      maxAge: 31536000, // 1 年
       includeSubDomains: true,
       preload: true,
     },
@@ -162,6 +163,12 @@ function createApp() {
   app.use('/api/internal', alertsRouter);
   app.use('/api/internal', metricsRouter.router);
   app.use('/api/internal', metricsAlertsRouter.router);
+  // Slack incoming webhook + slash-command (Round 32-F). Mounted under
+  // `/api/internal/alerts` (plural) so it does not collide with the
+  // existing `/api/internal/alert` (singular) route in alerts.js.
+  app.use('/api/internal/alerts/webhook/slack', alertWebhookRouter.rawBodyMiddleware);
+  app.use('/api/internal/alerts/webhook/slack/command', alertWebhookRouter.urlEncodedMiddleware);
+  app.use('/api/internal/alerts', alertWebhookRouter);
   app.use('/api/internal', clientErrorsRouter);
   app.use('/api/internal', sentryDebugRouter);
   // OpenAPI docs

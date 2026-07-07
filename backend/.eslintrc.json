@@ -1,16 +1,32 @@
 {
+  "root": true,
   "env": {
     "node": true,
-    "es2022": true,
-    "jest": false
+    "es2023": true
   },
-  "extends": "eslint:recommended",
   "parserOptions": {
-    "ecmaVersion": 2022,
+    "ecmaVersion": 2023,
     "sourceType": "script"
   },
+  "extends": [
+    "eslint:recommended"
+  ],
   "rules": {
-    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
-    "no-console": "off"
-  }
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_", "varsIgnorePattern": "^_" }],
+    "no-console": "off",
+    "no-process-exit": "off",
+    "eqeqeq": ["error", "smart"],
+    "no-var": "error",
+    "prefer-const": "error",
+    "no-multi-spaces": "warn",
+    "no-trailing-spaces": "warn",
+    "semi": ["error", "always"],
+    "quotes": ["error", "single", { "avoidEscape": true, "allowTemplateLiterals": true }],
+    "no-eval": "error",
+    "no-implied-eval": "error",
+    "no-empty": ["error", { "allowEmptyCatch": true }],
+    "no-control-regex": "warn",
+    "no-dupe-keys": "warn"
+  },
+  "ignorePatterns": ["node_modules/", "coverage/", "**/*.min.js", "tests/"]
 }

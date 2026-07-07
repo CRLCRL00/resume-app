@@ -6,7 +6,9 @@
   "scripts": {
     "smoke": "node scripts/smoke.js",
     "smoke:prod": "node scripts/smoke.js",
-    "smoke:help": "node scripts/smoke.js --help"
+    "smoke:help": "node scripts/smoke.js --help",
+    "lint": "npm --prefix backend run lint && npm --prefix mini-program run lint",
+    "lint:fix": "npm --prefix backend run lint:fix && npm --prefix mini-program run lint:fix"
   },
   "engines": {
     "node": ">=20.0.0"

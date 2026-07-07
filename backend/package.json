@@ -12,7 +12,8 @@
     "check-env": "node scripts/check-env.js",
     "test": "node scripts/clear-test-rate-limit.js && node run-tests.js",
     "test:watch": "node --test --watch tests/*.test.js",
-    "lint": "eslint src/ tests/",
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix",
     "db:init": "node scripts/db-init.js"
   },
   "engines": {

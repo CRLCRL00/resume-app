@@ -51,8 +51,8 @@ function coarseFilter(jobs, userForm, limit) {
     if (uMin > 0 && j.salary_max < uMin * 0.8) return false;
     // 经验模糊：不限/无要求 → 通过；要求范围且用户在范围外 → 过滤
     const req = parseExpReq(j.experience_required);
-    if (req && uYears > req.max) return false;       // 超经验
-    if (req && uYears + 1 < req.min) return false;   // 缺经验（容忍 1 年）
+    if (req && uYears > req.max) return false; // 超经验
+    if (req && uYears + 1 < req.min) return false; // 缺经验（容忍 1 年）
     return true;
   });
   return limit ? filtered.slice(0, limit) : filtered;

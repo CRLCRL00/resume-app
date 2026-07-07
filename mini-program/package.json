@@ -1,5 +1,14 @@
 {
+  "name": "resume-app-mini-program",
+  "version": "0.1.0",
+  "private": true,
+  "description": "简历推荐小程序 (WeChat Mini-Program)",
+  "scripts": {
+    "lint": "eslint . --ext .js",
+    "lint:fix": "eslint . --ext .js --fix"
+  },
   "devDependencies": {
+    "eslint": "^8.57.0",
     "miniprogram-ci": "^2.1.31"
   }
 }

@@ -19,7 +19,7 @@ function createPool() {
     // leak detection + idle cleanup
     enableKeepAlive: true,
     keepAliveInitialDelay: 10000,
-    idleTimeout: 60000,            // 60s idle 后关闭连接
+    idleTimeout: 60000, // 60s idle 后关闭连接
     maxIdle: Number(process.env.DB_MAX_IDLE) || 5,
   });
 }

@@ -125,7 +125,7 @@ App({
         const localPv = wx.getStorageSync('privacy_version') || '1970-01-01';
         const localTv = wx.getStorageSync('terms_version') || '1970-01-01';
         if ((latest.privacy && latest.privacy.version > localPv) ||
-            (latest.terms   && latest.terms.version   > localTv)) {
+            (latest.terms && latest.terms.version > localTv)) {
           // 后端版本更新 → 清旧 accept + 重弹
           if (accepted) {
             wx.removeStorageSync('privacy_accepted');

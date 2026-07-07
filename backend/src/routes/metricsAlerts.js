@@ -36,6 +36,10 @@
 const express = require('express');
 const router = express.Router();
 const client = require('prom-client');
+const { evaluateAndNotify, forceNotify } = require('../services/alertRouter');
+
+const isTestEnv = process.env.NODE_ENV === 'test'
+  || process.env.npm_lifecycle_event === 'test';
 
 // Reuse the singletons created by routes/metrics.js + slidingRateLimit.js.
 // require()ing them here ensures we share the same registry (and the
@@ -69,11 +73,11 @@ const slidingRateLimitDecisions = globalThis.__slidingRateLimitCounter
 
 // ---------- thresholds ----------
 const THRESHOLDS = {
-  rlBlocked:        Number(process.env.ALERT_RL_BLOCK_THRESHOLD    || 100),
-  httpErrors:       Number(process.env.ALERT_HTTP_ERROR_THRESHOLD  || 50),
-  llmErrors:        Number(process.env.ALERT_LLM_ERROR_THRESHOLD   || 20),
-  slowOps:          Number(process.env.ALERT_SLOW_OPS_THRESHOLD    || 10),
-  dbPoolRatio:      Number(process.env.ALERT_DB_POOL_RATIO         || 0.9),
+  rlBlocked:        Number(process.env.ALERT_RL_BLOCK_THRESHOLD || 100),
+  httpErrors:       Number(process.env.ALERT_HTTP_ERROR_THRESHOLD || 50),
+  llmErrors:        Number(process.env.ALERT_LLM_ERROR_THRESHOLD || 20),
+  slowOps:          Number(process.env.ALERT_SLOW_OPS_THRESHOLD || 10),
+  dbPoolRatio:      Number(process.env.ALERT_DB_POOL_RATIO || 0.9),
 };
 
 // ---------- rule definitions (mirror alerts.yml) ----------
@@ -189,8 +193,8 @@ async function evaluateRule(rule) {
       threshold = THRESHOLDS.httpErrors;
       value = errCount;
       firing = rule.severity === 'critical'
-        ? errCount >= threshold * 2    // >= 100
-        : errCount >= threshold;       // >= 50
+        ? errCount >= threshold * 2 // >= 100
+        : errCount >= threshold; // >= 50
       // Touch allErr to keep lint happy if unused.
       void allErr;
       break;
@@ -219,7 +223,7 @@ async function evaluateRule(rule) {
     }
     case 'DBPoolExhausted': {
       const used = await gaugeAt(dbPoolConnections, { state: 'used' });
-      const all  = await gaugeAt(dbPoolConnections, { state: 'all' });
+      const all = await gaugeAt(dbPoolConnections, { state: 'all' });
       threshold = THRESHOLDS.dbPoolRatio;
       if (used == null || all == null || all === 0) {
         value = 0;
@@ -272,6 +276,8 @@ function authGuard(req, res, next) {
 /**
  * GET /api/internal/metrics/alerts
  * Returns currently-firing alerts (and the count of rules checked).
+ * Side effect (non-test only): dispatches Slack notifications for each fired alert
+ * through services/alertRouter (Round 32-F).
  */
 router.get('/metrics/alerts', authGuard, async (req, res) => {
   try {
@@ -286,6 +292,17 @@ router.get('/metrics/alerts', authGuard, async (req, res) => {
       labels: r.labels,
       evaluatedAt: r.evaluatedAt,
     }));
+
+    let notifyResult = null;
+    if (!isTestEnv && fired.length) {
+      try {
+        notifyResult = await evaluateAndNotify({ rules: RULES, fired });
+      } catch (err) {
+        // Notification failure must NOT break the read endpoint.
+        notifyResult = { error: err?.message || 'notify failed' };
+      }
+    }
+
     res.json({
       code: 0,
       data: {
@@ -293,10 +310,33 @@ router.get('/metrics/alerts', authGuard, async (req, res) => {
         checked: RULES.length,
         generatedAt: new Date().toISOString(),
         thresholds: THRESHOLDS,
+        notify: notifyResult,
       },
     });
   } catch (err) {
     res.status(500).json({ code: 500, message: 'alert evaluation failed' });
+  }
+});
+
+/**
+ * POST /api/internal/metrics/alerts/test-notify
+ * Ops trigger: send a manual Slack notification bypassing dedupe.
+ * Body: { name, severity?, text, channel? }
+ * Auth: ALERT_TOKEN (same pattern as the GET endpoint).
+ */
+router.post('/metrics/alerts/test-notify', authGuard, async (req, res) => {
+  try {
+    const { name, severity = 'warning', text, channel: chanOverride } = req.body || {};
+    if (!name || !text) {
+      return res.status(400).json({ code: 400, message: 'name + text required' });
+    }
+    const result = await forceNotify({ name, severity, text, channel: chanOverride });
+    if (!result.ok) {
+      return res.status(502).json({ code: 502, message: result.error || result.reason || 'notify failed', data: result });
+    }
+    res.json({ code: 0, data: result });
+  } catch (err) {
+    res.status(500).json({ code: 500, message: 'test-notify failed' });
   }
 });
 

@@ -32,7 +32,7 @@ async function deliver({ url, payload, secret = process.env.OUTBOUND_HMAC_SECRET
       lastErr = String(e?.message || e);
     }
     if (i < attempts) {
-      const delay = 500 * Math.pow(2, i - 1);  // 0.5s, 1s, 2s
+      const delay = 500 * Math.pow(2, i - 1); // 0.5s, 1s, 2s
       await new Promise(r => setTimeout(r, delay));
     }
   }

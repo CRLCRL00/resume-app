@@ -1,5 +1,5 @@
 // 防止 LLM prompt injection：从用户文本里剥离可能被模型误读的指令
-const MAX_USER_TEXT = 8000;            // 单字段长度上限
+const MAX_USER_TEXT = 8000; // 单字段长度上限
 const ROLE_TAGS = [
   /<\s*\/?\s*(system|user|assistant|tool|function|developer|human)\s*>/gi,
   /\[\s*(system|user|assistant)\s*[:|]/gi,
