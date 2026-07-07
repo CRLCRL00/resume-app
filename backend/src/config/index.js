@@ -69,6 +69,13 @@ function load() {
     LOG_LEVEL: process.env.LOG_LEVEL || 'info',
     // 可选：Sentry DSN。未设置时 sentry.js initSentry() 返回 false，整体 no-op
     SENTRY_DSN: process.env.SENTRY_DSN || '',
+    // Slack incoming-webhook + HMAC for /api/internal/alerts/webhook/slack.
+    // SLACK_WEBHOOK_URL empty in dev/test → no outbound, log warn only.
+    SLACK_WEBHOOK_URL: process.env.SLACK_WEBHOOK_URL || '',
+    SLACK_DEFAULT_CHANNEL: process.env.SLACK_DEFAULT_CHANNEL || '#alerts',
+    SLACK_HMAC_SECRET: process.env.SLACK_HMAC_SECRET || '',
+    // alertRouter dedupe window (ms). Default 1h.
+    ALERT_DEDUPE_TTL_MS: Number(process.env.ALERT_DEDUPE_TTL_MS) || 60 * 60 * 1000,
   };
 }
 
