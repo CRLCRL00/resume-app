@@ -211,6 +211,77 @@ jobs:
       - run: cd backend && npm run perf:bench:ci
 ```
 
+## CI gate (`.github/workflows/perf-ci.yml`)
+
+Since round 35 the perf bench is wired as a PR-only CI gate that fails
+the build when any endpoint regresses beyond the threshold.
+
+- **Workflow**: [`.github/workflows/perf-ci.yml`](../.github/workflows/perf-ci.yml)
+- **Trigger**: `pull_request → [develop, main]` only. No push (would waste
+  CI minutes on every commit; we already have unit-test coverage for
+  correctness via `backend-ci.yml`).
+- **Concurrency**: `perf-ci-${{ github.ref }}` with `cancel-in-progress: true`
+  so stale PRs don't burn the budget.
+- **Timeout**: 5 minutes wall (≈ 20s bench + 30s services + install).
+- **Thresholds** (env-overridable in the workflow file):
+  - `BENCH_P99_MS = 1500` — fail if any endpoint p99 > 1500ms.
+  - `BENCH_P95_MS = 800` — fail if any endpoint p95 > 800ms.
+  - `BENCH_DURATION = 5000` — 5s per endpoint (4 endpoints × 5s ≈ 20s bench).
+- **LLM mode**: mock only. Real DeepSeek calls are deliberately not run in
+  CI — they cost money, add 1-5s per LLM request (multiplying bench
+  duration by 5-10×), and would need a secrets-protected API key in the
+  GitHub Actions environment. Mock mode measures *our* code path; the
+  threshold is calibrated against the mock baseline.
+- **Failure modes** that fail the PR:
+  - Any endpoint `p99 > BENCH_P99_MS` → **latency regression**.
+  - Any endpoint `p95 > BENCH_P95_MS` → **broader tail regression**
+    (catches a regression affecting >5% of requests, not just >1%).
+  - Any endpoint `errors > 0` → **new error introduced**.
+  - On failure, `perf-output.txt` is uploaded as an artifact (7-day
+    retention) for triage.
+
+### Result line
+
+The bench always emits a structured final line so CI logs are grep-friendly:
+
+```
+RESULT: ok
+# or
+RESULT: fail (failures=[{"endpoint":"POST /api/match","kind":"p99","value":1820,"threshold":1500}])
+```
+
+Format is stable; downstream tooling can `grep -E '^RESULT:' perf-output.txt`
+to extract pass/fail + failure reasons.
+
+### Overriding the threshold
+
+If infra improves (faster MySQL, JIT warmup tuned, etc.) and the gate
+consistently fires, bump the threshold in `.github/workflows/perf-ci.yml`:
+
+```yaml
+env:
+  BENCH_P99_MS: '1200'   # tightened from 1500
+  BENCH_P95_MS: '700'    # tightened from 800
+```
+
+For one-off investigations (e.g. "did the regression actually happen, or
+is it infra noise?"), comment in the PR and ops can adjust the env var
+via a temporary branch or local re-run:
+
+```bash
+BENCH_P99_MS=2500 BENCH_P95_MS=1500 BENCH_DURATION=10000 npm run perf:bench
+```
+
+### When the gate fails
+
+1. Read the PR's failed action logs (link in the PR check).
+2. Download the `perf-output` artifact for full per-endpoint JSON.
+3. Identify the regressed endpoint from `RESULT: fail (...)`.
+4. Profile locally: `cd backend && npm run perf:bench` (10s default)
+   and `npm run perf:bench:real` (real LLM, 30s) to bisect.
+5. If the regression is real, revert or fix before merging.
+6. If it's infra noise, bump the threshold in `perf-ci.yml` (see above).
+
 ## Adding a new endpoint to the bench
 
 Edit `backend/scripts/perf-bench.js`, find the `targets` array, and add:

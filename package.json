@@ -8,7 +8,8 @@
     "smoke:prod": "node scripts/smoke.js",
     "smoke:help": "node scripts/smoke.js --help",
     "lint": "npm --prefix backend run lint && npm --prefix mini-program run lint",
-    "lint:fix": "npm --prefix backend run lint:fix && npm --prefix mini-program run lint:fix"
+    "lint:fix": "npm --prefix backend run lint:fix && npm --prefix mini-program run lint:fix",
+    "perf:bench:ci": "cd backend && BENCH_P99_MS=1500 BENCH_P95_MS=800 BENCH_DURATION=5000 node scripts/perf-bench.js"
   },
   "engines": {
     "node": ">=20.0.0"
