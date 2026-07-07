@@ -17,6 +17,13 @@ const llmTokens = new client.Counter({
   help: 'LLM token usage',
   labelNames: ['call_path', 'kind'],
 });
+// LLM 请求延迟直方图（按 operation + model 切片）
+const llmRequestDuration = new client.Histogram({
+  name: 'llm_request_duration_seconds',
+  help: 'LLM upstream request duration',
+  labelNames: ['operation', 'model'],
+  buckets: [0.1, 0.25, 0.5, 1, 2, 4, 8, 16],
+});
 const httpRequests = new client.Counter({
   name: 'http_requests_total',
   help: 'HTTP requests by route + status',
@@ -53,6 +60,23 @@ const dbQueryDuration = new client.Histogram({
   labelNames: ['op'], // select / insert / update / delete
   buckets: [0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2.5],
 });
+// 慢查询仪表 (v2)：按 operation + table 维度切分
+// 用 globalThis 单例防止 require 循环 / 重复 register
+const dbQueryDurationV2 = globalThis.__dbQueryDurationV2
+  || new client.Histogram({
+    name: 'db_query_duration_seconds_v2',
+    help: 'DB query duration by operation + table (slow query dashboard)',
+    labelNames: ['operation', 'table'],
+    buckets: [0.001, 0.01, 0.05, 0.1, 0.2, 0.5, 1, 2, 5],
+  });
+globalThis.__dbQueryDurationV2 = dbQueryDurationV2;
+const dbSlowQueries = globalThis.__dbSlowQueries
+  || new client.Counter({
+    name: 'db_slow_queries_total',
+    help: 'DB queries exceeding slow threshold',
+    labelNames: ['operation', 'table'],
+  });
+globalThis.__dbSlowQueries = dbSlowQueries;
 // 周期采 DB pool + redis 状态
 setInterval(() => {
   try {
@@ -135,10 +159,13 @@ module.exports = {
   register,
   llmCalls,
   llmTokens,
+  llmRequestDuration,
   httpRequests,
   httpDuration,
   slowOps,
   dbPoolConnections,
   dbQueries,
   dbQueryDuration,
+  dbQueryDurationV2,
+  dbSlowQueries,
 };
