@@ -127,6 +127,18 @@ groups:
           description: "Operations taking > 1s are happening at > 0.1/sec sustained. Likely DB, LLM, or upstream slowdown. Check slow_operations_total{route}."
           runbook_url: "https://runbooks.example.com/resume-app/slow-request-rate"
 
+      - alert: SlowQuerySpike
+        # > 0.5 slow queries/sec sustained for 5m (Round 36)
+        expr: rate(db_slow_queries_total[5m]) > 0.5
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app-backend
+        annotations:
+          summary: "Slow DB queries > 0.5/s for 5m"
+          description: "DB queries exceeding 200ms threshold sustained. Inspect db_slow_queries_total{operation, table} for the worst-offending queries."
+          runbook_url: "https://runbooks.example.com/resume-app/slow-query-spike"
+
       # NOTE: Depends on a future Sentry / client-error feed metric (e.g.
       # sentry_issues_total or client_errors_reported_total). The label and
       # metric name are placeholders so ops can wire them up when the feed

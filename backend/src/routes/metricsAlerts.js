@@ -26,6 +26,7 @@
  *   ALERT_HTTP_ERROR_THRESHOLD   default 50
  *   ALERT_LLM_ERROR_THRESHOLD    default 20
  *   ALERT_SLOW_OPS_THRESHOLD     default 10
+ *   ALERT_SLOW_QUERY_THRESHOLD   default 50 (Round 36)
  *   ALERT_DB_POOL_RATIO          default 0.9 (used / all)
  *
  * Auth: optional Bearer token. If process.env.ALERT_TOKEN is set, callers
@@ -46,7 +47,7 @@ const isTestEnv = process.env.NODE_ENV === 'test'
 // sliding-rate-limit counter's globalThis guard kicks in if both modules
 // were already loaded).
 const metricsModule = require('./metrics');
-const { register, llmCalls, httpRequests, slowOps, dbPoolConnections } = metricsModule;
+const { register, llmCalls, httpRequests, slowOps, dbPoolConnections, dbSlowQueries } = metricsModule;
 
 // sliding_rate_limit_decisions_total lives in middleware/slidingRateLimit.js
 // and is exposed via globalThis guard so we can read it without a circular
@@ -77,6 +78,7 @@ const THRESHOLDS = {
   httpErrors:       Number(process.env.ALERT_HTTP_ERROR_THRESHOLD || 50),
   llmErrors:        Number(process.env.ALERT_LLM_ERROR_THRESHOLD || 20),
   slowOps:          Number(process.env.ALERT_SLOW_OPS_THRESHOLD || 10),
+  slowQueries:      Number(process.env.ALERT_SLOW_QUERY_THRESHOLD || 50),
   dbPoolRatio:      Number(process.env.ALERT_DB_POOL_RATIO || 0.9),
 };
 
@@ -134,6 +136,15 @@ const RULES = [
     thresholdKey: 'slowOps',
     summary: 'Slow operations exceed threshold',
     description: '>1s operations sustained above threshold.',
+  },
+  {
+    // Round 36: fires when cumulative db_slow_queries_total (sum across
+    // all {operation, table} label-sets) crosses threshold. Default 50.
+    name: 'SlowQuerySpike',
+    severity: 'warning',
+    thresholdKey: 'slowQueries',
+    summary: 'Slow DB queries exceed threshold',
+    description: 'DB queries > 200ms sustained above threshold.',
   },
 ];
 
@@ -238,6 +249,14 @@ async function evaluateRule(rule) {
       // slow_operations_total has labels {route, op}; sum all.
       const slow = await sumCounter(slowOps);
       threshold = THRESHOLDS.slowOps;
+      value = slow;
+      firing = slow >= threshold;
+      break;
+    }
+    case 'SlowQuerySpike': {
+      // db_slow_queries_total has labels {operation, table}; sum across all.
+      const slow = await sumCounter(dbSlowQueries);
+      threshold = THRESHOLDS.slowQueries;
       value = slow;
       firing = slow >= threshold;
       break;
