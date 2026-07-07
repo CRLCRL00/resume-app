@@ -286,12 +286,10 @@ const openapiSpec = {
         parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'integer' } }],
         responses: { 200: { description: 'OK' }, 404: { description: 'not found' } },
       },
+      delete: { summary: '软删 (admin)', parameters: [{ name: 'id', in: 'path', required: true }] },
     },
     '/api/admin/jobs/{id}/online': {
       patch: { summary: '切换 is_online (admin)', parameters: [{ name: 'id', in: 'path', required: true }] },
-    },
-    '/api/admin/jobs/{id}': {
-      delete: { summary: '软删 (admin)', parameters: [{ name: 'id', in: 'path', required: true }] },
     },
     '/api/admin/jobs/{id}/restore': {
       patch: { summary: '取消软删 (admin)', parameters: [{ name: 'id', in: 'path', required: true }] },
