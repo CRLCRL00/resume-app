@@ -276,6 +276,176 @@ test('DELETE /api/admin/2fa with correct code disables 2FA', async () => {
   assert.equal(row.totp_verified_at, null);
 });
 
+// --- backup code suite (round 34) ---
+
+async function setupAndEnable(jwt, openid) {
+  const setupRes = await request(createApp())
+    .post('/api/admin/2fa/setup')
+    .set('Authorization', `Bearer ${jwt}`)
+    .send({});
+  const base32 = setupRes.body.data.base32;
+  const code = speakeasy.totp({ secret: base32, encoding: 'base32' });
+  const enRes = await request(createApp())
+    .post('/api/admin/2fa/enable')
+    .set('Authorization', `Bearer ${jwt}`)
+    .send({ code });
+  return { base32, enable: enRes };
+}
+
+// 11. enable returns 8 plaintext backup codes formatted xxxx-xxxx
+test('POST /api/admin/2fa/enable returns 8 backup codes', async () => {
+  const openid = uniqOpenid(11);
+  await seedAdmin(openid);
+  const jwt = sign({ userId: 7011, openid });
+  const { enable } = await setupAndEnable(jwt, openid);
+  assert.equal(enable.status, 200);
+  const codes = enable.body.data.backupCodes;
+  assert.ok(Array.isArray(codes), 'backupCodes must be array');
+  assert.equal(codes.length, 8, `need 8 codes, got ${codes.length}`);
+  for (const c of codes) {
+    assert.ok(/^[0-9a-f]{4}-[0-9a-f]{4}$/.test(c), `bad code format: ${c}`);
+  }
+  // uniqueness
+  assert.equal(new Set(codes).size, 8, 'codes must be unique');
+});
+
+// 12. codes stored hashed (DB row does NOT contain plaintext)
+test('backup codes are stored as SHA-256 hashes (not plaintext)', async () => {
+  const openid = uniqOpenid(12);
+  await seedAdmin(openid);
+  const jwt = sign({ userId: 7012, openid });
+  const { enable } = await setupAndEnable(jwt, openid);
+  const codes = enable.body.data.backupCodes;
+  const [[row]] = await pool.query(
+    'SELECT backup_codes FROM admins WHERE openid = ?',
+    [openid]
+  );
+  const stored = typeof row.backup_codes === 'string'
+    ? JSON.parse(row.backup_codes)
+    : row.backup_codes;
+  assert.ok(Array.isArray(stored), 'backup_codes must be JSON array');
+  assert.equal(stored.length, 8);
+  // plaintext codes must NOT appear in stored JSON
+  const blob = JSON.stringify(stored);
+  for (const c of codes) {
+    const compact = c.replace(/-/g, '');
+    assert.ok(!blob.includes(c), `plaintext ${c} leaked into storage`);
+    assert.ok(!blob.includes(compact), `plaintext-no-dash ${compact} leaked`);
+  }
+  // hashes must be 64 hex chars (sha256)
+  for (const h of stored) {
+    assert.ok(/^[a-f0-9]{64}$/.test(h), `bad hash: ${h}`);
+  }
+});
+
+// 13. verify with correct backup code returns challengeToken
+test('POST /api/admin/2fa/verify accepts backup code', async () => {
+  const openid = uniqOpenid(13);
+  await seedAdmin(openid);
+  const jwt = sign({ userId: 7013, openid });
+  const { enable } = await setupAndEnable(jwt, openid);
+  const codes = enable.body.data.backupCodes;
+  const vRes = await request(createApp())
+    .post('/api/admin/2fa/verify')
+    .set('Authorization', `Bearer ${jwt}`)
+    .send({ code: codes[0] });
+  assert.equal(vRes.status, 200, `expected 200 got ${vRes.status} body=${JSON.stringify(vRes.body)}`);
+  assert.ok(vRes.body.data.challengeToken);
+  assert.equal(vRes.body.data.challengeToken.length, 32);
+});
+
+// 14. after backup code use, remaining = 7
+test('after backup code use, remaining count = 7', async () => {
+  const openid = uniqOpenid(14);
+  await seedAdmin(openid);
+  const jwt = sign({ userId: 7014, openid });
+  const { enable } = await setupAndEnable(jwt, openid);
+  const codes = enable.body.data.backupCodes;
+  await request(createApp())
+    .post('/api/admin/2fa/verify')
+    .set('Authorization', `Bearer ${jwt}`)
+    .send({ code: codes[0] });
+  const stRes = await request(createApp())
+    .get('/api/admin/2fa/status')
+    .set('Authorization', `Bearer ${jwt}`);
+  assert.equal(stRes.status, 200);
+  assert.equal(stRes.body.data.backupCodesRemaining, 7);
+});
+
+// 15. backup code normalization: A1B2-C3D4 matches a1b2c3d4 (case + dash)
+test('backup code normalization: case + dash insensitive', async () => {
+  const openid = uniqOpenid(15);
+  await seedAdmin(openid);
+  const jwt = sign({ userId: 7015, openid });
+  const { enable } = await setupAndEnable(jwt, openid);
+  const codes = enable.body.data.backupCodes;
+  // original: xxxx-xxxx lowercase hex → flip case + remove dash
+  const original = codes[1];
+  const noDash = original.replace(/-/g, '');
+  const upper = noDash.toUpperCase();
+  // attempt with dash + uppercase
+  const dashed = `${upper.slice(0,4)}-${upper.slice(4)}`;
+  const vRes = await request(createApp())
+    .post('/api/admin/2fa/verify')
+    .set('Authorization', `Bearer ${jwt}`)
+    .send({ code: dashed });
+  assert.equal(vRes.status, 200, `expected 200 got ${vRes.status} body=${JSON.stringify(vRes.body)}`);
+  assert.ok(vRes.body.data.challengeToken);
+});
+
+// 16. backup code reuse → 400 (already consumed)
+test('backup code cannot be reused', async () => {
+  const openid = uniqOpenid(16);
+  await seedAdmin(openid);
+  const jwt = sign({ userId: 7016, openid });
+  const { enable } = await setupAndEnable(jwt, openid);
+  const codes = enable.body.data.backupCodes;
+  const first = await request(createApp())
+    .post('/api/admin/2fa/verify')
+    .set('Authorization', `Bearer ${jwt}`)
+    .send({ code: codes[2] });
+  assert.equal(first.status, 200);
+  const second = await request(createApp())
+    .post('/api/admin/2fa/verify')
+    .set('Authorization', `Bearer ${jwt}`)
+    .send({ code: codes[2] });
+  assert.equal(second.status, 400, `reuse must 400, got ${second.status}`);
+});
+
+// 17. verify with WRONG backup code → 400
+test('POST /api/admin/2fa/verify with wrong backup code returns 400', async () => {
+  const openid = uniqOpenid(17);
+  await seedAdmin(openid);
+  const jwt = sign({ userId: 7017, openid });
+  await setupAndEnable(jwt, openid);
+  // clearly not-stored
+  const vRes = await request(createApp())
+    .post('/api/admin/2fa/verify')
+    .set('Authorization', `Bearer ${jwt}`)
+    .send({ code: 'dead-beef' });
+  assert.equal(vRes.status, 400);
+});
+
+// 18. after using all 8 codes, status shows backupCodesRemaining = 0
+test('after using all 8 codes, backupCodesRemaining = 0', async () => {
+  const openid = uniqOpenid(18);
+  await seedAdmin(openid);
+  const jwt = sign({ userId: 7018, openid });
+  const { enable } = await setupAndEnable(jwt, openid);
+  const codes = enable.body.data.backupCodes;
+  for (const c of codes) {
+    const r = await request(createApp())
+      .post('/api/admin/2fa/verify')
+      .set('Authorization', `Bearer ${jwt}`)
+      .send({ code: c });
+    assert.equal(r.status, 200, `expected 200 for ${c}, got ${r.status}`);
+  }
+  const stRes = await request(createApp())
+    .get('/api/admin/2fa/status')
+    .set('Authorization', `Bearer ${jwt}`);
+  assert.equal(stRes.body.data.backupCodesRemaining, 0);
+});
+
 test.after(async () => {
   // best-effort cleanup
   const [rows] = await pool.query(
