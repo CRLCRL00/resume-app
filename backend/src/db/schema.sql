@@ -110,11 +110,13 @@ CREATE TABLE IF NOT EXISTS `admin_operation_logs` (
   `target_type` VARCHAR(32) DEFAULT NULL COMMENT 'job / prompt',
   `target_id` VARCHAR(64) DEFAULT NULL,
   `detail` JSON DEFAULT NULL,
+  `result` ENUM('success','failure','unknown') NOT NULL DEFAULT 'unknown' COMMENT '操作结果 (Round audit-filter)',
   `ip` VARCHAR(64) DEFAULT NULL,
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   KEY `idx_admin_time` (`admin_openid`, `created_at`),
-  KEY `idx_action_time` (`action`, `created_at`)
+  KEY `idx_action_time` (`action`, `created_at`),
+  KEY `idx_result` (`result`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='管理操作日志';
 
 -- 8. 隐私 / 服务条款 版本 (Phase 8+)
@@ -150,6 +152,7 @@ INSERT IGNORE INTO `schema_migrations` (`name`) VALUES
   ('003-audit-archive'),
   ('004-admin-audit'),
   ('005-alerts-dead-letter'),
+  ('005-audit-result'),
   ('028-client-errors');
 
 -- 004-admin-audit: admin 写操作审计（双跑安全）
