@@ -82,6 +82,18 @@ jobs:
         working-directory: backend
         run: npm ci
 
+      - name: Install mini-program dependencies
+        working-directory: mini-program
+        run: npm ci || npm install --no-audit --no-fund
+
+      - name: Lint backend
+        working-directory: backend
+        run: npm run lint
+
+      - name: Lint mini-program
+        working-directory: mini-program
+        run: npm run lint
+
       - name: Initialize test schema and seed data
         working-directory: backend
         run: node scripts/db-init.js --test
