@@ -10,5 +10,6 @@ router.use(require('./logs'));
 router.use(require('./legal'));
 router.use(require('./admins'));
 router.use(require('./audit'));
+router.use('/queries', require('./queries'));
 
 module.exports = router;
