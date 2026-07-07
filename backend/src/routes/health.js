@@ -49,6 +49,13 @@ async function pingDb() {
 
 async function pingRedis() {
   const start = Date.now();
+  // Round 33 chaos follow-up #1: defensive — malformed redis stub (no .ping)
+  // throws TypeError "redis.ping is not a function" which leaks into the
+  // public /health response. Detect missing method explicitly so error msg
+  // is generic ("redis client missing ping()").
+  if (typeof redis.ping !== 'function') {
+    return { ok: false, latencyMs: Date.now() - start, error: 'redis client missing ping()' };
+  }
   try {
     const pong = await redis.ping();
     return { ok: pong === 'PONG', latencyMs: Date.now() - start };

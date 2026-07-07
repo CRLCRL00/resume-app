@@ -333,3 +333,68 @@ test('chaos #7: db down + redis down simultaneously → /api/health responds, no
   assert.equal(live.status, 200, 'live endpoint should never depend on DB/Redis');
   assert.equal(live.body.status, 'live');
 });
+
+// ============================================================
+//  Test 8 — Round 33 chaos follow-up #1: malformed redis stub
+//  missing the `ping` method (e.g. partial mock in test). The
+//  /api/health/ready endpoint previously called `redis.ping()`
+//  directly; that would throw "redis.ping is not a function".
+//  Expectation: route degrades to 503 with redis=down, and the
+//  rich /api/health response must NOT leak "is not a function".
+// ============================================================
+test('chaos #8: redis stub without .ping → /ready 503, redis=down, no TypeError leak', async () => {
+  const REDIS_PATH = require.resolve('../../src/config/redis');
+  const orig = require.cache[REDIS_PATH];
+  // Stub: no `ping`. call/eval resolve with safe shapes so module-load paths
+  // (rate-limit redis, sliding rate limit) don't crash at require-time.
+  const stub = {
+    call: (..._args) => Promise.resolve(['unknown', 'unknown']),
+    eval: () => Promise.resolve('0000000000000000000000000000000000000000'),
+    get: () => Promise.resolve(null),
+    set: () => Promise.resolve('OK'),
+    del: () => Promise.resolve(0),
+    keys: () => Promise.resolve([]),
+    // deliberately no `ping` method
+    on: () => {},
+    quit: () => Promise.resolve(),
+    disconnect: () => {},
+  };
+  require.cache[REDIS_PATH] = {
+    id: REDIS_PATH,
+    filename: REDIS_PATH,
+    loaded: true,
+    exports: stub,
+  };
+  delete require.cache[require.resolve('../../src/routes/health')];
+  delete require.cache[require.resolve('../../src/app')];
+
+  try {
+    const { createApp } = require('../../src/app');
+    const app = createApp();
+    const res = await Promise.race([
+      request(app).get('/api/health/ready').timeout(2000),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('hung')), 4000)),
+    ]);
+    assert.equal(res.status, 503);
+    assert.equal(res.body.status, 'not_ready');
+    assert.equal(res.body.redis, 'down');
+    assert.equal(res.body.code, 1503);
+
+    // Also probe /api/health (rich endpoint) — must not leak
+    // "redis.ping is not a function" into redis.error (public field).
+    const full = await Promise.race([
+      request(app).get('/api/health').timeout(2000),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('hung')), 4000)),
+    ]);
+    assert.equal(full.status, 503);
+    assert.ok(full.body.data.redis);
+    assert.equal(full.body.data.redis.ok, false);
+    assert.doesNotMatch(full.body.data.redis.error || '', /is not a function/i,
+      'redis.error must NOT leak "is not a function"');
+  } finally {
+    if (orig) require.cache[REDIS_PATH] = orig;
+    else delete require.cache[REDIS_PATH];
+    delete require.cache[require.resolve('../../src/routes/health')];
+    delete require.cache[require.resolve('../../src/app')];
+  }
+});
