@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
+const { twoFactorRequired } = require('../../middleware/twoFactorRequired');
 const { AppError } = require('../../middleware/errorHandler');
 const { jobSchema, validateBody } = require('../../middleware/validate');
 const pool = require('../../config/db');
@@ -26,7 +27,7 @@ router.get('/jobs', userAuth, adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/jobs', userAuth, adminAuth, validateBody(jobSchema, { stripUnknown: false }), async (req, res, next) => {
+router.post('/jobs', userAuth, adminAuth, twoFactorRequired, validateBody(jobSchema, { stripUnknown: false }), async (req, res, next) => {
   try {
     const value = req.body;
     const [r] = await pool.query(
@@ -40,7 +41,7 @@ router.post('/jobs', userAuth, adminAuth, validateBody(jobSchema, { stripUnknown
   } catch (err) { next(err); }
 });
 
-router.put('/jobs/:id', userAuth, adminAuth, validateBody(jobSchema, { stripUnknown: false }), async (req, res, next) => {
+router.put('/jobs/:id', userAuth, adminAuth, twoFactorRequired, validateBody(jobSchema, { stripUnknown: false }), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) throw new AppError(1000, 'invalid id', 400);
@@ -57,7 +58,7 @@ router.put('/jobs/:id', userAuth, adminAuth, validateBody(jobSchema, { stripUnkn
   } catch (err) { next(err); }
 });
 
-router.patch('/jobs/:id/online', userAuth, adminAuth, async (req, res, next) => {
+router.patch('/jobs/:id/online', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) throw new AppError(1000, 'invalid id', 400);
@@ -70,7 +71,7 @@ router.patch('/jobs/:id/online', userAuth, adminAuth, async (req, res, next) => 
   } catch (err) { next(err); }
 });
 
-router.delete('/jobs/:id', userAuth, adminAuth, async (req, res, next) => {
+router.delete('/jobs/:id', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) throw new AppError(1000, 'invalid id', 400);
@@ -81,7 +82,7 @@ router.delete('/jobs/:id', userAuth, adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.patch('/jobs/:id/restore', userAuth, adminAuth, async (req, res, next) => {
+router.patch('/jobs/:id/restore', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) throw new AppError(1000, 'invalid id', 400);

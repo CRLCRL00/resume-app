@@ -275,9 +275,9 @@ const openapiSpec = {
         responses: { 200: { description: 'data.items + total' } },
       },
       post: {
-        summary: '新增岗位 (admin)',
+        summary: '新增岗位 (admin, 启用 2FA 后需 X-2FA-Token)',
         requestBody: { required: true, content: { 'application/json': { schema: { $ref: '#/components/schemas/JobCreateRequest' } } } },
-        responses: { 200: { description: 'data.job_id' } },
+        responses: { 200: { description: 'data.job_id' }, 403: { description: '2FA required' } },
       },
     },
     '/api/admin/jobs/{id}': {
@@ -340,6 +340,48 @@ const openapiSpec = {
           } } },
         },
         responses: { 200: { description: 'OK' }, 400: { description: 'invalid' }, 403: { description: 'admin only' } },
+      },
+    },
+    '/api/admin/2fa/status': {
+      get: {
+        summary: 'admin 2FA 状态 (enabled / hasSecret / verifiedAt)',
+        responses: { 200: { description: 'data.enabled / data.hasSecret / data.verifiedAt' }, 403: { description: 'admin only' } },
+      },
+    },
+    '/api/admin/2fa/setup': {
+      post: {
+        summary: '生成 TOTP secret 存 DB（不启用）',
+        responses: { 200: { description: 'data.otpauthUrl + data.base32 + data.qrDataUrl' } },
+      },
+    },
+    '/api/admin/2fa/enable': {
+      post: {
+        summary: '校验 code 后启用 2FA (admin)',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { type: 'object', required: ['code'], properties: { code: { type: 'string', pattern: '^\\d{6}$' } } } } },
+        },
+        responses: { 200: { description: 'data.enabled=true' }, 400: { description: 'code 错或未 setup' } },
+      },
+    },
+    '/api/admin/2fa/verify': {
+      post: {
+        summary: '校验 code 签发 challengeToken (5 min, 单次)',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { type: 'object', required: ['code'], properties: { code: { type: 'string', pattern: '^\\d{6}$' } } } } },
+        },
+        responses: { 200: { description: 'data.challengeToken (32 hex)' }, 400: { description: 'code 错 / 未启用' } },
+      },
+    },
+    '/api/admin/2fa': {
+      delete: {
+        summary: '校验 code 后关闭 2FA (admin, 清 secret)',
+        requestBody: {
+          required: true,
+          content: { 'application/json': { schema: { type: 'object', required: ['code'], properties: { code: { type: 'string', pattern: '^\\d{6}$' } } } } },
+        },
+        responses: { 200: { description: 'data.disabled=true' }, 400: { description: 'code 错' } },
       },
     },
     '/api/internal/alert': {

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
+const { twoFactorRequired } = require('../../middleware/twoFactorRequired');
 const { AppError } = require('../../middleware/errorHandler');
 const pool = require('../../config/db');
 const adminLog = require('../../services/adminLog');
@@ -31,7 +32,7 @@ router.get('/users', userAuth, adminAuth, async (req, res, next) => {
  * POST /api/admin/users — 添加 admin
  * Body: { openid, note? }
  */
-router.post('/users', userAuth, adminAuth, async (req, res, next) => {
+router.post('/users', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
   try {
     const { openid, note } = req.body || {};
     if (!openid || typeof openid !== 'string' || openid.length > 64) {
@@ -51,7 +52,7 @@ router.post('/users', userAuth, adminAuth, async (req, res, next) => {
 /**
  * DELETE /api/admin/users/:openid — 删除 admin（不删 user row）
  */
-router.delete('/users/:openid', userAuth, adminAuth, async (req, res, next) => {
+router.delete('/users/:openid', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
   try {
     const openid = req.params.openid;
     if (!openid) throw new AppError(1000, 'openid required', 400);

@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
+const { twoFactorRequired } = require('../../middleware/twoFactorRequired');
 const { AppError } = require('../../middleware/errorHandler');
 const pool = require('../../config/db');
 const logger = require('../../utils/logger');
@@ -10,7 +11,7 @@ const logger = require('../../utils/logger');
  * POST /api/admin/legal-version — bump policy version (admin only)
  * Body: { doc_type: 'privacy'|'terms', version: 'YYYY-MM-DD', note?: string }
  */
-router.post('/legal-version', userAuth, adminAuth, async (req, res, next) => {
+router.post('/legal-version', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
   try {
     const { doc_type, version, note } = req.body || {};
     if (!['privacy', 'terms'].includes(doc_type)) {

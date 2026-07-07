@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
+const { twoFactorRequired } = require('../../middleware/twoFactorRequired');
 const { AppError } = require('../../middleware/errorHandler');
 const { promptUpdateSchema, validateBody } = require('../../middleware/validate');
 const pool = require('../../config/db');
@@ -27,7 +28,7 @@ router.get('/prompts/:code', userAuth, adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/prompts/:code', userAuth, adminAuth, validateBody(promptUpdateSchema), async (req, res, next) => {
+router.put('/prompts/:code', userAuth, adminAuth, twoFactorRequired, validateBody(promptUpdateSchema), async (req, res, next) => {
   try {
     const value = req.body;
     const code = req.params.code;

@@ -79,6 +79,10 @@ CREATE TABLE IF NOT EXISTS `admins` (
   `id` INT UNSIGNED NOT NULL AUTO_INCREMENT,
   `openid` VARCHAR(64) NOT NULL,
   `note` VARCHAR(128) DEFAULT NULL COMMENT '备注',
+  `totp_secret` VARBINARY(128) DEFAULT NULL COMMENT 'TOTP base32 secret (encrypted at rest in app layer)',
+  `totp_enabled` TINYINT(1) NOT NULL DEFAULT 0,
+  `totp_verified_at` TIMESTAMP NULL DEFAULT NULL COMMENT 'last successful 2fa verify',
+  `backup_codes` TEXT DEFAULT NULL COMMENT 'JSON array of hashed backup codes (single-use)',
   `created_at` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
   PRIMARY KEY (`id`),
   UNIQUE KEY `uk_openid` (`openid`)
