@@ -300,12 +300,57 @@ const openapiSpec = {
     },
     '/api/admin/logs': {
       get: {
-        summary: '全部操作日志 (admin)',
+        summary: '全部操作日志 (admin) — 支持高级筛选',
         parameters: [
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
+          { name: 'action', in: 'query', schema: { type: 'string' }, description: '前缀 LIKE 匹配，如 admin.' },
+          { name: 'admin_openid', in: 'query', schema: { type: 'string' }, description: '精确匹配 actor' },
+          { name: 'target_id', in: 'query', schema: { type: 'string' } },
+          { name: 'target_type', in: 'query', schema: { type: 'string' } },
+          { name: 'result', in: 'query', schema: { type: 'string', enum: ['success', 'failure', 'unknown'] } },
+          { name: 'ip', in: 'query', schema: { type: 'string' }, description: '精确 IP' },
+          { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date-time' }, description: 'ISO 8601' },
+          { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date-time' }, description: 'ISO 8601' },
         ],
-        responses: { 200: { description: 'data.items + total' } },
+        responses: { 200: { description: 'data.items + total + filter' } },
+      },
+    },
+    '/api/admin/logs/actions': {
+      get: {
+        summary: 'distinct action types + counts (给 ops 下拉)',
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 100, maximum: 200 } },
+        ],
+        responses: { 200: { description: 'data.items: {action, count, last_at}[]' } },
+      },
+    },
+    '/api/admin/logs/actors': {
+      get: {
+        summary: 'distinct admin openids + action counts (给 ops filter UI)',
+        parameters: [
+          { name: 'limit', in: 'query', schema: { type: 'integer', default: 100, maximum: 200 } },
+        ],
+        responses: { 200: { description: 'data.items: {admin_openid, count, last_at}[]' } },
+      },
+    },
+    '/api/admin/logs/retention-trigger': {
+      post: {
+        summary: '手动触发 retention cron (admin, retentionDays ∈ [30,720])',
+        requestBody: {
+          required: false,
+          content: { 'application/json': { schema: {
+            type: 'object',
+            properties: {
+              retentionDays: { type: 'integer', minimum: 30, maximum: 720, default: 180 },
+              batchSize: { type: 'integer', minimum: 1, maximum: 10000, default: 1000 },
+            },
+          } } },
+        },
+        responses: {
+          200: { description: 'data.{deleted, batches, durationMs, retentionDays}' },
+          400: { description: 'retentionDays/batchSize out of range' },
+        },
       },
     },
     '/api/admin/logs/security': {
