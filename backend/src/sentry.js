@@ -1,5 +1,4 @@
 const Sentry = require('@sentry/node');
-const config = require('./config');
 const logger = require('./utils/logger');
 
 let initialized = false;

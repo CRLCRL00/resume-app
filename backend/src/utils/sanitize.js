@@ -6,6 +6,7 @@ const ROLE_TAGS = [
   /```\s*(system|assistant|user)[\s\S]*?(?:```|$)/gi,
   /<<\s*(SYS|USER|INST|INSTRUCT)\s*>>/gi,
 ];
+// eslint-disable-next-line no-control-regex
 const CTRL_CHARS = /[\x00-\x08\x0B-\x0C\x0E-\x1F\x7F]/g;
 
 function sanitizeForLlm(input, { max = MAX_USER_TEXT } = {}) {

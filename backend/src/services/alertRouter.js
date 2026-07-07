@@ -85,7 +85,7 @@ function formatAlertMessage(alert) {
  * dedupe + mute lists. Returns a summary so callers (the route handler,
  * the test) can inspect what happened.
  */
-async function evaluateAndNotify({ rules = [], fired = [] } = {}) {
+async function evaluateAndNotify({ fired = [] } = {}) {
   const muted = mutedNames();
   const notified = [];
   const skipped = [];

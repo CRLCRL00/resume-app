@@ -32,7 +32,7 @@ const defaultPool = createPool();
 if (!defaultPool.__metricsWrapped) {
   defaultPool.__metricsWrapped = true;
 
-  const wrap = (orig, name) => function (...args) {
+  const wrap = (orig, _name) => function (...args) {
     const m = require('../routes/metrics');
     const t0 = Date.now();
     let op = 'other';

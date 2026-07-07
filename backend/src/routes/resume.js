@@ -6,7 +6,7 @@ const { AppError } = require('../middleware/errorHandler');
 const resumeGenerator = require('../services/resumeGenerator');
 const rateLimit = require('../services/rateLimit');
 const pool = require('../config/db');
-const { sanitizeForLlm, sanitizeForLlmDeep } = require('../utils/sanitize');
+const { sanitizeForLlmDeep } = require('../utils/sanitize');
 const { idempotency, idempotencyCapture, captureBody } = require('../middleware/idempotency');
 
 router.post('/save', userAuth, async (req, res, next) => {

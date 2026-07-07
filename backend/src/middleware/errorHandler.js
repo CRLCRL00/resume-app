@@ -9,11 +9,11 @@ class AppError extends Error {
   }
 }
 
-function notFoundHandler(req, res, next) {
+function notFoundHandler(req, res, _next) {
   res.status(404).json({ code: 1404, message: `Not found: ${req.method} ${req.path}` });
 }
 
-function errorHandler(err, req, res, next) {
+function errorHandler(err, req, res, _next) {
   logger.error({ err, path: req.path, method: req.method }, 'request error');
 
   if (err instanceof AppError) {
