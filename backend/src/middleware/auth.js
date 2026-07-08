@@ -8,12 +8,26 @@ const logger = require('../utils/logger');
 // 本中间件继续接受历史签发的 30d JWT（依赖 services/token.verify），保证
 // 老 token / 旧测试调用 services/token.sign() 仍能通过。refresh 链由
 // services/token.{signRefresh,revoke,burnFamily} 单独维护。
-async function userAuth(req, res, next) {
+// Round 39: 接受两种 token 来源
+// 1) Authorization: Bearer <token> — WeChat / API clients 优先
+// 2) req.cookies.auth_token — 浏览器 admin panel（httpOnly，JS 拿不到）
+// 优先级：header > cookie（WeChat 调用永远走 header；cookie 仅作 fallback）
+function extractToken(req) {
   const auth = req.headers.authorization;
-  if (!auth || !auth.startsWith('Bearer ')) {
+  if (auth && auth.startsWith('Bearer ')) {
+    return { token: auth.slice(7), via: 'header' };
+  }
+  if (req.cookies && req.cookies.auth_token) {
+    return { token: req.cookies.auth_token, via: 'cookie' };
+  }
+  return { token: null, via: null };
+}
+
+async function userAuth(req, res, next) {
+  const { token, via } = extractToken(req);
+  if (!token) {
     return next(new AppError(1002, 'missing token', 401));
   }
-  const token = auth.slice(7);
   try {
     const payload = verify(token);
     // jti 黑名单优先；老 token 无 jti 回退到 key 级黑名单
@@ -27,6 +41,7 @@ async function userAuth(req, res, next) {
     }
     req.user = payload;
     req.token = token;
+    req.authVia = via; // 'header' | 'cookie' — 用于 CSRF/audit 判定
     next();
   } catch (err) {
     next(err);
