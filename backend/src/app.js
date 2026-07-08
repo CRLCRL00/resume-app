@@ -15,6 +15,7 @@ const alertWebhookRouter = require('./routes/alertWebhook');
 const clientErrorsRouter = require('./routes/clientErrors');
 const sentryDebugRouter = require('./routes/sentryDebug');
 const helmet = require('helmet');
+const cookieParser = require('cookie-parser');
 const { corsMiddleware } = require('./middleware/cors');
 const { notFoundHandler, errorHandler } = require('./middleware/errorHandler');
 const { resumeLimiter, matchLimiter } = require('./middleware/rateLimit');
@@ -75,6 +76,9 @@ function createApp() {
   app.use('/api/internal/alert', alertsRouter.rawBodyMiddleware);
 
   app.use(express.json({ limit: '1mb' }));
+  // Round 39: cookie-parser 让 userAuth 能从 req.cookies.auth_token 读 token
+  // mount 在 express.json 之后、所有路由之前；helmet/cors 仍在外层处理安全头
+  app.use(cookieParser());
 
   // HTTP timing metrics（记录每个请求耗时到 Prometheus histogram）
   const m = metricsRouter;
