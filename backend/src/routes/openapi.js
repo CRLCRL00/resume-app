@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { convertJoiAll } = require('../services/joiToOpenApi');
+const { scanRoutes, routesToOpenApi } = require('../services/routeScanner');
 const {
   resumeSchema,
   jobSchema,
@@ -153,6 +154,10 @@ const openapiSpec = {
     },
   },
   security: [{ bearerAuth: [] }],
+  paths: {}, // populated at first request: auto-scan + hand-written merge
+};
+
+const handWrittenPaths = {
   paths: {
     '/api/health': {
       get: {
@@ -477,7 +482,30 @@ const openapiSpec = {
   },
 };
 
-router.get('/openapi.json', (req, res) => res.json(openapiSpec));
+// Hand-written paths (rich docs) + auto-scanned paths (catch-all for new routes).
+// Hand-written wins on collision — that's the merge contract. See services/routeScanner.js.
+// Lazy build to avoid circular require: openapi.js is required at the bottom of app.js,
+// so we cannot call createApp() at module load. The handler runs after the app is
+// fully constructed — we scan the live `req.app` instance instead.
+let _built = false;
+function buildMergedPaths(app) {
+  if (_built) return;
+  _built = true;
+  const autoRoutes = scanRoutes(app);
+  const autoPaths = routesToOpenApi(autoRoutes);
+  const manual = handWrittenPaths.paths || {};
+  const merged = { ...autoPaths, ...manual };
+  openapiSpec.paths = merged;
+  const autoCount = Object.keys(autoPaths).length;
+  const manualCount = Object.keys(manual).length;
+  openapiSpec.info['x-auto-paths'] = true;
+  openapiSpec.info['x-path-count'] = { auto: autoCount, manual: manualCount };
+}
+
+router.get('/openapi.json', (req, res) => {
+  buildMergedPaths(req.app);
+  res.json(openapiSpec);
+});
 
 const SWAGGER_HTML = `
 <!DOCTYPE html>
