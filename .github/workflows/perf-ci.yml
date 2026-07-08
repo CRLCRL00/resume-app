@@ -104,8 +104,32 @@ jobs:
         working-directory: backend
         # Run via root npm script (env-vars + chdir to backend/). Writes
         # perf-output.txt so the failure-upload step can attach it.
+        # BENCH_JSON_OUTPUT=1 also writes .bench-results.json for the PR
+        # comment step + artifact (one bench run serves both).
         run: |
-          npm run perf:bench:ci 2>&1 | tee perf-output.txt
+          npm run perf:bench:ci:json 2>&1 | tee perf-output.txt
+
+      - name: Generate perf comment
+        if: always()
+        working-directory: backend
+        # Read .bench-results.json (written by the bench step) and emit a
+        # markdown table (≤30 lines) for the PR. Runs even on failure so
+        # reviewers see the partial results that triggered the gate.
+        run: |
+          node scripts/perf-comment.js > perf-comment.md
+          cat perf-comment.md
+
+      - name: Upload perf results artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: perf-results
+          path: |
+            backend/.bench-results.json
+            backend/perf-comment.md
+            backend/perf-output.txt
+          if-no-files-found: ignore
+          retention-days: 14
 
       - name: Upload perf output on failure
         if: failure()
@@ -115,3 +139,10 @@ jobs:
           path: backend/perf-output.txt
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Comment on PR
+        if: github.event_name == 'pull_request' && always()
+        uses: marocchino/sticky-pull-request-comment@v2
+        with:
+          header: perf-bench
+          path: backend/perf-comment.md
