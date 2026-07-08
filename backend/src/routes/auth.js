@@ -9,6 +9,7 @@ const rateLimit = require('../services/rateLimit');
 const securityLog = require('../services/securityLog');
 const { checkLockout, recordFailure, recordSuccess } = require('../middleware/authLockout');
 const logger = require('../utils/logger');
+const { COOKIE_CONFIG, REFRESH_COOKIE_CONFIG } = require('../config/cookie');
 
 router.post('/login', checkLockout, async (req, res, next) => {
   // IP 限流 + lockout：每 IP 5 / 15 分钟（防爆破 + 减轻 code2session）
@@ -79,6 +80,10 @@ router.post('/login', checkLockout, async (req, res, next) => {
     logger.info({ userId: user.id, openid: user.openid }, 'user login');
 
     await recordSuccess(req);
+    // Round 39: 同步下 httpOnly cookie 给浏览器 admin panel
+    // WeChat 仍从 body 拿 token（wx.request 不支持 cookie）
+    res.cookie('auth_token', access, COOKIE_CONFIG);
+    res.cookie('refresh_token', refreshToken, REFRESH_COOKIE_CONFIG);
     res.json({ code: 0, data: { token: access, refreshToken, csrfToken: csrf, user } });
   } catch (err) {
     recordFailure(req).catch(() => {});
@@ -123,6 +128,8 @@ router.post('/refresh', async (req, res, next) => {
     const newJti = decode(refresh).jti;
     await rotateFamily(decoded.jti, newJti, family);
     securityLog.recordSync('auth.refresh.ok', req, { family, userId: decoded.userId });
+    // Round 39: 旋转后同步刷 cookie（轮换出的新 access 给浏览器）
+    res.cookie('auth_token', access, COOKIE_CONFIG);
     res.json({ code: 0, data: { access_token: access, refresh_token: refresh, expires_in: 900 } });
   } catch (err) {
     next(err);
@@ -148,6 +155,9 @@ router.post('/logout', async (req, res, next) => {
       if (d && d.family) await burnFamily(d.family);
     }
     securityLog.recordSync('logout', req, {});
+    // Round 39: 清 cookie（即便请求来自 header-only 客户端，也清；不存在则 noop）
+    res.clearCookie('auth_token', { path: '/' });
+    res.clearCookie('refresh_token', { path: '/' });
     res.json({ code: 0, data: { revoked: true } });
   } catch (err) {
     next(err);
