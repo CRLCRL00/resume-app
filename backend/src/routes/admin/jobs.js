@@ -15,9 +15,27 @@ function parsePage(req) {
   return { page, pageSize, offset: (page - 1) * pageSize };
 }
 
+// LIKE escape: \ % _  → 字面字符
+function escapeLike(s) {
+  return String(s).replace(/[\\%_]/g, (m) => '\\' + m);
+}
+
 router.get('/jobs', userAuth, adminAuth, async (req, res, next) => {
   try {
     const { page, pageSize, offset } = parsePage(req);
+    const q = (req.query.q || '').toString().trim();
+    if (q) {
+      const like = `%${escapeLike(q)}%`;
+      const [items] = await pool.query(
+        'SELECT id, title, company, city, salary_min, salary_max, is_online, is_deleted, created_at FROM jobs WHERE title LIKE ? OR company LIKE ? OR description_md LIKE ? ORDER BY id DESC LIMIT ? OFFSET ?',
+        [like, like, like, pageSize, offset]
+      );
+      const [[{ total }]] = await pool.query(
+        'SELECT COUNT(*) AS total FROM jobs WHERE title LIKE ? OR company LIKE ? OR description_md LIKE ?',
+        [like, like, like]
+      );
+      return res.json({ code: 0, data: { items, total, page, pageSize, q } });
+    }
     const [items] = await pool.query(
       'SELECT id, title, company, city, salary_min, salary_max, is_online, is_deleted, created_at FROM jobs ORDER BY id DESC LIMIT ? OFFSET ?',
       [pageSize, offset]
