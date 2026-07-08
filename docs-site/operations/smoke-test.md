@@ -1,7 +1,5 @@
 # Smoke Test (`scripts/smoke.js`)
 
-> 完整站点版：[docs-site/operations/smoke-test](https://crlcrl00.github.io/resume-app/operations/smoke-test)。本文档为仓库内简版。
-
 Cross-platform (Node 20+ global `fetch`, no shell deps) deploy-time endpoint
 liveness probe. Runs on Windows + Linux identically. Hits a deployed backend
 and verifies 8 critical endpoints respond as expected.

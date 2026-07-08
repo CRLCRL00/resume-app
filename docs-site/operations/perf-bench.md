@@ -1,7 +1,5 @@
 # Perf Bench — p95/p99 Latency Baseline
 
-> 完整站点版：[docs-site/operations/perf-bench](https://crlcrl00.github.io/resume-app/operations/perf-bench)。本文档为仓库内简版。
-
 > **TL;DR**: `cd backend && npm run perf:bench` boots the express app
 > in-process and drives autocannon at 4 hot endpoints. Emits JSON summary
 > per endpoint; exits non-zero if any p99 exceeds threshold.
@@ -222,7 +220,7 @@ the build when any endpoint regresses beyond the threshold.
 - **Trigger**: `pull_request → [develop, main]` only. No push (would waste
   CI minutes on every commit; we already have unit-test coverage for
   correctness via `backend-ci.yml`).
-- **Concurrency**: `perf-ci-${{ github.ref }}` with `cancel-in-progress: true`
+- **Concurrency**: `perf-ci-$&#123;&#123; github.ref &#125;&#125;` with `cancel-in-progress: true`
   so stale PRs don't burn the budget.
 - **Timeout**: 5 minutes wall (≈ 20s bench + 30s services + install).
 - **Thresholds** (env-overridable in the workflow file):

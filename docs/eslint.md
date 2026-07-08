@@ -1,5 +1,7 @@
 # ESLint Guide
 
+> 完整站点版：[docs-site/operations/eslint](https://crlcrl00.github.io/resume-app/operations/eslint)（如需上线可加，目前仓库内仍是单一真理源）。本文档为仓库内权威版。
+
 This document covers the ESLint configuration for `backend/` and `mini-program/`.
 
 ## Tooling

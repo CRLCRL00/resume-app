@@ -23,6 +23,11 @@ dist/
 build/
 coverage/
 
+# VitePress 文档站点
+docs-site/node_modules/
+docs-site/.vitepress/dist/
+docs-site/.vitepress/cache/
+
 # 编辑器
 .vscode/
 .idea/

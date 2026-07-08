@@ -24,9 +24,37 @@
 
 | 链接 | 说明 |
 |------|------|
-| [docs/index.md](./docs/index.md) | 完整文档索引（从这里开始）|
+| [https://crlcrl00.github.io/resume-app/](https://crlcrl00.github.io/resume-app/) | **文档站点**（VitePress，main 自动部署） |
+| [docs/index.md](./docs/index.md) | 仓库内文档索引 |
 | [RUNBOOK.md](./RUNBOOK.md) | 运维 / 部署 / 故障排查 |
 | [docs/audit/微信管理后台操作手册.md](./docs/audit/微信管理后台操作手册.md) | 微信小程序后台手动操作 |
+
+### 本地预览文档站
+
+```bash
+npm run docs:dev        # http://localhost:5173
+npm run docs:build      # 产出 docs-site/.vitepress/dist
+```
+
+## 文档
+
+> 项目文档已迁到独立 VitePress 站点 [crlcrl00.github.io/resume-app](https://crlcrl00.github.io/resume-app/)。
+
+包含：
+
+- **指南** — 快速开始 / 架构
+- **运维** — perf-bench / smoke-test / 告警 / 慢查询 / 审计 / 2FA / 混沌
+- **参考** — OpenAPI / 环境变量
+- **更新日志** — 全部 devlog 索引
+
+旧 `docs/*.md` 保留为仓库内简版（向后兼容）。
+
+### 部署
+
+- 触发：push 到 `main`，涉及 `docs-site/**` 或本 workflow 文件
+- 也可手动：Actions → docs-deploy → Run workflow
+- Workflow：`.github/workflows/docs-deploy.yml`
+- 输出：GitHub Pages 环境 `github-pages`
 
 ## 快速开始（开发环境）
 
