@@ -6,15 +6,15 @@ const { createApp } = require('../src/app');
 // Ensure no ALERT_TOKEN is set so routes are reachable for tests.
 delete process.env.ALERT_TOKEN;
 
-test('GET /api/internal/metrics/alerts/rules returns rule list (8 rules) + names', async () => {
+test('GET /api/internal/metrics/alerts/rules returns rule list (9 rules) + names', async () => {
   const app = createApp();
   const res = await request(app).get('/api/internal/metrics/alerts/rules');
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.code, 0);
   assert.ok(res.body.data);
-  assert.strictEqual(res.body.data.count, 8);
+  assert.strictEqual(res.body.data.count, 9);
   assert.ok(Array.isArray(res.body.data.names));
-  assert.strictEqual(res.body.data.names.length, 8);
+  assert.strictEqual(res.body.data.names.length, 9);
   // Spot-check that the rules we promised are present.
   const expectedNames = [
     'HighErrorRate',
@@ -25,21 +25,22 @@ test('GET /api/internal/metrics/alerts/rules returns rule list (8 rules) + names
     'DBPoolExhausted',
     'SlowRequestRate',
     'SlowQuerySpike',
+    'SlowQueryByTable',
   ];
   for (const n of expectedNames) {
     assert.ok(res.body.data.names.includes(n), `expected ${n} in ${JSON.stringify(res.body.data.names)}`);
   }
-  assert.ok(res.body.data.rules.length === 8);
+  assert.ok(res.body.data.rules.length === 9);
   assert.ok(res.body.data.thresholds);
 });
 
-test('GET /api/internal/metrics/alerts returns fired:[] + checked:8 initially', async () => {
+test('GET /api/internal/metrics/alerts returns fired:[] + checked:9 initially', async () => {
   const app = createApp();
   const res = await request(app).get('/api/internal/metrics/alerts');
   assert.strictEqual(res.statusCode, 200);
   assert.strictEqual(res.body.code, 0);
   assert.ok(res.body.data);
-  assert.strictEqual(res.body.data.checked, 8);
+  assert.strictEqual(res.body.data.checked, 9);
   assert.ok(Array.isArray(res.body.data.fired));
   // On a fresh process no counters should trip thresholds; assert fired is empty.
   assert.deepStrictEqual(res.body.data.fired, []);
@@ -188,4 +189,154 @@ test('SlowQuerySpike honors custom ALERT_SLOW_QUERY_THRESHOLD=10', async () => {
   // Reset env + cache so later tests get default threshold again.
   delete process.env.ALERT_SLOW_QUERY_THRESHOLD;
   delete require.cache[require.resolve('../src/routes/metricsAlerts')];
+});
+
+// ---------------- SlowQueryByTable (Round 37) ----------------
+
+test('GET /api/internal/metrics/alerts/rules returns 9 rules including SlowQueryByTable', async () => {
+  const app = createApp();
+  const res = await request(app).get('/api/internal/metrics/alerts/rules');
+  assert.strictEqual(res.statusCode, 200);
+  assert.strictEqual(res.body.code, 0);
+  assert.ok(res.body.data);
+  assert.strictEqual(res.body.data.count, 9);
+  assert.strictEqual(res.body.data.names.length, 9);
+  assert.ok(
+    res.body.data.names.includes('SlowQueryByTable'),
+    `expected SlowQueryByTable in ${JSON.stringify(res.body.data.names)}`
+  );
+  const rule = res.body.data.rules.find((r) => r.name === 'SlowQueryByTable');
+  assert.ok(rule, 'expected SlowQueryByTable rule entry');
+  assert.strictEqual(rule.severity, 'warning');
+  assert.strictEqual(rule.thresholdKey, 'slowQueryPerTable');
+  assert.strictEqual(rule.thresholdDefault, 20);
+});
+
+test('SlowQueryByTable does NOT fire when all {operation, table} below threshold', async () => {
+  const counter = metricsModule.dbSlowQueries;
+  // Defensive reset for test isolation.
+  const snapBefore = await counter.get();
+  for (const v of snapBefore.values) {
+    try { counter.remove(v.labels); } catch (_e) {}
+  }
+
+  // Bump 3 distinct label-sets, all below threshold (20).
+  counter.inc({ operation: 'select', table: 'users' }, 5);
+  counter.inc({ operation: 'select', table: 'jobs' }, 3);
+  counter.inc({ operation: 'update', table: 'resumes' }, 7);
+
+  const app = createApp();
+  const res = await request(app).get('/api/internal/metrics/alerts');
+  const firedNames = res.body.data.fired.map((r) => r.name);
+  assert.ok(
+    !firedNames.includes('SlowQueryByTable'),
+    `expected SlowQueryByTable NOT in fired, got ${JSON.stringify(firedNames)}`
+  );
+});
+
+test('SlowQueryByTable fires when one operation+table above threshold', async () => {
+  const counter = metricsModule.dbSlowQueries;
+  const snapBefore = await counter.get();
+  const beforeLabels = new Set(snapBefore.values.map((v) => JSON.stringify(v.labels)));
+
+  try {
+    // Bump 21 (>20) for one label combo.
+    for (let i = 0; i < 21; i++) {
+      counter.inc({ operation: 'select', table: 'users' });
+    }
+    // Other table well below threshold.
+    counter.inc({ operation: 'select', table: 'jobs' });
+
+    const app = createApp();
+    const res = await request(app).get('/api/internal/metrics/alerts');
+    const slow = res.body.data.fired.find((a) => a.name === 'SlowQueryByTable');
+    assert.ok(slow, 'SlowQueryByTable should fire');
+    assert.strictEqual(slow.labels.offenders.length, 1);
+    assert.strictEqual(slow.labels.offenders[0].table, 'users');
+    assert.strictEqual(slow.labels.offenders[0].operation, 'select');
+    assert.ok(slow.labels.offenders[0].value >= 20);
+    assert.ok(slow.value >= 20, `expected value >= 20, got ${slow.value}`);
+    assert.strictEqual(slow.threshold, 20);
+  } finally {
+    const snapAfter = await counter.get();
+    for (const v of snapAfter.values) {
+      if (!beforeLabels.has(JSON.stringify(v.labels))) {
+        try { counter.remove(v.labels); } catch (_e) {}
+      }
+    }
+  }
+});
+
+test('SlowQueryByTable fired labels.offenders contains offending combo', async () => {
+  const counter = metricsModule.dbSlowQueries;
+  // Defensive reset: drop any pre-existing label-sets so offender count
+  // is deterministic (prior tests may have left series behind).
+  const snapBefore = await counter.get();
+  const beforeLabels = new Set(snapBefore.values.map((v) => JSON.stringify(v.labels)));
+  for (const v of snapBefore.values) {
+    try { counter.remove(v.labels); } catch (_e) {}
+  }
+
+  try {
+    counter.inc({ operation: 'update', table: 'orders' }, 25);
+    counter.inc({ operation: 'delete', table: 'sessions' }, 30);
+
+    const app = createApp();
+    const res = await request(app).get('/api/internal/metrics/alerts');
+    const slow = res.body.data.fired.find((a) => a.name === 'SlowQueryByTable');
+    assert.ok(slow, 'SlowQueryByTable should fire');
+    assert.strictEqual(slow.labels.offenders.length, 2);
+    const tables = slow.labels.offenders.map((o) => o.table).sort();
+    assert.deepStrictEqual(tables, ['orders', 'sessions']);
+    const ops = slow.labels.offenders.map((o) => o.operation).sort();
+    assert.deepStrictEqual(ops, ['delete', 'update']);
+  } finally {
+    const snapAfter = await counter.get();
+    for (const v of snapAfter.values) {
+      if (!beforeLabels.has(JSON.stringify(v.labels))) {
+        try { counter.remove(v.labels); } catch (_e) {}
+      }
+    }
+  }
+});
+
+test('SlowQueryByTable honors custom ALERT_SLOW_QUERY_PER_TABLE_THRESHOLD=10', async () => {
+  process.env.ALERT_SLOW_QUERY_PER_TABLE_THRESHOLD = '10';
+  delete require.cache[require.resolve('../src/routes/metricsAlerts')];
+  const freshAlerts = require('../src/routes/metricsAlerts');
+  assert.strictEqual(freshAlerts.THRESHOLDS.slowQueryPerTable, 10);
+  const rule = freshAlerts.RULES.find((r) => r.name === 'SlowQueryByTable');
+  assert.ok(rule, 'expected SlowQueryByTable in RULES');
+  assert.strictEqual(rule.thresholdKey, 'slowQueryPerTable');
+
+  // Fire at 11 with custom threshold 10.
+  const counter = metricsModule.dbSlowQueries;
+  // Defensive reset so prior tests' label-sets don't leak in (custom
+  // threshold 10 would catch them all).
+  const snapBefore = await counter.get();
+  const beforeLabels = new Set(snapBefore.values.map((v) => JSON.stringify(v.labels)));
+  for (const v of snapBefore.values) {
+    try { counter.remove(v.labels); } catch (_e) {}
+  }
+  try {
+    counter.inc({ operation: 'select', table: 'resumes' }, 11);
+    // Build app with the freshly-loaded router that uses custom threshold.
+    const { createApp } = require('../src/app');
+    delete require.cache[require.resolve('../src/app')];
+    const freshApp = require('../src/app').createApp();
+    const res = await request(freshApp).get('/api/internal/metrics/alerts');
+    const slow = res.body.data.fired.find((a) => a.name === 'SlowQueryByTable');
+    assert.ok(slow, 'SlowQueryByTable should fire at 11 with custom threshold 10');
+    assert.strictEqual(slow.threshold, 10);
+  } finally {
+    const snapAfter = await counter.get();
+    for (const v of snapAfter.values) {
+      if (!beforeLabels.has(JSON.stringify(v.labels))) {
+        try { counter.remove(v.labels); } catch (_e) {}
+      }
+    }
+    delete process.env.ALERT_SLOW_QUERY_PER_TABLE_THRESHOLD;
+    delete require.cache[require.resolve('../src/routes/metricsAlerts')];
+    delete require.cache[require.resolve('../src/app')];
+  }
 });

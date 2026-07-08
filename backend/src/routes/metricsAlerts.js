@@ -27,6 +27,7 @@
  *   ALERT_LLM_ERROR_THRESHOLD    default 20
  *   ALERT_SLOW_OPS_THRESHOLD     default 10
  *   ALERT_SLOW_QUERY_THRESHOLD   default 50 (Round 36)
+ *   ALERT_SLOW_QUERY_PER_TABLE_THRESHOLD  default 20 (Round 37)
  *   ALERT_DB_POOL_RATIO          default 0.9 (used / all)
  *
  * Auth: optional Bearer token. If process.env.ALERT_TOKEN is set, callers
@@ -79,6 +80,7 @@ const THRESHOLDS = {
   llmErrors:        Number(process.env.ALERT_LLM_ERROR_THRESHOLD || 20),
   slowOps:          Number(process.env.ALERT_SLOW_OPS_THRESHOLD || 10),
   slowQueries:      Number(process.env.ALERT_SLOW_QUERY_THRESHOLD || 50),
+  slowQueryPerTable: Number(process.env.ALERT_SLOW_QUERY_PER_TABLE_THRESHOLD || 20),
   dbPoolRatio:      Number(process.env.ALERT_DB_POOL_RATIO || 0.9),
 };
 
@@ -145,6 +147,17 @@ const RULES = [
     thresholdKey: 'slowQueries',
     summary: 'Slow DB queries exceed threshold',
     description: 'DB queries > 200ms sustained above threshold.',
+  },
+  {
+    // Round 37: per-{operation, table} slow-query alerting. Catches "one
+    // specific table is slow while total is OK" — the global SlowQuerySpike
+    // misses this. Default 20 per label combo; full offender list attached
+    // to labels.offenders for ops drill-down.
+    name: 'SlowQueryByTable',
+    severity: 'warning',
+    thresholdKey: 'slowQueryPerTable',
+    summary: 'Per-table slow queries above threshold',
+    description: 'A specific operation+table combo has >20 slow queries sustained.',
   },
 ];
 
@@ -259,6 +272,33 @@ async function evaluateRule(rule) {
       threshold = THRESHOLDS.slowQueries;
       value = slow;
       firing = slow >= threshold;
+      break;
+    }
+    case 'SlowQueryByTable': {
+      // Iterate all {operation, table} label combos; fire if ANY exceeds
+      // threshold. value = single worst offender (highest count);
+      // labels.offenders = full list of >= threshold label-sets.
+      const counter = metricsModule.dbSlowQueries;
+      const snap = await counter.get();
+      threshold = THRESHOLDS.slowQueryPerTable;
+      const offenders = [];
+      let worst = null;
+      for (const v of snap.values) {
+        const v0 = Number(v.value) || 0;
+        if (v0 >= threshold) {
+          offenders.push({
+            operation: v.labels?.operation,
+            table: v.labels?.table,
+            value: v0,
+          });
+        }
+        if (!worst || v0 > worst.value) {
+          worst = { operation: v.labels?.operation, table: v.labels?.table, value: v0 };
+        }
+      }
+      value = worst?.value || 0;
+      firing = offenders.length > 0;
+      labels.offenders = offenders;
       break;
     }
     default:

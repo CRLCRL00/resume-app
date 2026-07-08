@@ -139,6 +139,20 @@ groups:
           description: "DB queries exceeding 200ms threshold sustained. Inspect db_slow_queries_total{operation, table} for the worst-offending queries."
           runbook_url: "https://runbooks.example.com/resume-app/slow-query-spike"
 
+      - alert: SlowQueryByTable
+        # Per-{operation, table} spike: any single combo > 0.2/sec sustained (Round 37).
+        # Catches the "one specific table is slow but total is OK" case the
+        # global SlowQuerySpike misses.
+        expr: max by (operation, table) (rate(db_slow_queries_total[5m])) > 0.2
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app-backend
+        annotations:
+          summary: "Per-table slow queries > 0.2/s for 5m"
+          description: "Table {{ $labels.table }} operation {{ $labels.operation }} is slow."
+          runbook_url: "https://runbooks.example.com/resume-app/slow-query-by-table"
+
       # NOTE: Depends on a future Sentry / client-error feed metric (e.g.
       # sentry_issues_total or client_errors_reported_total). The label and
       # metric name are placeholders so ops can wire them up when the feed
