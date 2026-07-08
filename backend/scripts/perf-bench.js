@@ -35,6 +35,16 @@ function parseCliMode(argv) {
 }
 const CLI_MODE = parseCliMode(process.argv.slice(2));
 
+// JSON output mode: --json flag or BENCH_JSON_OUTPUT=1. Suppresses human
+// table; prints ONLY the JSON array of endpoint results to stdout. Used by
+// .github/workflows/perf-ci.yml to feed perf-comment.js + the artifact.
+const JSON_OUTPUT = process.env.BENCH_JSON_OUTPUT === '1'
+  || (Array.isArray(process.argv.slice(2)) && process.argv.slice(2).includes('--json'));
+// Output file for the JSON array. Default: backend/.bench-results.json.
+// Set BENCH_OUTPUT_FILE to override (e.g. CI may use a different path).
+const JSON_OUTPUT_FILE = process.env.BENCH_OUTPUT_FILE
+  || path.join(__dirname, '..', '.bench-results.json');
+
 // 1. Mock externals BEFORE app boots (require.cache injection).
 // CLI mode (node scripts/perf-bench.js) → mock wechat + llm so bench is offline.
 // Programmatic callers (tests) call runBench() with realLlm:true to skip mockLlm.
@@ -148,6 +158,16 @@ function summary(name, result) {
   };
 }
 
+// Tag an endpoint entry with `result: 'ok'|'fail'`. Uses thresholds captured
+// at bench time (p99Ms/p95Ms). Fail if p99>=p99Ms OR p95>=p95Ms OR errors>0.
+function tagResult(entry, p99Ms, p95Ms) {
+  const p99 = entry.latency?.p99 || 0;
+  const p95 = entry.latency?.p95 || 0;
+  const errors = entry.errors || 0;
+  entry.result = (p99 < p99Ms && p95 < p95Ms && errors === 0) ? 'ok' : 'fail';
+  return entry;
+}
+
 function runOne(target, duration) {
   return new Promise((resolve, reject) => {
     const inst = autocannon({
@@ -252,6 +272,11 @@ async function runBench(opts = {}) {
   const nonLlmConn = opts.nonLlmConcurrency || (realLlm ? 10 : 50);
   const skipNonLlm = Boolean(opts.skipNonLlm);
   const printJson = opts.printJson !== false;
+  // Thresholds captured at bench time; used to tag each entry.result. When
+  // JSON output mode is on we still need this even though main() is also
+  // computing the gate decision.
+  const tagP99 = opts.p99Ms || Number(process.env.BENCH_P99_MS) || 2000;
+  const tagP95 = opts.p95Ms || Number(process.env.BENCH_P95_MS) || 800;
 
   if (realLlm) {
     const evict = [
@@ -357,6 +382,7 @@ async function runBench(opts = {}) {
         s.tokens_per_call = null;
       }
       endpointResults.push(s);
+      tagResult(s, tagP99, tagP95);
       if (printJson) console.log(JSON.stringify(s));
     }
 
@@ -411,17 +437,26 @@ async function main(opts = {}) {
   // so swapping the export before calling main() actually takes effect.
   const exportsRef = module.exports;
   const runner = opts.runBench || exportsRef.runBench || runBench;
+  // JSON output mode: --json or BENCH_JSON_OUTPUT=1. In this mode main()
+  // suppresses per-endpoint JSON lines, the comparison table, and the
+  // perf bench report block; only the final array goes to stdout (or the
+  // configured file). The structured `RESULT: ok|fail` line still emits.
+  const jsonMode = JSON_OUTPUT || Boolean(opts.jsonOutput);
   let exitCode = 0;
   const failures = [];
+  let endpointResults = [];
   try {
     const result = await runner({
       realLlm: CLI_MODE === 'real',
       duration: Number(process.env.BENCH_DURATION) || undefined,
       p99Ms,
       p95Ms,
+      // Suppress per-endpoint JSON line + report block when we want a
+      // clean array on stdout. Tests can still override via opts.printJson.
+      printJson: jsonMode ? false : undefined,
     });
-    printComparisonTable(result);
-    for (const e of result.endpoints) {
+    endpointResults = result.endpoints || [];
+    for (const e of endpointResults) {
       if (e.latency.p99 > p99Ms) {
         logger.warn({ endpoint: e.endpoint, p99: e.latency.p99, threshold: p99Ms }, 'p99 over threshold');
         failures.push({ endpoint: e.endpoint, kind: 'p99', value: e.latency.p99, threshold: p99Ms });
@@ -439,10 +474,48 @@ async function main(opts = {}) {
       }
     }
     if (CLI_MODE === 'real') {
-      const total = result.endpoints
+      const total = endpointResults
         .filter((e) => e.tokens_per_call)
         .reduce((acc, e) => acc + (e.tokens_per_call.total || 0), 0);
       logger.info({ totalTokens: total }, 'real-LLM bench token usage');
+    }
+    if (jsonMode) {
+      // Emit ONLY the array (CI parses with `node -e` or jq-like consumer).
+      // Human-readable summary goes to stderr so CI log reviewers still see
+      // p95/p99 at a glance; the markdown PR comment has the same data
+      // rendered as a table.
+      const arrayJson = JSON.stringify(endpointResults);
+      process.stdout.write(arrayJson + '\n');
+      try {
+        require('node:fs').writeFileSync(JSON_OUTPUT_FILE, arrayJson);
+        logger.info({ file: JSON_OUTPUT_FILE, count: endpointResults.length }, 'bench results saved');
+      } catch (e) {
+        logger.error({ err: e.message, file: JSON_OUTPUT_FILE }, 'failed to write bench results file');
+      }
+      // Render a compact table to stderr (pino goes to stdout, so use stderr
+      // directly to avoid clobbering the array consumers parse).
+      const cols = [
+        ['Endpoint', 30], ['p50', 6], ['p95', 6], ['p99', 6],
+        ['RPS', 8], ['Err', 5], ['Result', 7],
+      ];
+      const header = cols.map(([n, w]) => n.padEnd(w)).join(' | ');
+      const sep = cols.map(([, w]) => '-'.repeat(w)).join('-+-');
+      process.stderr.write('\n=== PERF BENCH (JSON mode) ===\n' + header + '\n' + sep + '\n');
+      for (const e of endpointResults) {
+        const row = [
+          e.endpoint.padEnd(30),
+          String(e.latency.p50).padStart(6),
+          String(e.latency.p95).padStart(6),
+          String(e.latency.p99).padStart(6),
+          String(Math.round(e.throughput?.avg || 0)).padStart(8),
+          String(e.errors || 0).padStart(5),
+          (e.result || '').padEnd(7),
+        ].join(' | ');
+        process.stderr.write(row + '\n');
+      }
+      process.stderr.write('\n');
+    } else {
+      printComparisonTable(result);
     }
   } catch (err) {
     logger.error({ err: err.message, stack: err.stack }, 'bench failed');

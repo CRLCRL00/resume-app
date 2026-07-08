@@ -17,6 +17,8 @@
     "db:init": "node scripts/db-init.js",
     "perf:bench": "node scripts/perf-bench.js",
     "perf:bench:ci": "node -e \"process.env.BENCH_P99_MS=1500; process.env.BENCH_DURATION=5000; require('./scripts/perf-bench.js')\"",
+    "perf:bench:ci:json": "node -e \"process.env.BENCH_P99_MS=1500; process.env.BENCH_DURATION=5000; process.env.BENCH_JSON_OUTPUT='1'; process.env.BENCH_OUTPUT_FILE=process.cwd()+'/.bench-results.json'; require('./scripts/perf-bench.js')\"",
+    "perf:comment": "node scripts/perf-comment.js",
     "perf:bench:real": "node scripts/perf-bench.js --real-llm"
   },
   "engines": {
