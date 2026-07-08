@@ -271,8 +271,9 @@ const openapiSpec = {
         parameters: [
           { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
           { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
+          { name: 'q', in: 'query', schema: { type: 'string' }, description: 'LIKE 搜索 title/company/description_md（% _ 已转义）' },
         ],
-        responses: { 200: { description: 'data.items + total' } },
+        responses: { 200: { description: 'data.items + total + q' } },
       },
       post: {
         summary: '新增岗位 (admin, 启用 2FA 后需 X-2FA-Token)',
@@ -446,6 +447,28 @@ const openapiSpec = {
       get: {
         summary: '慢查询聚合统计 (admin)',
         responses: { 200: { description: 'data: { slowQueryThresholdMs, totalTracked, slowCount, byTable }' }, 403: { description: 'admin only' } },
+      },
+    },
+    '/api/admin/users': {
+      get: {
+        summary: 'admin 列表 + 搜索 (admin)',
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
+          { name: 'q', in: 'query', schema: { type: 'string' }, description: 'LIKE 搜索 openid + LEFT JOIN users.nickname（% _ 已转义）' },
+        ],
+        responses: { 200: { description: 'data.items + total + q' } },
+      },
+    },
+    '/api/admin/resumes/search': {
+      get: {
+        summary: '简历全文搜索 (admin) — q 搜 nickname / openid / source_form.name/education[0].school/experience[0].company',
+        parameters: [
+          { name: 'page', in: 'query', schema: { type: 'integer', default: 1 } },
+          { name: 'pageSize', in: 'query', schema: { type: 'integer', default: 20, maximum: 100 } },
+          { name: 'q', in: 'query', schema: { type: 'string' }, description: 'LIKE 搜索（% _ 已转义）' },
+        ],
+        responses: { 200: { description: 'data.items + total + q' } },
       },
     },
     '/api/internal/alert': {

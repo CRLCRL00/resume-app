@@ -9,6 +9,7 @@ router.use(require('./prompts'));
 router.use(require('./logs'));
 router.use(require('./legal'));
 router.use(require('./admins'));
+router.use(require('./resumes'));
 router.use(require('./audit'));
 router.use('/queries', require('./queries'));
 
