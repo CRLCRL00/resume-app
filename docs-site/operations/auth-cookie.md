@@ -84,3 +84,76 @@ flow keeps working (userAuth checks both).
 `backend/tests/auth-cookie.test.js` — 8 cases covering cookie attributes,
 backward compat, header/cookie priority, clear-on-logout, refresh
 re-issuance, and CSRF Origin enforcement.
+
+`backend/tests/auth-cookie-rotation.test.js` — 6 cases (R40) covering
+cookie theft detection: rotation → use old cookie → 401, multi-rotation
+→ use any old cookie → 401, logout → use old cookie → 401, header-mode
+(WeChat) unaffected.
+
+## Cookie theft detection (R40)
+
+`/refresh` rotates the refresh token: the old `jti` lands in the Redis
+blacklist (`jwt:bl:<oldJti>`) and a new `jti` is issued. If an attacker
+replays the old `refresh_token` cookie (e.g. via XSS exfiltration, or
+stolen from a leaked device backup) **after** the legitimate user has
+already refreshed, that old jti is now blacklisted — `userAuth` detects
+this and treats it as theft.
+
+### Detection flow (`backend/src/middleware/auth.js`)
+
+On every cookie-mode request, after the access token verifies, `userAuth`
+also checks `req.cookies.refresh_token`:
+
+1. Decode the refresh cookie → extract `jti`
+2. If `jti` is in `jwt:bl:<jti>` (Redis blacklist) → **theft suspected**
+3. `burnFamily(family)` — revoke every token in the rotation chain
+4. `res.clearCookie('auth_token')` + `res.clearCookie('refresh_token')`
+5. Log `security.cookie_theft` via `securityLog.recordSync`
+6. Return `401 { code: 1002, message: "cookie revoked; please re-login" }`
+
+The clearCookie emits `Set-Cookie` headers with past expiry, so the
+browser drops both cookies immediately. The user must re-login (the
+refresh chain is burned — there is no way to "un-burn" a family).
+
+### `/logout` chain (R40)
+
+`POST /api/auth/logout` was previously header-only aware. R40 adds
+cookie-mode handling:
+
+- If `Authorization: Bearer <access>` → revoke access jti (TTL 900s)
+- Else if `req.cookies.auth_token` → revoke access jti from cookie
+- If `req.cookies.refresh_token` (or body.refresh_token) → `burnFamily`
+
+This makes the logout chain symmetric: whether the user logged in via
+WeChat (`Authorization` header) or via the browser admin panel
+(cookies), the jti blacklist is updated, and any subsequent request
+with the old refresh cookie hits the theft detection path in step 1.
+
+### Failure mode: fail-open
+
+The Redis lookup in step 2 is wrapped in `safeCheckJti` semantics:
+if Redis is down, the check returns `false` and the request proceeds.
+This matches the existing R33 chaos-followup fail-open behavior. A
+warn-level log is emitted so operators can correlate a flood of
+"theft checks failing open" with a Redis outage.
+
+### Header-mode (WeChat) unaffected
+
+The detection only fires when:
+
+- `req.authVia === 'cookie'` (set when the access token came from cookie)
+- `req.cookies.refresh_token` is present
+
+WeChat mini-program requests go through `Authorization: Bearer` and
+never carry cookies (`wx.request` does not set Cookie), so `via` is
+`'header'` and the cookie theft branch is skipped entirely. Header-mode
+theft detection continues to use the existing `token revoked` path
+(jti blacklist on access token).
+
+### Recovery
+
+A user who hits a 401 "cookie revoked; please re-login" must re-auth
+via `/api/auth/login` (WeChat) or the admin panel login page. The
+burned family cannot be revived — that's the point: even if the
+attacker later presents the rotated jti, the `jwt:fam:burned:<id>`
+key returns truthy and `detectReuse` will 401 it.

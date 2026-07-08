@@ -75,6 +75,16 @@ async function burnFamily(familyId) {
   await redis.set(`jwt:fam:burned:${familyId}`, '1', 'EX', REFRESH_TTL_SEC + 86400);
 }
 
+/**
+ * Round 40: cookie theft detection helper.
+ * 若请求里携带的 refresh jti 已在黑名单（rotation 后旧 jti 被 revoke），
+ * 且 ≠ 当前 expected jti → 返回 true，调用方应烧 family + 清 cookie + 401。
+ */
+async function checkCookieTheft({ oldRefreshJti, currentRefreshJti }) {
+  if (!oldRefreshJti || oldRefreshJti === currentRefreshJti) return false;
+  return await isRevoked(oldRefreshJti);
+}
+
 // 语义化别名（spec 期望的命名）；与下方函数完全等价
 const signAccess = (payload, opts) => sign(payload, opts);
 const verifyAccess = (tokenStr) => verify(tokenStr);
@@ -96,6 +106,7 @@ module.exports = {
   rotateFamily,
   detectReuse,
   burnFamily,
+  checkCookieTheft,
   decode,
   REFRESH_TTL_SEC,
   ACCESS_TTL_SEC,

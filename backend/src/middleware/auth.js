@@ -1,6 +1,7 @@
-const { verify, isRevoked } = require('../services/token');
+const { verify, isRevoked, decode, burnFamily } = require('../services/token');
 const redis = require('../config/redis');
 const { AppError } = require('./errorHandler');
+const securityLog = require('../services/securityLog');
 const logger = require('../utils/logger');
 
 // 用户态校验：access token 路径。
@@ -39,13 +40,61 @@ async function userAuth(req, res, next) {
       const blacklisted = await safeCheckBlacklist(token);
       if (blacklisted) return next(new AppError(1002, 'token revoked', 401));
     }
+
+    // Round 40: cookie 模式 + refresh cookie 在场 → 检查 cookie 盗用。
+    // refresh jti 已被 rotation 后 revoke（黑名单），旧 cookie 再现即 theft。
+    if (via === 'cookie' && req.cookies && req.cookies.refresh_token) {
+      const theftResult = await checkCookieTheftRefresh(req);
+      if (theftResult) {
+        const family = theftResult.family;
+        if (family) {
+          burnFamily(family).catch((e) =>
+            logger.warn({ err: e.message, family }, 'burnFamily failed during theft response'));
+        }
+        // 先清 cookie（Set-Cookie 头必须在 status 之前）
+        res.clearCookie('auth_token', { path: '/' });
+        res.clearCookie('refresh_token', { path: '/' });
+        securityLog.recordSync('cookie_theft', req, {
+          oldJti: theftResult.oldJti,
+          family,
+          path: req.path,
+        });
+        // 直接写 401 JSON（避免 next(err) 走 errorHandler 时被 setHeader 顺序坑）
+        return res.status(401).json({ code: 1002, message: 'cookie revoked; please re-login' });
+      }
+    }
+
     req.user = payload;
     req.token = token;
     req.authVia = via; // 'header' | 'cookie' — 用于 CSRF/audit 判定
+    // Round 40: ops visibility — 标记本次会话最近一次通过验证的时间
+    req.sessionBumpedAt = Date.now();
     next();
   } catch (err) {
     next(err);
   }
+}
+
+/**
+ * Round 40 helper: 检查 refresh cookie 的 jti 是否已在黑名单。
+ * 返回 null 表示未触发 theft；返回 { oldJti, family } 表示盗用。
+ * fail-open: redis 故障不阻断主流程（与 safeCheckJti 一致）。
+ */
+async function checkCookieTheftRefresh(req) {
+  const raw = req.cookies.refresh_token;
+  if (!raw) return null;
+  let decoded;
+  try { decoded = decode(raw); } catch (_e) { return null; }
+  if (!decoded || !decoded.jti) return null;
+  let revoked;
+  try {
+    revoked = await isRevoked(decoded.jti);
+  } catch (e) {
+    logger.warn({ jti: decoded.jti, err: e.message }, 'cookie theft check failed; failing open');
+    return null;
+  }
+  if (!revoked) return null;
+  return { oldJti: decoded.jti, family: decoded.family };
 }
 
 async function safeCheckJti(jti) {
