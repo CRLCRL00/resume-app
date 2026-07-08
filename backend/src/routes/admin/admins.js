@@ -7,15 +7,40 @@ const { AppError } = require('../../middleware/errorHandler');
 const pool = require('../../config/db');
 const adminLog = require('../../services/adminLog');
 
+// LIKE escape: \ % _  → 字面字符
+function escapeLike(s) {
+  return String(s).replace(/[\\%_]/g, (m) => '\\' + m);
+}
+
 /**
  * GET /api/admin/users — 列出 admin 用户（未删除）
- * Query: ?page=&pageSize=
+ * Query: ?page=&pageSize=&q=  (q 搜 openid + LEFT JOIN users.nickname)
  */
 router.get('/users', userAuth, adminAuth, async (req, res, next) => {
   try {
     const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
     const pageSize = Math.min(parseInt(req.query.pageSize, 10) || 20, 100);
     const offset = (page - 1) * pageSize;
+    const q = (req.query.q || '').toString().trim();
+    if (q) {
+      const like = `%${escapeLike(q)}%`;
+      const [items] = await pool.query(
+        `SELECT a.id, a.openid, a.note, a.created_at, u.nickname
+         FROM admins a
+         LEFT JOIN users u ON u.openid = a.openid
+         WHERE a.openid LIKE ? OR u.nickname LIKE ?
+         ORDER BY a.id DESC LIMIT ? OFFSET ?`,
+        [like, like, pageSize, offset]
+      );
+      const [[{ total }]] = await pool.query(
+        `SELECT COUNT(*) AS total
+         FROM admins a
+         LEFT JOIN users u ON u.openid = a.openid
+         WHERE a.openid LIKE ? OR u.nickname LIKE ?`,
+        [like, like]
+      );
+      return res.json({ code: 0, data: { items, total, page, pageSize, q } });
+    }
     const [items] = await pool.query(
       `SELECT a.id, a.openid, a.note, a.created_at, u.nickname
        FROM admins a
