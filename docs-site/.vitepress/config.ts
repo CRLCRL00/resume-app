@@ -4,6 +4,9 @@ export default defineConfig({
   title: '简历推荐小程序 Docs',
   description: 'ResumeApp 后端 / 小程序 / 运维文档',
   lang: 'zh-CN',
+  // 自定义域名部署在根路径，故 base = '/'（无子路径）。
+  // 注意：未挂自定义域前，project URL (…/resume-app/) 下静态资源会 404。
+  base: '/',
   lastUpdated: true,
   cleanUrls: true,
   head: [
@@ -39,6 +42,8 @@ export default defineConfig({
             { text: 'Admin 操作审计', link: '/operations/audit-logs' },
             { text: 'Admin 两步验证 (2FA)', link: '/operations/two-factor' },
             { text: '混沌测试场景', link: '/operations/chaos-testing' },
+            { text: '微信小程序 CI 与发布', link: '/operations/wechat-mp-ci' },
+            { text: '自定义域名', link: '/operations/custom-domain' },
           ],
         },
       ],

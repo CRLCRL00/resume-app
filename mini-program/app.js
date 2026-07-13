@@ -1,5 +1,7 @@
 // 工具栏 → 详情 → 本地设置 → 勾「不校验合法域名」才能访问 https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com
 // 真机预览时 wx.login 自动跑，模拟器 timeout 所以跳过
+// 注意：sentry 必须 require 在最前面，且早于 App()，SDK 才能 wrap onLaunch
+require('./utils/sentry');
 const { reportClientError } = require('./utils/monitor');
 
 App({

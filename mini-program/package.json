@@ -5,10 +5,13 @@
   "description": "简历推荐小程序 (WeChat Mini-Program)",
   "scripts": {
     "lint": "eslint . --ext .js",
-    "lint:fix": "eslint . --ext .js --fix"
+    "lint:fix": "eslint . --ext .js --fix",
+    "wx:upload": "bash ../scripts/wx-mp-upload.sh",
+    "wx:preview": "bash ../scripts/wx-mp-preview.sh"
   },
   "devDependencies": {
     "eslint": "^8.57.0",
-    "miniprogram-ci": "^2.1.31"
+    "miniprogram-ci": "^2.1.31",
+    "sentry-miniapp": "^1.13.1"
   }
 }

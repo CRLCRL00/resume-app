@@ -39,6 +39,15 @@ jobs:
           cache: npm
           cache-dependency-path: docs-site/package-lock.json
 
+      # 缓存 VitePress build cache，加速增量构建（node_modules 由上面 npm cache 覆盖）。
+      - name: Cache VitePress
+        uses: actions/cache@v4
+        with:
+          path: docs-site/.vitepress/cache
+          key: vitepress-${{ hashFiles('docs-site/**/*.md', 'docs-site/.vitepress/config.ts') }}
+          restore-keys: |
+            vitepress-
+
       - name: Install
         working-directory: docs-site
         run: npm ci
@@ -47,8 +56,16 @@ jobs:
         working-directory: docs-site
         run: npm run build
 
+      # VitePress 不会自动把 docs-site/CNAME 拷进 dist，需手动 cp 到根。
+      - name: Copy CNAME (custom domain)
+        run: cp docs-site/CNAME docs-site/.vitepress/dist/CNAME
+
       - name: Configure Pages
         uses: actions/configure-pages@v4
+        with:
+          # 首次部署需 repo → Settings → Pages → Source = GitHub Actions。
+          # enablement 会在缺失时尝试自动开启 Pages。
+          enablement: true
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

@@ -41,6 +41,8 @@ Thumbs.db
 
 # 微信开发者工具本地配置（含本机路径，不应入仓）
 mini-program/project.private.config.json
+# 小程序运行时配置（含 Sentry DSN 等敏感值，部署时手动同步或脚本注入）
+mini-program/src/config.js
 .claude/
 简历key.txt
 *.key.txt

@@ -55,6 +55,17 @@ npm run docs:build      # 产出 docs-site/.vitepress/dist
 - 也可手动：Actions → docs-deploy → Run workflow
 - Workflow：`.github/workflows/docs-deploy.yml`
 - 输出：GitHub Pages 环境 `github-pages`
+- 当前 URL：<https://crlcrl00.github.io/resume-app/>
+
+### 自定义域名
+
+支持挂自有域名（部署在域名根路径）。启用步骤见
+[docs-site/operations/custom-domain.md](./docs-site/operations/custom-domain.md)：
+
+- 改 `docs-site/CNAME` 为真实域名（仓库内为占位 `docs.example.com`，勿提交真域名）
+- repo → Settings → Pages 填 Custom domain + 勾选 Enforce HTTPS
+- DNS：CNAME `docs` → `crlcrl00.github.io`
+
 
 ## 快速开始（开发环境）
 
