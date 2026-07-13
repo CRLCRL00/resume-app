@@ -14,10 +14,8 @@ description: 一页式 ops 行动清单（revoke + ICP + 部署 + 监控）。
 
 ```bash
 # GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)
-# 找到以下 3 个前缀的 PAT 全部 Revoke:
-github_pat_11CAQ3JHA0I4F9XX...
-github_pat_11CAQ3JHA0mPQOeKA0a6yb_1iwir61...
-github_pat_11CAQ3JHA0h0vth5oMor2Y_BJno3uYjy6F96OjYdRceSThSDy...
+# 按 token description 找前缀 `github_pat_11CAQ3JHA0...` 的 PAT（已写进 R45 历史 commitment）
+# 共 3 个，全部 Revoke。R45 已 sanitize this 文档不在 commit history 中复现真实 PAT 串。
 ```
 
 **校验**:

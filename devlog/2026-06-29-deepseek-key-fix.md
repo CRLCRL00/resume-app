@@ -11,7 +11,7 @@
 
 | 项 | Before | After |
 |----|--------|-------|
-| DeepSeek API key | `sk-0cb4...caca`（已撤销）| `sk-01545d2a6d98429dab169ea7ffeb9b15`（新）|
+| DeepSeek API key | `sk-...`（已撤销） | `sk-...`（新，R45 未在文档复现）|
 | DEEPSEEK_BASE_URL | `https://api.deepseek.com`（缺 /v1）| `https://api.deepseek.com/v1` ✅ |
 | 后端 LLM 真调 | 502 Authentication Fails | **200 OK** |
 | `llm.chat()` 直接调 | FAIL | **34 tokens** 真实返回 |

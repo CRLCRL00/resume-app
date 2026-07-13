@@ -107,6 +107,6 @@ gh secret list | grep WX_MINIPROGRAM
 > Listed as a reminder for ops to audit and rotate these creds;
 > do NOT reproduce the secret value in any public doc.
 
-- GitHub PAT set: 3 PATs of the form `github_pat_11CAQ3JHA0...` are recorded as exposed in prior session history. Revoke ALL of them regardless of current revocation status.
+- GitHub PAT set: 3 PATs of the `github_pat_11CAQ3JHA0...` family are recorded as exposed in prior session history. Revoke ALL of them regardless of current revocation status. The full PAT strings were scrubbed from this file in R45; refer to git history before Jul 2026-07-13 if original values are needed.
 - WeChat code-upload key file: a Windows path like `D:\小程序密钥.key` was named in repo docs. Re-rotate the key in mp.weixin.qq.com → 开发设置 → "小程序代码上传密钥".
 - Server tunnel hostname: the default `*.serveousercontent.com` URL is published in source. Re-create the tunnel if you don't control the old hostname.

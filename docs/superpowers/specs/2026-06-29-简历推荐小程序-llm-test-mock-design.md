@@ -10,7 +10,7 @@
 
 | # | 测试 | 失败原因 |
 |---|------|----------|
-| 1 | `service-matchService.test.js: match returns empty when no candidates` | 真 LLM 被调（DB 候选任务残留）→ API key `****caca` 无效 → 502 |
+| 1 | `service-matchService.test.js: match returns empty when no candidates` | 真 LLM 被调（DB 候选任务残留）→ API key 无效 → 502 |
 | 2 | `route-resume-generate-llm.test.js: hits DB cache when content_md exists` | mock leak — body throw 时 restore 不执行 |
 | 3 | `.../calls LLM when no cache and stores result` | mock leak 同 #2 |
 | 4 | `.../returns 502 on LLM failure` | mock leak 同 #2 |
@@ -18,7 +18,7 @@
 
 ## 根因
 
-1. **DeepSeek API key `sk-0cb4df3452da4caf93a3d91558f3caca` 已失效**（环境 `.env` 中残留）
+1. **DeepSeek API key (R42 之前已撤销，`sk-...` form) 已失效**（环境 `.env` 中残留）— R45 抹去具体值
 2. **mock pattern 脆弱**：`const orig = chat; llm.chat = stub; ... llm.chat = orig;` 在 body throw 时不执行 restore
 3. **Node module cache 跨文件共享**：5 个测试文件共用同一 llm module 实例，跨文件 stub 残留
 
