@@ -25,10 +25,63 @@ const redis = require('../config/redis');
 const logger = require('../utils/logger');
 const config = require('../config');
 const { notifySlack } = require('./alertNotifier');
+const leaderElect = require('./leaderElect');
 
 const DEDUPE_PREFIX = 'alert:notify:';
 const DEFAULT_DEDUPE_TTL_MS = 60 * 60 * 1000;
 const DEFAULT_CHANNEL = '#alerts';
+
+// Round 40 — multi-pod leader election. Only the alert-leader pod should
+// actually send Slack notifications. Non-leader pods observe the fired
+// list and skip dispatch (the dedupe window also catches repeated calls,
+// but doing it once at the leader cuts the per-event Redis traffic).
+//
+// Fail-open posture: if leaderElect itself throws (Redis down), we still
+// attempt dispatch rather than silently drop the alert. This matches the
+// existing dedupe behavior in this file: better to double-send than to
+// miss an incident.
+const ALERT_LEADER_ROLE = 'alert';
+
+// Counter helper. Lazily resolves the prom-client Counter so tests that
+// mock prom-client or that haven't loaded metrics.js yet still work.
+let _canDispatchOverride = null;
+function dispatchCounter() {
+  try {
+    const m = require('../routes/metrics');
+    return m.alertDispatchTotal;
+  } catch (_e) {
+    return null; // tests can no-op the counter via this null
+  }
+}
+
+function incDispatch(result) {
+  const c = dispatchCounter();
+  if (c && typeof c.inc === 'function') {
+    try { c.inc({ role: ALERT_LEADER_ROLE, result }); } catch (_e) { /* noop */ }
+  }
+}
+
+/**
+ * Returns true if this pod should dispatch alerts. In test environments
+ * (NODE_ENV=test) we always allow dispatch so existing alertRouter tests
+ * continue to work without leader election gymnastics.
+ */
+async function canDispatch() {
+  if (_canDispatchOverride) {
+    // Test path — caller injected a sync/async fn returning the verdict.
+    return await _canDispatchOverride();
+  }
+  const isTest = process.env.NODE_ENV === 'test'
+    || process.env.npm_lifecycle_event === 'test';
+  if (isTest) return true;
+  try {
+    return await leaderElect.isLeader(ALERT_LEADER_ROLE);
+  } catch (err) {
+    // Redis hiccup — fail open so alerts aren't silently dropped.
+    logger.warn({ err: err.message }, 'alert leader check failed; dispatching anyway (fail-open)');
+    return true;
+  }
+}
 
 function mutedNames() {
   const csv = process.env.ALERT_MUTED || '';
@@ -91,6 +144,22 @@ async function evaluateAndNotify({ fired = [] } = {}) {
   const skipped = [];
   const errors = [];
 
+  // Round 40: multi-pod leader gate. If we're not the alert leader,
+  // skip the whole batch — non-leader pods only observe (the leader is
+  // responsible for dispatching + dedupe). Increment the skipped
+  // counter so ops can see non-leader activity in /metrics.
+  if (!(await canDispatch())) {
+    for (const a of fired || []) {
+      if (a && a.name) {
+        skipped.push({ name: a.name, reason: 'not_leader' });
+      }
+    }
+    incDispatch('skipped_not_leader');
+    logger.debug({ role: ALERT_LEADER_ROLE, count: (fired || []).length },
+      'alert dispatch skipped: not leader');
+    return { notified, skipped, errors, checked: (fired || []).length };
+  }
+
   const url = webhookUrl();
 
   for (const alert of fired) {
@@ -138,10 +207,12 @@ async function evaluateAndNotify({ fired = [] } = {}) {
       // Failed to send — release dedupe so we retry on next cycle.
       await clearDedupe(alert.name);
       errors.push({ name: alert.name, reason: res?.error || 'unknown' });
+      incDispatch('failed');
       continue;
     }
 
     notified.push({ name: alert.name, severity, status: res.status });
+    incDispatch('sent');
 
     // Critical → record an incident.
     if (severity === 'critical') {
@@ -172,6 +243,15 @@ async function forceNotify({ name, severity = 'warning', text, channel: chanOver
   if (!name || !text) {
     return { ok: false, error: 'name + text required' };
   }
+  // Round 40: forceNotify is the ops manual escape hatch — still gated by
+  // leader so an ops click on pod B doesn't double-send what pod A is
+  // already sending. Skipped calls return ok:false with reason so the
+  // caller (the /test-notify endpoint) can surface this to ops.
+  if (!(await canDispatch())) {
+    incDispatch('skipped_not_leader');
+    logger.warn({ name }, 'forceNotify skipped: not leader');
+    return { ok: false, reason: 'not_leader', leaderRole: ALERT_LEADER_ROLE };
+  }
   const url = webhookUrl();
   if (!url) {
     logger.warn('forceNotify skipped: SLACK_WEBHOOK_URL not set');
@@ -183,7 +263,10 @@ async function forceNotify({ name, severity = 'warning', text, channel: chanOver
     text: `[${severity.toUpperCase()}] ${name}: ${text}`,
   });
   if (res.ok) {
+    incDispatch('sent');
     await safeSecurityLog('alert.forceNotify', { name, severity, status: res.status });
+  } else {
+    incDispatch('failed');
   }
   return res;
 }
@@ -200,4 +283,11 @@ module.exports = {
   // re-export notifier for convenience
   notifySlack,
   config,
+  // Round 40: leader election hooks (used by tests + future callers).
+  canDispatch,
+  ALERT_LEADER_ROLE,
+  // Test-only: force a specific leader-check return value. When set,
+  // canDispatch() returns this value directly (skips real leader lookup).
+  __setCanDispatchForTests: (fn) => { _canDispatchOverride = fn; },
+  __resetCanDispatchForTests: () => { _canDispatchOverride = null; },
 };

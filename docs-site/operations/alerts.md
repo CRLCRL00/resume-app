@@ -59,7 +59,7 @@ in-process 评估器用**绝对计数器**（无 TSDB 也能用）；YAML 仍保
 
 - **重启即清零**：`prom-client` Counter 自进程启动单调累计，pm2 reload 后归零，新窗口不会立刻告警。经验值阈值已留 buffer。
 - **RedisDown 永真为 false**：进程内拿不到外部 `up{}`，靠 blackbox_exporter。
-- **多 pod 部署下 dedupe 是「best-effort」**：每 pod 各自跑评估器，Redis 共享 dedupe key → 跨 pod 去重有效；未来扩多 pod 仍 OK。
+- **多 pod 部署下 dedupe 是「best-effort」**：每 pod 各自跑评估器 → R40 已升级为 Redis leader election（`leader:alert` 租约 + 30s TTL + 5s 心跳）。详见 [multi-pod-alerts.md](./multi-pod-alerts.md)
 - **不阻塞 HTTP 响应**：`metricsAlerts` 端点不 await Slack 推送耗时（`alertRouter.evaluateAndNotify` 内部对未配 webhook 走 logger.warn，不抛）。
 
 ## 调阈值

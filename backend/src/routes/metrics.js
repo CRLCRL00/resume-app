@@ -77,6 +77,23 @@ const dbSlowQueries = globalThis.__dbSlowQueries
     labelNames: ['operation', 'table'],
   });
 globalThis.__dbSlowQueries = dbSlowQueries;
+// Round 40: multi-pod leader election metrics. Track who is the alert
+// leader + how dispatches resolved (sent / skipped-not-leader / failed).
+// Singleton via globalThis to avoid double-register in require cycles.
+const alertDispatchTotal = globalThis.__alertDispatchTotal
+  || new client.Counter({
+    name: 'alert_dispatch_total',
+    help: 'Alert dispatch outcomes by role',
+    labelNames: ['role', 'result'], // result ∈ sent / skipped_not_leader / failed
+  });
+globalThis.__alertDispatchTotal = alertDispatchTotal;
+const alertLeaderStatus = globalThis.__alertLeaderStatus
+  || new client.Gauge({
+    name: 'alert_leader_status',
+    help: '1 if this pod currently holds the alert leader lease, else 0',
+    labelNames: ['pod', 'role'],
+  });
+globalThis.__alertLeaderStatus = alertLeaderStatus;
 // 周期采 DB pool + redis 状态
 setInterval(() => {
   try {
@@ -168,4 +185,6 @@ module.exports = {
   dbQueryDuration,
   dbQueryDurationV2,
   dbSlowQueries,
+  alertDispatchTotal,
+  alertLeaderStatus,
 };

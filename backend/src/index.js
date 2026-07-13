@@ -42,6 +42,54 @@ if (process.env.NODE_ENV !== 'test') {
     runAdminLogsCleanup({ retentionDays, logger })
       .catch((err) => logger.error({ err: err.message }, 'admin_logs cleanup cron failed'));
   }, 24 * 60 * 60_000).unref();
+
+  // Round 40: multi-pod alert leader election. Try to acquire the
+  // 'alert' role lease; on success start the heartbeat so the lease is
+  // renewed every 5s. If we lose the lease (another pod took over after
+  // our TTL expired), the heartbeat stops itself.
+  //
+  // Failure here is non-fatal: alertRouter falls back to fail-open (each
+  // pod sends) when leaderElect.isLeader throws, so worst case is back
+  // to the pre-R40 duplicate behavior — never silent.
+  const leaderElect = require('./services/leaderElect');
+  const metricsModule = require('./routes/metrics');
+  leaderElect.tryAcquire('alert')
+    .then((res) => {
+      if (res.acquired) {
+        logger.info({ role: 'alert', pod: res.leader, ttl: res.ttl },
+          'became alert leader');
+        leaderElect.startHeartbeat('alert');
+      } else {
+        logger.info({ role: 'alert', currentLeader: res.leader },
+          'another pod holds the alert leader lease; staying follower');
+      }
+      metricsModule.alertLeaderStatus.set(
+        { pod: leaderElect.podName(), role: 'alert' },
+        res.acquired ? 1 : 0
+      );
+    })
+    .catch((err) => {
+      logger.warn({ err: err.message },
+        'alert leader election failed at boot; continuing with fail-open');
+      // Surface the failure in the gauge (0 = not leader) so ops can see it.
+      try {
+        metricsModule.alertLeaderStatus.set(
+          { pod: leaderElect.podName(), role: 'alert' }, 0
+        );
+      } catch (_e) { /* noop */ }
+    });
+
+  // Refresh the gauge every 10s so /metrics reflects current state even
+  // if leadership changed without a boot event (e.g. another pod died).
+  setInterval(async () => {
+    try {
+      const isL = await leaderElect.isLeader('alert');
+      metricsModule.alertLeaderStatus.set(
+        { pod: leaderElect.podName(), role: 'alert' },
+        isL ? 1 : 0
+      );
+    } catch (_e) { /* noop */ }
+  }, 10_000).unref();
 }
 
 server.keepAliveTimeout = 65000;
@@ -63,7 +111,18 @@ setupGracefulShutdown(server, {
   db: pool,
   redis,
   timeoutMs: SHUTDOWN_TIMEOUT_MS,
-  onShutdownStart: () => { isShuttingDown = true; },
+  onShutdownStart: () => {
+    isShuttingDown = true;
+    // Round 40: release alert leader lease so the next pod can take over
+    // immediately instead of waiting for TTL. Fire-and-forget — the
+    // shutdown timeout (30s) gives us plenty of headroom if Redis is slow.
+    if (process.env.NODE_ENV !== 'test') {
+      try {
+        const leaderElect = require('./services/leaderElect');
+        leaderElect.stopHeartbeat('alert').catch(() => { /* noop */ });
+      } catch (_e) { /* noop */ }
+    }
+  },
 });
 
 process.on('uncaughtException', (err) => {
