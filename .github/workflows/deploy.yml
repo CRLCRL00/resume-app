@@ -1,12 +1,29 @@
 name: Deploy
-# 触发方式：Actions UI 手动 Run workflow
+# R41-Gap-1: 触发方式 — push main 自动部署 prod + 保留手动 workflow_dispatch
+# push develop 自动部署 staging（如已配置 STAGING_* secrets）
+# 手动可覆盖 env 选择 prod / staging
 on:
+  push:
+    branches:
+      - main
+      - develop
+    paths:
+      - 'backend/**'
+      - '.github/workflows/deploy.yml'
   workflow_dispatch:
     inputs:
       ref:
         description: 'Git ref to deploy (branch or SHA)'
         required: true
         default: 'develop'
+      env:
+        description: 'Target environment'
+        required: true
+        default: 'prod'
+        type: choice
+        options:
+          - 'prod'
+          - 'staging'
       validate_only:
         description: 'Validate secrets + connectivity only (skip package/deploy)'
         required: false
@@ -15,63 +32,149 @@ on:
         options:
           - 'false'
           - 'true'
+
+# 防止同 ref 并发 deploy（GitHub 自动串行）
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   validate:
     if: ${{ inputs.validate_only == 'true' }}
     runs-on: ubuntu-latest
     steps:
-      - name: SSH connectivity check
+      - name: SSH connectivity check (prod)
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SERVER_HOST }}
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
-            echo "[validate] host=$(hostname)"
-            echo "[validate] uptime=$(uptime -p)"
-            pm2 show resume-app-backend 2>&1 | grep -E 'status|uptime' | head -5
+            echo "[validate] env=prod host=$(hostname)"
+            pm2 show resume-app-backend 2>&1 | grep -E 'status|uptime' | head -5 || true
             curl -sS -m 5 -o /dev/null -w '[validate] /api/health => %{http_code}\n' http://127.0.0.1:3000/api/health || true
+
+  resolve-target:
+    if: ${{ inputs.validate_only != 'true' }}
+    runs-on: ubuntu-latest
+    outputs:
+      server_host: ${{ steps.resolve.outputs.server_host }}
+      server_user: ${{ steps.resolve.outputs.server_user }}
+      server_key: ${{ steps.resolve.outputs.server_key }}
+      target_label: ${{ steps.resolve.outputs.target_label }}
+    steps:
+      - name: Determine target environment
+        id: resolve
+        env:
+          # workflow_dispatch 的 env 优先；push 自动 trigger 按 ref 推断
+          INPUT_ENV: ${{ inputs.env || '' }}
+          REF: ${{ github.ref }}
+          # push develop → staging；push main → prod；手动覆盖
+        run: |
+          if [ -n "$INPUT_ENV" ]; then
+            TARGET="$INPUT_ENV"
+          else
+            case "$REF" in
+              refs/heads/main) TARGET="prod" ;;
+              refs/heads/develop) TARGET="staging" ;;
+              *) TARGET="prod" ;;
+            esac
+          fi
+          echo "TARGET=$TARGET"
+          if [ "$TARGET" = "staging" ]; then
+            HOST="${{ secrets.STAGING_HOST || secrets.SERVER_HOST }}"
+            USER="${{ secrets.STAGING_USER || secrets.SERVER_USER }}"
+            KEY="${{ secrets.STAGING_SSH_KEY || secrets.SERVER_SSH_KEY }}"
+            if [ -z "${{ secrets.STAGING_SSH_KEY }}" ]; then
+              echo "::warning::STAGING_SSH_KEY 未配置,fallback 到 SERVER_SSH_KEY (prod)";
+            fi
+          else
+            HOST="${{ secrets.SERVER_HOST }}"
+            USER="${{ secrets.SERVER_USER }}"
+            KEY="${{ secrets.SERVER_SSH_KEY }}"
+          fi
+          echo "server_host=$HOST" >> "$GITHUB_OUTPUT"
+          echo "server_user=$USER" >> "$GITHUB_OUTPUT"
+          echo "server_key=$KEY" >> "$GITHUB_OUTPUT"
+          echo "target_label=$TARGET" >> "$GITHUB_OUTPUT"
+
   package:
+    if: ${{ inputs.validate_only != 'true' }}
+    needs: resolve-target
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.event.inputs.ref || github.ref }}
+
       - name: Tar backend (exclude node_modules, .env, logs)
         run: |
           tar --exclude='node_modules' --exclude='.env' --exclude='*.log' \
               --exclude='tests' --exclude='coverage' \
               -czf resume-app-backend.tar.gz backend/
+
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
           name: resume-app-backend
           path: resume-app-backend.tar.gz
+
   deploy:
     if: ${{ inputs.validate_only != 'true' }}
-    needs: package
+    needs: [resolve-target, package]
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: resume-app-backend
+
       - name: SCP to server
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          host: ${{ needs.resolve-target.outputs.server_host }}
+          username: ${{ needs.resolve-target.outputs.server_user }}
+          key: ${{ needs.resolve-target.outputs.server_key }}
           source: 'resume-app-backend.tar.gz'
           target: '/tmp/'
           command_timeout: '60s'
-      - name: Run deploy script on server
+
+      - name: Run deploy + post-deploy health probe
+        # R41-Gap-3: deploy.sh 末尾加 health probe；连续 5 次 503 自动回滚
+        # 前一版 deploy.sh 由 .deploy-backup/ 保留最近 5 版，rollback = pm2 reload prev
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.SERVER_HOST }}
-          username: ${{ secrets.SERVER_USER }}
-          key: ${{ secrets.SERVER_SSH_KEY }}
+          host: ${{ needs.resolve-target.outputs.server_host }}
+          username: ${{ needs.resolve-target.outputs.server_user }}
+          key: ${{ needs.resolve-target.outputs.server_key }}
           script: |
+            TARGET_LABEL="${{ needs.resolve-target.outputs.target_label }}"
             DEPLOY_TARBALL=/tmp/resume-app-backend.tar.gz \
             PM2_NAME=resume-app-backend \
             bash /opt/resume-app/backend/scripts/deploy.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "## Deploy summary"
+            echo ""
+            echo "- Env: \`${{ needs.resolve-target.outputs.target_label }}\`"
+            echo "- Host: \`${{ needs.resolve-target.outputs.server_host }}\`"
+            echo "- Ref: \`${{ github.event.inputs.ref || github.ref }}\`"
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Trigger: ${{ github.event_name }}"
+            echo "- Result: ${{ job.status }}"
+            if [ "${{ needs.resolve-target.outputs.target_label }}" = "staging" ]; then
+              echo ""
+              echo "### Rollback"
+              echo "若 staging 验证失败,revert PR 即可;prod 失败需手动:"
+              echo '```bash'
+              echo "ssh \${{ needs.resolve-target.outputs.server_user }}@\${{ needs.resolve-target.outputs.server_host }}"
+              echo 'cd /opt/resume-app/backend'
+              echo 'ls .deploy-backup/'
+              echo 'cp -pR .deploy-backup/<prev-ts>/src .'
+              echo 'pm2 reload resume-app-backend'
+              echo '```'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"

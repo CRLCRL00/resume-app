@@ -104,8 +104,9 @@ gh secret list | grep WX_MINIPROGRAM
 
 ## Known historical leaks (rotate-first checklist)
 
-> Listed to ensure these are NOT still active.
+> Listed as a reminder for ops to audit and rotate these creds;
+> do NOT reproduce the secret value in any public doc.
 
-- `github_pat_11CAQ3JHA0I4F9XX...` (3 similar) — must be revoked if not already
-- `D:\小程序密钥.key` path appeared in README — re-rotate the key itself if path is recognizable to outsiders
-- Server tunnel hostname `fa1b04c679fe9e41-43-139-176-199.serveousercontent.com` is in `monitor.sh` default — change if rotating tunnel
+- GitHub PAT set: 3 PATs of the form `github_pat_11CAQ3JHA0...` are recorded as exposed in prior session history. Revoke ALL of them regardless of current revocation status.
+- WeChat code-upload key file: a Windows path like `D:\小程序密钥.key` was named in repo docs. Re-rotate the key in mp.weixin.qq.com → 开发设置 → "小程序代码上传密钥".
+- Server tunnel hostname: the default `*.serveousercontent.com` URL is published in source. Re-create the tunnel if you don't control the old hostname.
