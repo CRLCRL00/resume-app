@@ -79,6 +79,18 @@ changes required beyond `credentials: 'include'` on `fetch` and reading
 `data.token` from body for the first render. Pre-existing token-in-header
 flow keeps working (userAuth checks both).
 
+## Admin panel (Round 40)
+
+The browser-based admin UI is at `/admin/*` (see [admin-panel.md](./admin-panel.md)).
+It uses the same cookie flow above. Dev login short-circuits the WeChat call:
+
+- `POST /api/auth/login` with `code: 'dev-bypass'` and a pre-registered admin
+  `openid` → 200 + cookies, skipping `wechatService.code2session()`.
+- Gated on `NODE_ENV !== 'production'`. Production forces the normal WeChat
+  path (returns 400 if the dev-bypass code is seen in prod).
+- Every dev-bypass success writes `security.admin.dev_bypass` to
+  `admin_operation_logs` with the openid in `detail.openid`.
+
 ## Tests
 
 `backend/tests/auth-cookie.test.js` — 8 cases covering cookie attributes,
