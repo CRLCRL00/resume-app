@@ -7,7 +7,8 @@
     "lint": "eslint . --ext .js",
     "lint:fix": "eslint . --ext .js --fix",
     "wx:upload": "bash ../scripts/wx-mp-upload.sh",
-    "wx:preview": "bash ../scripts/wx-mp-preview.sh"
+    "wx:preview": "bash ../scripts/wx-mp-preview.sh",
+    "sentry:sourcemap": "node scripts/upload-sourcemaps.js"
   },
   "devDependencies": {
     "eslint": "^8.57.0",

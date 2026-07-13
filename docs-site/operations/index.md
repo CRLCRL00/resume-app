@@ -12,6 +12,8 @@
 - [告警与指标阈值](/operations/alerts) — 8 条 in-process 告警 + Slack 路由
 - [慢查询仪表盘](/operations/admin-queries) — ring buffer + admin 端点
 - [Admin 操作审计](/operations/audit-logs) — 6 维过滤 + 180 天保留
+- [Sentry 后端](/operations/sentry) — `@sentry/node` 异常上报 + Express error handler
+- [Sentry 小程序](/operations/sentry-mp) — `sentry-miniapp` + source map 上传
 
 ## 安全
 
