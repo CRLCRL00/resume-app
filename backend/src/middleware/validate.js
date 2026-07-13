@@ -5,6 +5,9 @@ const phoneOrEmpty = Joi.string().allow('').pattern(/^1[3-9]\d{9}$/).messages({
   'string.pattern.base': '手机号格式错误',
 });
 
+// Schemas carry .label() so routeScanner → OpenAPI can infer requestBody refs
+// from validateBody middleware (see __joiSchemaLabel). Keep labels in sync with
+// components.schemas names in src/routes/openapi.js — drift = broken $ref.
 const resumeSchema = Joi.object({
   name: Joi.string().max(64).required(),
   gender: Joi.string().valid('male', 'female', 'other').required(),
@@ -35,7 +38,7 @@ const resumeSchema = Joi.object({
     salary_max: Joi.number().integer().min(Joi.ref('salary_min')).required(),
   }).required(),
   skills: Joi.array().items(Joi.string()).min(1).max(20).required(),
-});
+}).label('ResumeSaveRequest');
 
 const jobSchema = Joi.object({
   title: Joi.string().max(128).required(),
@@ -47,23 +50,28 @@ const jobSchema = Joi.object({
   experience_required: Joi.string().max(16).default('不限'),
   skills_required: Joi.array().items(Joi.string()).default([]),
   description_md: Joi.string().max(20000).required(),
-});
+}).label('JobCreateRequest');
 
 const promptUpdateSchema = Joi.object({
   content: Joi.string().max(50000).required(),
-});
+}).label('PromptUpdateRequest');
 
 /**
  * validateBody(schema, { source = 'body', stripUnknown = false } = {})
  * Express middleware: validate req[source] against joi schema.
  * On success: req[source] is replaced with the cleaned value (Joi strips unknown keys if configured).
  * On failure: 400 with { code: 400, message, details }.
+ *
+ * The returned middleware also carries `__joiSchema` (ref) and `__joiSchemaLabel`
+ * (string from schema._flags.label) so routeScanner → OpenAPI can infer
+ * requestBody $refs. Backward-compat: existing callers continue to work — the
+ * extra props are read only by the scanner, not by Express.
  */
 function validateBody(schema, { source = 'body', stripUnknown = false } = {}) {
   if (!schema || typeof schema.validate !== 'function') {
     throw new Error('validateBody requires a Joi schema');
   }
-  return (req, res, next) => {
+  const mw = (req, res, next) => {
     const data = req[source];
     const opts = {
       abortEarly: false,
@@ -79,6 +87,11 @@ function validateBody(schema, { source = 'body', stripUnknown = false } = {}) {
     req[source] = value;
     next();
   };
+  // Attach joi ref + label so routeScanner can resolve $ref without parsing source.
+  // Both are best-effort — missing label gracefully skips requestBody emission.
+  mw.__joiSchema = schema;
+  mw.__joiSchemaLabel = (schema && schema._flags && schema._flags.label) || null;
+  return mw;
 }
 
 module.exports = { resumeSchema, jobSchema, promptUpdateSchema, validateBody };
