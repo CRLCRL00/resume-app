@@ -1,0 +1,68 @@
+# R41-Gap-9: Alertmanager config — 路由 backend 报警到 Slack / PagerDuty
+#
+# 用法：
+#   cp infra/prometheus/alertmanager.yml /etc/alertmanager/alertmanager.yml
+#   systemctl restart alertmanager
+#
+# 必填 secret 通过环境变量替换（systemd Environment=）：
+#   SLACK_WEBHOOK_URL=https://hooks.slack.com/services/...
+#   PAGERDUTY_SERVICE_KEY=...
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ['alertname', 'service', 'severity']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: 'default'
+  routes:
+    # critical → PagerDuty (24/7)
+    - matchers:
+        - severity = 'critical'
+      receiver: 'pagerduty'
+      group_wait: 10s
+      continue: false
+    # warning → Slack (#alerts 频道)
+    - matchers:
+        - severity = 'warning'
+      receiver: 'slack'
+      group_wait: 1m
+      continue: true
+    # default → 兜底 Slack (避免 critical 漏单)
+
+receivers:
+  - name: 'default'
+    slack_configs:
+      - api_url: ${SLACK_WEBHOOK_URL:-https://invalid.local/webhook}
+        channel: '#alerts'
+        title: '{{ .GroupLabels.alertname }} ({{ .GroupLabels.severity }})'
+        text: '{{ range .Alerts }}{{ .Annotations.description }}{{ end }}'
+
+  - name: 'slack'
+    slack_configs:
+      - api_url: ${SLACK_WEBHOOK_URL}
+        channel: '#alerts'
+        send_resolved: true
+        title: '{{ .GroupLabels.alertname }} ({{ .GroupLabels.severity }})'
+        text: |-
+          {{ range .Alerts }}
+          *Summary:* {{ .Annotations.summary }}
+          *Description:* {{ .Annotations.description }}
+          *Runbook:* {{ .Annotations.runbook_url }}
+          {{ end }}
+
+  - name: 'pagerduty'
+    pagerduty_configs:
+      - service_key: ${PAGERDUTY_SERVICE_KEY}
+        description: '{{ .GroupLabels.alertname }} ({{ .GroupLabels.severity }})'
+
+# 抑制规则 — RedisDown 时抑制依赖 Redis 的 SlowQuery（避免级联告警）
+inhibit_rules:
+  - source_match:
+      severity: 'critical'
+      alertname: 'RedisDown'
+    target_match:
+      severity: 'warning'
+    equal: ['service']

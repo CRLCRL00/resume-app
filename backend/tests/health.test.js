@@ -47,6 +47,50 @@ test('GET /api/health/ready returns 200 or 503 with db+redis', async () => {
   assert.ok(['ok', 'down'].includes(res.body.redis));
 });
 
+// R41-Gap-14: 生产环境强制 Redis AOF = yes，违反 → 503 not_ready
+test('R41-Gap-14: /api/health/ready in production with redis AOF disabled → 503 not_ready', async () => {
+  const prevEnv = process.env.NODE_ENV;
+  const prevRdb = require('../src/config/redis');
+  // 模拟 redis 客户端支持 ping + 但 CONFIG GET appendonly 返 'no'
+  const stub = {
+    ping: async () => 'PONG',
+    call: async (cmd, key) => {
+      if (cmd === 'CONFIG' && key === 'appendonly') return ['appendonly', 'no'];
+      if (cmd === 'CONFIG' && key === 'save') return ['save', ''];
+      return ['', ''];
+    },
+  };
+  process.env.NODE_ENV = 'production';
+  // 替换 require cache 让健康端点拿 stub
+  const cacheKey = require.resolve('../src/config/redis');
+  require.cache[cacheKey] = { exports: stub };
+  delete require.cache[require.resolve('../src/routes/health')];
+  delete require.cache[require.resolve('../src/app')];
+  try {
+    const { createApp } = require('../src/app');
+    const app = createApp();
+    const res = await request(app).get('/api/health/ready');
+    // db 也可能失败（db 仍是真的），所以 status 不一定是 'not_ready'
+    // 但 presencePersistence 字段必须是 'ok' 的反向
+    if (res.statusCode === 503) {
+      assert.equal(res.body.status, 'not_ready');
+      assert.ok(
+        typeof res.body.persistence === 'object' && res.body.persistence.ok === false,
+        'persistence.ok should be false'
+      );
+      assert.ok(typeof res.body.persistence.reason === 'string');
+    } else {
+      // 如果 db + redis 都 OK,那 persistence fail 应该独立报告 503
+      assert.fail(`expected 503 due to AOF, got ${res.statusCode}`);
+    }
+  } finally {
+    process.env.NODE_ENV = prevEnv;
+    require.cache[cacheKey] = { exports: prevRdb };
+    delete require.cache[require.resolve('../src/routes/health')];
+    delete require.cache[require.resolve('../src/app')];
+  }
+});
+
 test('GET /api/nonexistent returns 404', async () => {
   const app = createApp();
   const res = await request(app).get('/api/nonexistent');

@@ -115,22 +115,48 @@ router.get('/live', (_req, res) => {
 /**
  * GET /api/health/ready — k8s readiness: DB + Redis both up
  * Flat top-level shape (backward-compat with existing k8s probes).
+ *
+ * R41-Gap-14: Redis 无 AOF 持久化 → 503 not_ready + 警告 log
+ * 原因：cookie JWT 还在 Redis blacklist 上,Redis 重启丢数据 = 用户被强制重新登录,
+ * 或者更糟 - 已 revoke 的 token 复活.这是 R41 audit 暴露的数据完整性问题。
+ * AOF 配置由 infra/setup-server.sh (Step 4) 默认开启;此处检测关掉就是 ops 误改。
+ *
+ * 仅在 NODE_ENV=production 强制 enforce;test/dev 跳过 (test 起来 redis 通常没 AOF)
  */
 router.get('/ready', async (_req, res) => {
   const [db, rdb] = await Promise.all([pingDb(), pingRedis()]);
-  const ok = db.ok && rdb.ok;
-  logger[ok ? 'info' : 'error']({ db: db.ok, redis: rdb.ok }, 'health/ready');
+  let persistenceOk = true;
+  let persistenceReason = null;
+  const isProd = process.env.NODE_ENV === 'production';
+  if (isProd && rdb.ok) {
+    const persistence = await populatePersistenceCache();
+    if (persistence.aof !== 'yes') {
+      persistenceOk = false;
+      persistenceReason = `appendonly=${persistence.aof} (expected "yes"); Redis 数据丢失会导致已 revoke 的 cookie 复活`;
+      logger.warn({ component: 'redis-persistence', aof: persistence.aof },
+        'health/ready degraded: Redis AOF disabled');
+    }
+  }
+  const ok = db.ok && rdb.ok && persistenceOk;
+  logger[ok ? 'info' : 'error']({ db: db.ok, redis: rdb.ok, persistenceOk }, 'health/ready');
   // Round 34 chaos follow-up #4: structured warn so ops can grep
   // for `component=redis` and correlate 503s with Redis outage.
   if (!ok) {
     if (!db.ok) logger.warn({ component: 'db', error: db.error }, 'health/ready not_ready');
     if (!rdb.ok) logger.warn({ component: 'redis', error: rdb.error }, 'health/ready not_ready');
+    if (!persistenceOk) logger.warn(
+      { reason: persistenceReason },
+      'health/ready not_ready: persistence degraded'
+    );
   }
   res.status(ok ? 200 : 503).json({
     code: ok ? 0 : 1503,
     status: ok ? 'ready' : 'not_ready',
     db: db.ok ? 'ok' : 'down',
     redis: rdb.ok ? 'ok' : 'down',
+    persistence: persistenceOk
+      ? 'ok'
+      : { ok: false, reason: persistenceReason },
   });
 });
 
