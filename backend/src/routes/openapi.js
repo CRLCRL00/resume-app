@@ -54,7 +54,20 @@ const openapiSpec = {
     { url: 'http://127.0.0.1:3003', description: '本地开发' },
   ],
   components: {
-    securitySchemes: { bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' } },
+    securitySchemes: {
+      bearerAuth: { type: 'http', scheme: 'bearer', bearerFormat: 'JWT' },
+      // R42: idempotency-Key 头用于 admin/user 写操作防重试重复处理 (Round 40+ 部署)
+      // - 非必填;不带则视为新请求
+      // - 同 key + 不同 body → 409
+      // - 同 key + 相同 body 24h 内 → 返回缓存的响应
+      // - in-flight 锁 60s 防止并发同 key 双触发
+      idempotencyKey: {
+        type: 'apiKey',
+        in: 'header',
+        name: 'Idempotency-Key',
+        description: '客户端生成的唯一键 (UUID v4 推荐)。24h TTL,带相同 key 重放返回缓存响应。',
+      },
+    },
     schemas: {
       StandardResponse: {
         type: 'object',

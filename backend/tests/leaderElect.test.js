@@ -21,7 +21,11 @@ const redis = require('../src/config/redis');
 const leaderElect = require('../src/services/leaderElect');
 
 const TEST_ROLE = 'test:leader-elect';
-const touchedKeys = [`leader:${TEST_ROLE}`];
+const touchedKeys = [
+  `leader:${TEST_ROLE}`,
+  'leader:test:role-a',
+  'leader:test:role-b',
+];
 
 async function cleanup() {
   for (const k of touchedKeys) {
@@ -158,4 +162,26 @@ end
 
   const ttlAfter = await redis.ttl(`leader:${TEST_ROLE}`);
   assert.ok(ttlAfter >= 9, `expected ttl ~10 after renew, got ${ttlAfter}`);
+});
+
+// ---- 8 (R42): multi-role — same pod holds multiple roles simultaneously ----
+test('R42 multi-role: same pod holds alert + admin-log-cleanup simultaneously', async () => {
+  const ROLE_A = 'test:role-a';
+  const ROLE_B = 'test:role-b';
+  await redis.del(`leader:${ROLE_A}`, `leader:${ROLE_B}`);
+
+  const a = await leaderElect.tryAcquire(ROLE_A, { ttlSec: 10 });
+  const b = await leaderElect.tryAcquire(ROLE_B, { ttlSec: 10 });
+  assert.equal(a.acquired, true);
+  assert.equal(b.acquired, true);
+  assert.equal(await leaderElect.isLeader(ROLE_A), true);
+  assert.equal(await leaderElect.isLeader(ROLE_B), true);
+
+  // Release A should leave B intact.
+  await leaderElect.release(ROLE_A);
+  assert.equal(await leaderElect.isLeader(ROLE_A), false);
+  assert.equal(await leaderElect.isLeader(ROLE_B), true);
+
+  // Cleanup
+  await redis.del(`leader:${ROLE_A}`, `leader:${ROLE_B}`);
 });

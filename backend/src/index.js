@@ -43,52 +43,109 @@ if (process.env.NODE_ENV !== 'test') {
       .catch((err) => logger.error({ err: err.message }, 'admin_logs cleanup cron failed'));
   }, 24 * 60 * 60_000).unref();
 
-  // Round 40: multi-pod alert leader election. Try to acquire the
-  // 'alert' role lease; on success start the heartbeat so the lease is
-  // renewed every 5s. If we lose the lease (another pod took over after
-  // our TTL expired), the heartbeat stops itself.
+  // R40 + R42: multi-pod leader election for multiple roles.
+  // Each role has independent leader leases; one pod can hold
+  // multiple roles simultaneously without conflict.
   //
-  // Failure here is non-fatal: alertRouter falls back to fail-open (each
-  // pod sends) when leaderElect.isLeader throws, so worst case is back
-  // to the pre-R40 duplicate behavior — never silent.
+  // Roles:
+  //   alert             — Slack alerting (R40)
+  //   slow-query        — periodic slow-query rollup / cleanup
+  //   admin-log-cleanup — periodic admin_operation_logs retention sweep
+  //
+  // Failure is non-fatal: each role's consumer falls back to fail-open
+  // (every pod runs) when the lease can't be acquired, so worst case is
+  // back to pre-multi-role duplicate behaviour — never silent.
   const leaderElect = require('./services/leaderElect');
   const metricsModule = require('./routes/metrics');
-  leaderElect.tryAcquire('alert')
-    .then((res) => {
-      if (res.acquired) {
-        logger.info({ role: 'alert', pod: res.leader, ttl: res.ttl },
-          'became alert leader');
-        leaderElect.startHeartbeat('alert');
-      } else {
-        logger.info({ role: 'alert', currentLeader: res.leader },
-          'another pod holds the alert leader lease; staying follower');
-      }
-      metricsModule.alertLeaderStatus.set(
-        { pod: leaderElect.podName(), role: 'alert' },
-        res.acquired ? 1 : 0
-      );
-    })
-    .catch((err) => {
-      logger.warn({ err: err.message },
-        'alert leader election failed at boot; continuing with fail-open');
-      // Surface the failure in the gauge (0 = not leader) so ops can see it.
+
+  const ROLES = ['alert', 'admin-log-cleanup'];
+
+  // Per-role on-leader hooks. Each hook runs only on the leader pod.
+  // Hooks are best-effort; failures log but don't kill the lease.
+  //
+  // R42: previously admin-log-cleanup fired from a fixed setInterval on
+  // every pod. With leader election, the cron effect now happens on a
+  // single pod and prevents redundant retention sweeps under N pods.
+  const onLeader = {
+    'alert': null, // alertRouter gates on its own (canDispatch)
+    'admin-log-cleanup': async () => {
       try {
+        const retentionDays = Number(process.env.ADMIN_LOG_RETENTION_DAYS) || 180;
+        const { runAdminLogsCleanup } = require('./jobs/adminLogsCleanup');
+        await runAdminLogsCleanup({ retentionDays, logger });
+      } catch (err) {
+        logger.warn({ err: err.message }, 'admin-log-cleanup leader hook failed');
+      }
+    },
+  };
+
+  // Heartbeat intervals per role (override via env). Heartbeat MUST be < TTL
+  // to avoid expiry between renewals; defaults are TTL=30s, HB=5s for
+  // alert; admin-log-cleanup gets an hourly heartbeat (its hook runs once
+  // on acquire + periodically per onLeader's own setInterval).
+  const intervalMs = {
+    'alert': Number(process.env.ALERT_LEADER_HEARTBEAT_MS) || 5000,
+    'admin-log-cleanup': Number(process.env.ADMINLOG_LEADER_HEARTBEAT_MS) || 3600000, // hourly
+  };
+
+  (async () => {
+    for (const role of ROLES) {
+      try {
+        const res = await leaderElect.tryAcquire(role);
+        if (res.acquired) {
+          logger.info({ role, pod: res.leader, ttl: res.ttl }, 'became leader');
+          leaderElect.startHeartbeat(role, { intervalMs: intervalMs[role] });
+          // Kick off the on-leader hook in the background (fire-and-forget).
+          if (onLeader[role]) {
+            setTimeout(() => {
+              onLeader[role]().catch((err) =>
+                logger.warn({ role, err: err.message }, 'leader hook failed'));
+            }, 1000).unref();
+            // Re-run periodically on the leader pod.
+            const hb = intervalMs[role];
+            if (hb > 10000) {
+              setInterval(() => {
+                // Only run if we're still leader (i.e. heartbeat hasn't
+                // stopped itself due to losing lease).
+                if (leaderElect._activeHeartbeats().includes(role)) {
+                  onLeader[role]().catch(() => {});
+                }
+              }, hb).unref();
+            }
+          }
+        } else {
+          logger.info({ role, currentLeader: res.leader },
+            'another pod holds leader lease; staying follower');
+        }
+        // Gauge: alert_leader_status has labels {pod, role}
         metricsModule.alertLeaderStatus.set(
-          { pod: leaderElect.podName(), role: 'alert' }, 0
+          { pod: leaderElect.podName(), role },
+          res.acquired ? 1 : 0
+        );
+      } catch (err) {
+        logger.warn({ role, err: err.message },
+          'leader election failed at boot; continuing with fail-open');
+        try {
+          metricsModule.alertLeaderStatus.set(
+            { pod: leaderElect.podName(), role }, 0
+          );
+        } catch (_e) { /* noop */ }
+      }
+    }
+  })();
+
+  // Refresh all role gauges every 10s so /metrics reflects current state
+  // even when leadership changes without a boot event.
+  setInterval(async () => {
+    for (const role of ROLES) {
+      try {
+        const isL = await leaderElect.isLeader(role);
+        metricsModule.alertLeaderStatus.set(
+          { pod: leaderElect.podName(), role },
+          isL ? 1 : 0
         );
       } catch (_e) { /* noop */ }
-    });
-
-  // Refresh the gauge every 10s so /metrics reflects current state even
-  // if leadership changed without a boot event (e.g. another pod died).
-  setInterval(async () => {
-    try {
-      const isL = await leaderElect.isLeader('alert');
-      metricsModule.alertLeaderStatus.set(
-        { pod: leaderElect.podName(), role: 'alert' },
-        isL ? 1 : 0
-      );
-    } catch (_e) { /* noop */ }
+    }
   }, 10_000).unref();
 }
 

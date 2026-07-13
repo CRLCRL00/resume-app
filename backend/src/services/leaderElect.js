@@ -118,7 +118,18 @@ async function release(role) {
   const k = key(role);
   const name = podName();
   const r = await getRedis().eval(RELEASE_SCRIPT, 1, k, name);
-  return Number(r) === 1;
+  const released = Number(r) === 1;
+  if (released) {
+    // R42: graceful release → emit audit. We don't know who takes over
+    // from here, so to='unknown'. Failed releases (no longer leader)
+    // are not audited as transitions — they reflect stale state, not
+    // a real handover.
+    try {
+      const securityLog = require('./securityLog');
+      securityLog.recordLeaderSync(role, name, 'unknown', 'graceful-release');
+    } catch (_e) { /* skip */ }
+  }
+  return released;
 }
 
 /**
@@ -168,6 +179,12 @@ end
         // We no longer own the lease — stop the heartbeat to avoid
         // spamming logs every 5s.
         logger.warn({ role, pod: name }, 'leader heartbeat: lost lease, stopping');
+        // R42: emit security audit for the transition (best-effort, no await
+        // to keep heartbeat interval monotonic).
+        try {
+          const securityLog = require('./securityLog');
+          securityLog.recordLeaderSync(role, name, 'unknown', 'lost-lease');
+        } catch (_e) { /* module-not-found during early boot — skip audit */ }
         stopHeartbeat(role);
       }
     } catch (err) {

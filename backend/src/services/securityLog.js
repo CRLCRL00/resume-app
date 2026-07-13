@@ -38,4 +38,34 @@ function recordSync(event, req, detail = {}) {
     logger.error({ err: err.message, event }, 'securityLog.recordSync err'));
 }
 
-module.exports = { record, recordSync };
+/**
+ * R42: leader-transition audit. system event (无 req)。
+ * 复用 admin_operation_logs 表 (action 前缀 security.leader.*)。
+ * 失败不阻拦主流程（leaderElect 也不应因 audit 失败而 retry）。
+ */
+async function recordLeader(role, from, to, reason = 'election') {
+  try {
+    await pool.query(
+      `INSERT INTO admin_operation_logs (admin_openid, action, target_type, target_id, detail, ip)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        '__system__',
+        `security.leader.${reason}`,
+        'leader',
+        role.slice(0, 64),
+        JSON.stringify({ role, from, to, reason }).slice(0, 4096),
+        '127.0.0.1',
+      ]
+    );
+  } catch (err) {
+    logger.error({ err: err.message, role, from, to }, 'leader audit DB write failed');
+  }
+  logger.info({ role, from, to, reason }, 'leader transition');
+}
+
+function recordLeaderSync(...args) {
+  recordLeader(...args).catch(err =>
+    logger.error({ err: err.message }, 'securityLog.recordLeaderSync err'));
+}
+
+module.exports = { record, recordSync, recordLeader, recordLeaderSync };
