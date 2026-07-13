@@ -5,6 +5,7 @@ const { adminAuth } = require('../../middleware/adminAuth');
 const { twoFactorRequired } = require('../../middleware/twoFactorRequired');
 const { AppError } = require('../../middleware/errorHandler');
 const { jobSchema, validateBody } = require('../../middleware/validate');
+const { idempotency, idempotencyCapture } = require('../../middleware/idempotency');
 const pool = require('../../config/db');
 const adminLog = require('../../services/adminLog');
 
@@ -45,7 +46,7 @@ router.get('/jobs', userAuth, adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.post('/jobs', userAuth, adminAuth, twoFactorRequired, validateBody(jobSchema, { stripUnknown: false }), async (req, res, next) => {
+router.post('/jobs', userAuth, adminAuth, twoFactorRequired, validateBody(jobSchema, { stripUnknown: false }), idempotency({ prefix: 'admin-jobs' }), async (req, res, next) => {
   try {
     const value = req.body;
     const [r] = await pool.query(
@@ -57,9 +58,9 @@ router.post('/jobs', userAuth, adminAuth, twoFactorRequired, validateBody(jobSch
     await adminLog.record(req.user.openid, 'job.create', 'job', r.insertId, value, req.ip);
     res.json({ code: 0, data: { job_id: r.insertId } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
-router.put('/jobs/:id', userAuth, adminAuth, twoFactorRequired, validateBody(jobSchema, { stripUnknown: false }), async (req, res, next) => {
+router.put('/jobs/:id', userAuth, adminAuth, twoFactorRequired, validateBody(jobSchema, { stripUnknown: false }), idempotency({ prefix: 'admin-jobs' }), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) throw new AppError(1000, 'invalid id', 400);
@@ -74,9 +75,9 @@ router.put('/jobs/:id', userAuth, adminAuth, twoFactorRequired, validateBody(job
     await adminLog.record(req.user.openid, 'job.update', 'job', id, value, req.ip);
     res.json({ code: 0, data: { updated: true } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
-router.patch('/jobs/:id/online', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
+router.patch('/jobs/:id/online', userAuth, adminAuth, twoFactorRequired, idempotency({ prefix: 'admin-jobs' }), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) throw new AppError(1000, 'invalid id', 400);
@@ -87,9 +88,9 @@ router.patch('/jobs/:id/online', userAuth, adminAuth, twoFactorRequired, async (
     await adminLog.record(req.user.openid, 'job.toggle_online', 'job', id, { is_online: newVal }, req.ip);
     res.json({ code: 0, data: { is_online: newVal } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
-router.delete('/jobs/:id', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
+router.delete('/jobs/:id', userAuth, adminAuth, twoFactorRequired, idempotency({ prefix: 'admin-jobs' }), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) throw new AppError(1000, 'invalid id', 400);
@@ -98,9 +99,9 @@ router.delete('/jobs/:id', userAuth, adminAuth, twoFactorRequired, async (req, r
     await adminLog.record(req.user.openid, 'job.delete', 'job', id, null, req.ip);
     res.json({ code: 0, data: { deleted: true } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
-router.patch('/jobs/:id/restore', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
+router.patch('/jobs/:id/restore', userAuth, adminAuth, twoFactorRequired, idempotency({ prefix: 'admin-jobs' }), async (req, res, next) => {
   try {
     const id = parseInt(req.params.id, 10);
     if (!id) throw new AppError(1000, 'invalid id', 400);
@@ -109,6 +110,6 @@ router.patch('/jobs/:id/restore', userAuth, adminAuth, twoFactorRequired, async 
     await adminLog.record(req.user.openid, 'job.restore', 'job', id, null, req.ip);
     res.json({ code: 0, data: { restored: true } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 module.exports = router;

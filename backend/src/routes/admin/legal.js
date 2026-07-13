@@ -4,6 +4,7 @@ const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
 const { twoFactorRequired } = require('../../middleware/twoFactorRequired');
 const { AppError } = require('../../middleware/errorHandler');
+const { idempotency, idempotencyCapture } = require('../../middleware/idempotency');
 const pool = require('../../config/db');
 const logger = require('../../utils/logger');
 
@@ -11,7 +12,7 @@ const logger = require('../../utils/logger');
  * POST /api/admin/legal-version — bump policy version (admin only)
  * Body: { doc_type: 'privacy'|'terms', version: 'YYYY-MM-DD', note?: string }
  */
-router.post('/legal-version', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
+router.post('/legal-version', userAuth, adminAuth, twoFactorRequired, idempotency({ prefix: 'admin-legal' }), async (req, res, next) => {
   try {
     const { doc_type, version, note } = req.body || {};
     if (!['privacy', 'terms'].includes(doc_type)) {
@@ -28,6 +29,6 @@ router.post('/legal-version', userAuth, adminAuth, twoFactorRequired, async (req
     logger.info({ doc_type, version, openid }, 'legal version bumped');
     res.json({ code: 0, data: { doc_type, version } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 module.exports = router;

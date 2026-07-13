@@ -4,6 +4,7 @@ const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
 const { twoFactorRequired } = require('../../middleware/twoFactorRequired');
 const { AppError } = require('../../middleware/errorHandler');
+const { idempotency, idempotencyCapture } = require('../../middleware/idempotency');
 const pool = require('../../config/db');
 const adminLog = require('../../services/adminLog');
 
@@ -57,7 +58,7 @@ router.get('/users', userAuth, adminAuth, async (req, res, next) => {
  * POST /api/admin/users — 添加 admin
  * Body: { openid, note? }
  */
-router.post('/users', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
+router.post('/users', userAuth, adminAuth, twoFactorRequired, idempotency({ prefix: 'admin-users' }), async (req, res, next) => {
   try {
     const { openid, note } = req.body || {};
     if (!openid || typeof openid !== 'string' || openid.length > 64) {
@@ -72,12 +73,12 @@ router.post('/users', userAuth, adminAuth, twoFactorRequired, async (req, res, n
     await adminLog.record(req.user.openid, 'admin.add', 'admins', String(r.insertId || ''), { new_admin_openid: openid }, req.ip);
     res.json({ code: 0, data: { id: r.insertId, openid } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 /**
  * DELETE /api/admin/users/:openid — 删除 admin（不删 user row）
  */
-router.delete('/users/:openid', userAuth, adminAuth, twoFactorRequired, async (req, res, next) => {
+router.delete('/users/:openid', userAuth, adminAuth, twoFactorRequired, idempotency({ prefix: 'admin-users' }), async (req, res, next) => {
   try {
     const openid = req.params.openid;
     if (!openid) throw new AppError(1000, 'openid required', 400);
@@ -88,6 +89,6 @@ router.delete('/users/:openid', userAuth, adminAuth, twoFactorRequired, async (r
     await adminLog.record(req.user.openid, 'admin.remove', 'admins', openid, null, req.ip);
     res.json({ code: 0, data: { deleted: r.affectedRows, openid } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 module.exports = router;

@@ -5,6 +5,7 @@ const { adminAuth } = require('../../middleware/adminAuth');
 const { twoFactorRequired } = require('../../middleware/twoFactorRequired');
 const { AppError } = require('../../middleware/errorHandler');
 const { promptUpdateSchema, validateBody } = require('../../middleware/validate');
+const { idempotency, idempotencyCapture } = require('../../middleware/idempotency');
 const pool = require('../../config/db');
 const adminLog = require('../../services/adminLog');
 
@@ -28,7 +29,7 @@ router.get('/prompts/:code', userAuth, adminAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
-router.put('/prompts/:code', userAuth, adminAuth, twoFactorRequired, validateBody(promptUpdateSchema), async (req, res, next) => {
+router.put('/prompts/:code', userAuth, adminAuth, twoFactorRequired, validateBody(promptUpdateSchema), idempotency({ prefix: 'admin-prompts' }), async (req, res, next) => {
   try {
     const value = req.body;
     const code = req.params.code;
@@ -53,6 +54,6 @@ router.put('/prompts/:code', userAuth, adminAuth, twoFactorRequired, validateBod
       conn.release();
     }
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 module.exports = router;

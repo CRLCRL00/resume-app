@@ -3,6 +3,7 @@ const router = express.Router();
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
 const { AppError } = require('../../middleware/errorHandler');
+const { idempotency, idempotencyCapture } = require('../../middleware/idempotency');
 const pool = require('../../config/db');
 const logger = require('../../utils/logger');
 const { runAdminLogsCleanup } = require('../../jobs/adminLogsCleanup');
@@ -155,7 +156,7 @@ router.get('/logs/security', userAuth, adminAuth, async (req, res, next) => {
 /**
  * DELETE /api/admin/logs/prune — admin trigger manual cleanup (>90 days)
  */
-router.delete('/logs/prune', userAuth, adminAuth, async (req, res, next) => {
+router.delete('/logs/prune', userAuth, adminAuth, idempotency({ prefix: 'admin-logs' }), async (req, res, next) => {
   try {
     const days = parseInt(req.query.days, 10) || 90;
     if (days < 7) throw new AppError(1000, 'days must be >= 7', 400);
@@ -166,14 +167,14 @@ router.delete('/logs/prune', userAuth, adminAuth, async (req, res, next) => {
     logger.info({ admin: req.user.openid, days, deleted: r.affectedRows }, 'admin log prune');
     res.json({ code: 0, data: { deleted: r.affectedRows, days } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 /**
  * POST /api/admin/logs/retention-trigger — 手动触发 retention cron
  * Body: { retentionDays?: 30..720, batchSize?: 1..10000 }
  * Default retentionDays = process.env.ADMIN_LOG_RETENTION_DAYS || 180
  */
-router.post('/logs/retention-trigger', userAuth, adminAuth, async (req, res, next) => {
+router.post('/logs/retention-trigger', userAuth, adminAuth, idempotency({ prefix: 'admin-logs' }), async (req, res, next) => {
   try {
     const envDays = Number(process.env.ADMIN_LOG_RETENTION_DAYS) || 180;
     const bodyDays = Number(req.body && req.body.retentionDays);
@@ -194,13 +195,13 @@ router.post('/logs/retention-trigger', userAuth, adminAuth, async (req, res, nex
     );
     res.json({ code: 0, data: result });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 /**
  * POST /api/admin/logs/archive — move old logs to archive table（保留不删）
  * Body: { days: 90 } default
  */
-router.post('/logs/archive', userAuth, adminAuth, async (req, res, next) => {
+router.post('/logs/archive', userAuth, adminAuth, idempotency({ prefix: 'admin-logs' }), async (req, res, next) => {
   try {
     const days = parseInt((req.body && req.body.days) || 90, 10);
     if (days < 7) throw new AppError(1000, 'days must be >= 7', 400);
@@ -229,7 +230,7 @@ router.post('/logs/archive', userAuth, adminAuth, async (req, res, next) => {
       conn.release();
     }
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 /**
  * GET /api/admin/logs/archive — 拉归档

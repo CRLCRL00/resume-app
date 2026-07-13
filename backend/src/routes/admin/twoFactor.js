@@ -4,6 +4,7 @@ const QRCode = require('qrcode');
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
 const { AppError } = require('../../middleware/errorHandler');
+const { idempotency, idempotencyCapture } = require('../../middleware/idempotency');
 const pool = require('../../config/db');
 const twoFactor = require('../../services/twoFactor');
 
@@ -38,7 +39,7 @@ router.get('/status', userAuth, adminAuth, async (req, res, next) => {
  * POST /api/admin/2fa/setup — 生成 secret 存 DB（不启用）
  * Response: { otpauthUrl, base32, qrDataUrl }
  */
-router.post('/setup', userAuth, adminAuth, async (req, res, next) => {
+router.post('/setup', userAuth, adminAuth, idempotency({ prefix: 'admin-2fa' }), async (req, res, next) => {
   try {
     const { base32, otpauthUrl } = twoFactor.generateSecret({
       label: req.user.openid,
@@ -56,7 +57,7 @@ router.post('/setup', userAuth, adminAuth, async (req, res, next) => {
     }
     res.json({ code: 0, data: { otpauthUrl, base32, qrDataUrl } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 /**
  * POST /api/admin/2fa/enable — 校验 code，启用 2FA + 生成 8 backup codes
@@ -64,7 +65,7 @@ router.post('/setup', userAuth, adminAuth, async (req, res, next) => {
  * Response: { enabled: true, backupCodes: ['a1b2-c3d4', ...] }
  *   backupCodes 只在此响应返回一次，admin 必须自行保存。
  */
-router.post('/enable', userAuth, adminAuth, async (req, res, next) => {
+router.post('/enable', userAuth, adminAuth, idempotency({ prefix: 'admin-2fa' }), async (req, res, next) => {
   try {
     const { code } = req.body || {};
     if (!code || !/^\d{6}$/.test(String(code))) {
@@ -87,7 +88,7 @@ router.post('/enable', userAuth, adminAuth, async (req, res, next) => {
     );
     res.json({ code: 0, data: { enabled: true, backupCodes: plaintext } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 /**
  * POST /api/admin/2fa/verify — 校验 code，签发 challengeToken (5 min)
@@ -98,7 +99,7 @@ router.post('/enable', userAuth, adminAuth, async (req, res, next) => {
  * Order: 6 位数字 → TOTP 校验；其它格式（hex + dash）→ backup code 校验。
  * TOTP 与 backup code 不会同时被消耗，顺序有意义。
  */
-router.post('/verify', userAuth, adminAuth, async (req, res, next) => {
+router.post('/verify', userAuth, adminAuth, idempotency({ prefix: 'admin-2fa' }), async (req, res, next) => {
   try {
     const { code } = req.body || {};
     if (!code || typeof code !== 'string') {
@@ -130,13 +131,13 @@ router.post('/verify', userAuth, adminAuth, async (req, res, next) => {
     const challengeToken = await twoFactor.issueChallengeToken({ openid: req.user.openid });
     res.json({ code: 0, data: { challengeToken } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 /**
  * DELETE /api/admin/2fa — 校验 code，关闭 2FA 并清空 secret
  * Body: { code }
  */
-router.delete('/', userAuth, adminAuth, async (req, res, next) => { /* delete 2fa */
+router.delete('/', userAuth, adminAuth, idempotency({ prefix: 'admin-2fa' }), async (req, res, next) => { /* delete 2fa */
   try {
     const { code } = req.body || {};
     if (!code || !/^\d{6}$/.test(String(code))) {
@@ -159,6 +160,6 @@ router.delete('/', userAuth, adminAuth, async (req, res, next) => { /* delete 2f
     await twoFactor.clearVerified({ openid: req.user.openid });
     res.json({ code: 0, data: { disabled: true } });
   } catch (err) { next(err); }
-});
+}, idempotencyCapture());
 
 module.exports = router;
