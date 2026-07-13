@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Admin / Slow Queries</title>
+  <link rel="stylesheet" href="/admin/css/admin.css">
+  <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body x-data="queriesPage()" x-init="init()">
+  <header><h1>Slow Queries</h1><a href="/admin/dashboard.html">← Dashboard</a><button @click="logout()">Logout</button></header>
+  <main>
+    <p x-show="errMsg" class="err" x-text="errMsg"></p>
+    <h3>Stats (threshold / tracked / slow)</h3>
+    <p x-text="statsText"></p>
+    <h3>Recent slow (limit 20)</h3>
+    <table>
+      <thead><tr><th>time</th><th>sql</th><th>ms</th><th>op</th><th>table</th></tr></thead>
+      <tbody>
+        <template x-for="(q, i) in items" :key="i">
+          <tr>
+            <td x-text="(q.timestamp||'').slice(0,19).replace('T',' ')"></td>
+            <td><code x-text="(q.sql||'').slice(0,80)"></code></td>
+            <td x-text="q.durationMs"></td>
+            <td x-text="q.operation"></td>
+            <td x-text="q.table"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+  </main>
+  <script src="/admin/js/api.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script>
+    function queriesPage() {
+      return {
+        items: [], statsText: '-', errMsg: '',
+        async init() {
+          try { await requireAuth(); } catch (_e) { return; }
+          try {
+            const [slow, stats] = await Promise.all([
+              api('/admin/queries/slow?limit=20'),
+              api('/admin/queries/stats'),
+            ]);
+            this.items = slow.items;
+            this.statsText = `threshold=${stats.thresholdMs}ms · tracked=${stats.totalTracked} · slow=${stats.slowCount}`;
+          } catch (e) { this.errMsg = e.message; }
+        },
+        async logout() { await logout(); },
+      };
+    }
+  </script>
+</body>
+</html>

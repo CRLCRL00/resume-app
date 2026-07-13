@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Admin Dashboard</title>
+  <link rel="stylesheet" href="/admin/css/admin.css">
+  <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body x-data="dashboard()" x-init="init()">
+  <header><h1>Admin Dashboard</h1><button @click="logout()">Logout</button></header>
+  <nav>
+    <a href="/admin/jobs.html">Jobs</a>
+    <a href="/admin/audit.html">Audit</a>
+    <a href="/admin/queries.html">Slow Queries</a>
+    <a href="/admin/two-factor.html">2FA</a>
+  </nav>
+  <main>
+    <section class="cards">
+      <div class="card"><h3>Users</h3><p x-text="users"></p></div>
+      <div class="card"><h3>Jobs</h3><p x-text="jobs"></p></div>
+      <div class="card"><h3>Audit Logs</h3><p x-text="logs"></p></div>
+      <div class="card"><h3>Slow Queries</h3><p x-text="slowCount"></p></div>
+    </section>
+    <p x-show="errMsg" class="err" x-text="errMsg"></p>
+  </main>
+  <script src="/admin/js/api.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script>
+    function dashboard() {
+      return {
+        users: '-', jobs: '-', logs: '-', slowCount: '-', errMsg: '',
+        async init() {
+          try { await requireAuth(); } catch (_e) { return; }
+          const [u, j, l, q] = await Promise.all([
+            api('/admin/users?pageSize=1').then(d => d.total).catch(() => '?'),
+            api('/admin/jobs?pageSize=1').then(d => d.total).catch(() => '?'),
+            api('/admin/logs?pageSize=1').then(d => d.total).catch(() => '?'),
+            api('/admin/queries/stats').then(d => d.slowCount).catch(() => '?'),
+          ]);
+          this.users = u; this.jobs = j; this.logs = l; this.slowCount = q;
+        },
+        async logout() { await logout(); },
+      };
+    }
+  </script>
+</body>
+</html>

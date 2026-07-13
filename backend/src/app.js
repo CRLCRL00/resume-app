@@ -179,6 +179,15 @@ function createApp() {
   const { openapiRouter } = require('./routes/openapi');
   app.use('/api/docs', openapiRouter);
 
+  // Round 40: static admin web panel at /admin/* (Alpine.js SPA).
+  // - 静态文件服务（express.static + index 自动）
+  // - SPA fallback：未匹配文件 → index.html（前端路由友好）
+  // - 必须放在 notFoundHandler 之前，否则 404 中间件先消费
+  const path = require('path');
+  const adminPanelPath = path.join(__dirname, '..', '..', 'admin-panel');
+  app.use('/admin', express.static(adminPanelPath, { index: 'index.html', fallthrough: true }));
+  app.get('/admin/*', (req, res) => res.sendFile(path.join(adminPanelPath, 'index.html')));
+
   app.use(notFoundHandler);
   app.use(errorHandler);
 

@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Admin / 2FA</title>
+  <link rel="stylesheet" href="/admin/css/admin.css">
+  <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body x-data="twoFactor()" x-init="init()">
+  <header><h1>2FA</h1><a href="/admin/dashboard.html">← Dashboard</a><button @click="logout()">Logout</button></header>
+  <main>
+    <p x-show="errMsg" class="err" x-text="errMsg"></p>
+    <p x-show="okMsg" class="ok" x-text="okMsg"></p>
+    <section x-show="!setup">
+      <p>enabled: <strong x-text="status.enabled ? 'yes' : 'no'"></strong></p>
+      <p>backup codes remaining: <strong x-text="status.backupCodesRemaining"></strong></p>
+      <button @click="setup2fa()" x-show="!status.enabled">Setup</button>
+      <div x-show="status.enabled" class="disable">
+        <input x-model="disableCode" placeholder="6-digit code" maxlength="6">
+        <button @click="disable()">Disable 2FA</button>
+      </div>
+    </section>
+    <section x-show="setup">
+      <h3>Scan QR with Authenticator app</h3>
+      <img x-show="qr" :src="qr" alt="QR">
+      <p>or enter secret: <code x-text="base32"></code></p>
+      <input x-model="enableCode" placeholder="6-digit code" maxlength="6">
+      <button @click="enable()">Enable</button>
+      <div x-show="backupCodes.length">
+        <h3>Backup codes (one-time display — save now)</h3>
+        <ul><template x-for="c in backupCodes" :key="c"><li><code x-text="c"></code></li></template></ul>
+      </div>
+    </section>
+  </main>
+  <script src="/admin/js/api.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script>
+    function twoFactor() {
+      return {
+        status: { enabled: false, backupCodesRemaining: 0 },
+        setup: false, qr: '', base32: '', enableCode: '', disableCode: '',
+        backupCodes: [], errMsg: '', okMsg: '',
+        async init() {
+          try { await requireAuth(); } catch (_e) { return; }
+          await this.refresh();
+        },
+        async refresh() {
+          try { this.status = await api('/admin/2fa/status'); } catch (e) { this.errMsg = e.message; }
+        },
+        async setup2fa() {
+          this.errMsg = '';
+          try {
+            const d = await api('/admin/2fa/setup', { method: 'POST' });
+            this.qr = d.qrDataUrl; this.base32 = d.base32;
+            this.setup = true;
+          } catch (e) { this.errMsg = e.message; }
+        },
+        async enable() {
+          this.errMsg = '';
+          try {
+            const d = await api('/admin/2fa/enable', { method: 'POST', body: JSON.stringify({ code: this.enableCode }) });
+            this.backupCodes = d.backupCodes;
+            this.okMsg = '2FA enabled — save backup codes above';
+            this.setup = false; await this.refresh();
+          } catch (e) { this.errMsg = e.message; }
+        },
+        async disable() {
+          this.errMsg = '';
+          try {
+            await api('/admin/2fa', { method: 'DELETE', body: JSON.stringify({ code: this.disableCode }) });
+            this.okMsg = '2FA disabled'; this.disableCode = '';
+            await this.refresh();
+          } catch (e) { this.errMsg = e.message; }
+        },
+        async logout() { await logout(); },
+      };
+    }
+  </script>
+</body>
+</html>
