@@ -5,6 +5,10 @@
  * Self-contained — no deps. Walks Express's internal layer stack (the only
  * public-ish way to introspect mounted routes). Recurses into nested routers,
  * joining prefixes. Skips /api/internal/* by default (server-side only).
+ *
+ * R40: middleware entries may carry __joiSchema + __joiSchemaLabel (set by
+ * validateBody). When present, we propagate them as `requestSchema` /
+ * `requestSchemaName` so routesToOpenApi can emit `requestBody` $refs.
  */
 
 const HTTP_METHODS = ['get', 'post', 'put', 'delete', 'patch', 'head', 'options'];
@@ -16,6 +20,26 @@ function mwName(mw) {
   return 'anonymous';
 }
 
+/**
+ * Describe a single middleware function. Returns:
+ *   { name }                                          — generic mw
+ *   { name, requestSchema, requestSchemaName }        — validateBody-style with label
+ * `requestSchemaName` is resolved from __joiSchemaLabel (preferred) or
+ * schema._flags.label (fallback). When neither is set, name-only is emitted
+ * and routesToOpenApi will skip requestBody gracefully.
+ */
+function describeMw(fn) {
+  const entry = { name: mwName(fn) };
+  if (fn && fn.__joiSchema) {
+    entry.requestSchema = fn.__joiSchema;
+    const label = fn.__joiSchemaLabel
+      || (fn.__joiSchema && fn.__joiSchema._flags && fn.__joiSchema._flags.label)
+      || null;
+    if (label) entry.requestSchemaName = label;
+  }
+  return entry;
+}
+
 function walkStack(stack, prefix, out) {
   for (const layer of stack || []) {
     if (!layer || !layer.regexp) continue;
@@ -24,7 +48,7 @@ function walkStack(stack, prefix, out) {
       const fullPath = joinPath(prefix, layer.route.path);
       for (const method of HTTP_METHODS) {
         if (layer.route.methods[method]) {
-          const mws = (layer.route.stack || []).map(s => mwName(s.handle));
+          const mws = (layer.route.stack || []).map(s => describeMw(s.handle));
           out.push({
             method,
             path: fullPath,
@@ -133,6 +157,9 @@ function expressToOpenApiPath(p) {
 /**
  * Convert route descriptors → OpenAPI 3.0 paths object.
  * Each method gets a minimal stub with summary + 200 response + x-auto-generated:true.
+ * If any middleware carries `requestSchemaName`, emit requestBody with a $ref
+ * into components.schemas (the schema itself is generated from joi by
+ * src/routes/openapi.js).
  * @param {Array} routes
  * @returns {object} OpenAPI paths
  */
@@ -159,6 +186,19 @@ function routesToOpenApi(routes) {
       });
     }
     if (params.length) op.parameters = params;
+    // requestBody from validateBody middleware — first mw with requestSchemaName wins.
+    // Graceful: if no middleware has a label, skip silently (no error, no stub).
+    const bodyMw = (r.middlewares || []).find(mw => mw && mw.requestSchemaName);
+    if (bodyMw && bodyMw.requestSchemaName) {
+      op.requestBody = {
+        required: true,
+        content: {
+          'application/json': {
+            schema: { $ref: `#/components/schemas/${bodyMw.requestSchemaName}` },
+          },
+        },
+      };
+    }
     if (r.xInternal) op['x-internal'] = true;
     paths[oaPath][r.method] = op;
   }
