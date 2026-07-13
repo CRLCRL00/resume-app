@@ -11,11 +11,22 @@
 set -uo pipefail
 
 URL="${HEALTH_URL:-https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/health/deep}"
-ALERT_URL="${HEALTH_WEBHOOK:-https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/internal/alert}"
+ALERT_URL="${HEALTH_WEBHOOK:-}"
 ALERT_TOKEN="${ALERT_TOKEN:-dev-alert-token-change-me}"
 LOG="/var/log/resume-app-monitor.log"
 TIMEOUT=10
 STATE_FILE="/var/run/resume-app-monitor-state"
+
+# R41-Gap-23: 防呆 — 生产环境 ALERT_TOKEN 仍是默认 dev token 时打印 + exit 0 不发告警
+# （避免"配置错导致沉默"）。dev 环境允许默认。
+if [ "${NODE_ENV:-}" = "production" ] && [ "$ALERT_TOKEN" = "dev-alert-token-change-me" ]; then
+  echo "[$(date -Iseconds)] ABORT: ALERT_TOKEN 是 dev 默认值,生产环境必须覆盖。在 /opt/resume-app/backend/.env 设 ALERT_TOKEN=<strong-random>" >&2
+  exit 0
+fi
+# 同理：HEALTH_WEBHOOK 未设也不 silent fail，至少写 log
+if [ -z "$HEALTH_WEBHOOK" ]; then
+  echo "[$(date -Iseconds)] WARN: HEALTH_WEBHOOK 未设,告警仅写本地 log (${LOG})" >> "$LOG"
+fi
 
 TS() { date -Iseconds; }
 LOG_TS=$(TS)
@@ -41,7 +52,9 @@ echo "[$LOG_TS] FAIL HTTP=$HTTP body=$(head -c 200 /tmp/health.json)" >> "$LOG"
 echo "$(TS)" > "$STATE_FILE"
 
 # Optional webhook — HMAC-SHA256 签 (防重放/伪造) + retry x3
-if [ -n "${HEALTH_WEBHOOK:-}" ]; then
+# R41-Gap-23: 修 ALERT_URL 默认值 — 之前默认指向自己的 /api/internal/alert 是自指死循环
+# 现在默认空,需要 ops 显式设 HEALTH_WEBHOOK=企业微信/Slack/PagerDuty
+if [ -n "$ALERT_URL" ]; then
   PAYLOAD=$(cat <<JSON
 {"timestamp":"$LOG_TS","url":"$URL","http":$HTTP,"body":$(head -c 500 /tmp/health.json | jq -Rs .)}
 JSON
@@ -50,7 +63,7 @@ JSON
   SIG=$(printf "%s" "$PAYLOAD$TS_MS" | openssl dgst -sha256 -hmac "$ALERT_TOKEN" | sed 's/^.* //')
   # retry x3 with backoff (2s, 4s)
   for attempt in 1 2 3; do
-    HTTP_C=$(curl -m 5 -s -o /dev/null -w '%{http_code}' -X POST "$HEALTH_WEBHOOK" \
+    HTTP_C=$(curl -m 5 -s -o /dev/null -w '%{http_code}' -X POST "$ALERT_URL" \
       -H 'Content-Type: application/json' \
       -H "X-Alert-Token: $ALERT_TOKEN" \
       -H "X-Alert-Timestamp: $TS_MS" \
