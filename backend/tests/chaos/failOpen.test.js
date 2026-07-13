@@ -532,3 +532,58 @@ test('chaos #11: db down on login → 503 with code 1502', async () => {
     chaos.restoreAll();
   }
 });
+
+// ============================================================
+//  Test 12 — Round 34 chaos follow-up #4: when /api/health/ready
+//  returns 503 due to Redis being down, a structured
+//  `logger.warn` must be emitted with `{ component: 'redis', error }`
+//  so ops can grep for component=redis in logs.
+//  Behavior: 503 + not_ready + redis=down, and warn captured.
+// ============================================================
+test('chaos #12: redis down on /ready → 503 + warn logged with { component: "redis" }', async () => {
+  // Use the standard chaos redis stub (every command rejects).
+  chaos.installRedis();
+
+  const logger = require('../../src/utils/logger');
+  const origWarn = logger.warn;
+  const warnCalls = [];
+  logger.warn = (...args) => { warnCalls.push(args); };
+
+  // Wipe cached modules so routes/health picks up the failing redis stub.
+  delete require.cache[require.resolve('../../src/routes/health')];
+  delete require.cache[require.resolve('../../src/app')];
+
+  try {
+    const { createApp } = require('../../src/app');
+    const app = createApp();
+
+    const res = await Promise.race([
+      request(app).get('/api/health/ready').timeout(2000),
+      new Promise((_, rej) => setTimeout(() => rej(new Error('hung')), 4000)),
+    ]);
+
+    // Behavioral: still 503 with redis=down
+    assert.equal(res.status, 503, `expected 503, got ${res.status}`);
+    assert.equal(res.body.status, 'not_ready');
+    assert.equal(res.body.redis, 'down');
+
+    // Observability: warn must be emitted with { component: 'redis', error: ... }
+    const found = warnCalls.some((args) => {
+      const payload = args[0] || {};
+      return (
+        payload.component === 'redis' &&
+        typeof payload.error === 'string' &&
+        payload.error.length > 0
+      );
+    });
+    assert.ok(
+      found,
+      `expected warn with { component: 'redis', error } on redis down; got: ${JSON.stringify(warnCalls)}`
+    );
+  } finally {
+    logger.warn = origWarn;
+    chaos.restoreAll();
+    delete require.cache[require.resolve('../../src/routes/health')];
+    delete require.cache[require.resolve('../../src/app')];
+  }
+});

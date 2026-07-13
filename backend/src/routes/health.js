@@ -73,6 +73,12 @@ router.get('/', async (_req, res) => {
   const persistence = await populatePersistenceCache();
   const ok = db.ok && rdb.ok;
   logger[ok ? 'info' : 'error']({ db: db.ok, redis: rdb.ok }, 'health/');
+  // Round 34 chaos follow-up #4: structured warn so ops can grep
+  // for `component=redis` and correlate 503s with Redis outage.
+  if (!ok) {
+    if (!db.ok) logger.warn({ component: 'db', error: db.error }, 'health/ degraded');
+    if (!rdb.ok) logger.warn({ component: 'redis', error: rdb.error }, 'health/ degraded');
+  }
   res.status(ok ? 200 : 503).json({
     code: ok ? 0 : 1503,
     data: {
@@ -114,6 +120,12 @@ router.get('/ready', async (_req, res) => {
   const [db, rdb] = await Promise.all([pingDb(), pingRedis()]);
   const ok = db.ok && rdb.ok;
   logger[ok ? 'info' : 'error']({ db: db.ok, redis: rdb.ok }, 'health/ready');
+  // Round 34 chaos follow-up #4: structured warn so ops can grep
+  // for `component=redis` and correlate 503s with Redis outage.
+  if (!ok) {
+    if (!db.ok) logger.warn({ component: 'db', error: db.error }, 'health/ready not_ready');
+    if (!rdb.ok) logger.warn({ component: 'redis', error: rdb.error }, 'health/ready not_ready');
+  }
   res.status(ok ? 200 : 503).json({
     code: ok ? 0 : 1503,
     status: ok ? 'ready' : 'not_ready',
