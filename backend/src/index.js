@@ -20,8 +20,15 @@ if (sentryEnabled && typeof Sentry.setupExpressErrorHandler === 'function') {
 
 let isShuttingDown = false;
 
-const server = app.listen(config.PORT, () => {
-  logger.info({ port: config.PORT, env: config.NODE_ENV }, 'server started');
+// R43.5: bind to 127.0.0.1 by default — backend should never be directly
+// reachable from the internet. nginx (port 443, with self-signed cert) is
+// the only public ingress. Set BIND_HOST to override (e.g. '0.0.0.0' if
+// running behind an L4 LB that needs direct pod access; never in dev unless
+// you also trust the network).
+const BIND_HOST = process.env.BIND_HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0');
+
+const server = app.listen(config.PORT, BIND_HOST, () => {
+  logger.info({ port: config.PORT, host: BIND_HOST, env: config.NODE_ENV }, 'server started');
 });
 
 // Boot 诊断：表/列/admin seed/schema_migrations 校验
