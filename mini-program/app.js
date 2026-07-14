@@ -109,9 +109,38 @@ App({
   },
 
   // 调试用：模拟器控制台敲 setToken('xxx') 手动塞 token
+  // R50: 加 devQuickLogin() 在 IDE console 一行 dev-bypass 拿 token
+  //   getApp().devQuickLogin('dev-admin')   →  自动 POST /api/auth/login + 存 token
   setToken(token, user) {
     wx.setStorageSync('token', token);
     if (user) wx.setStorageSync('user', user);
+  },
+
+  /**
+   * R50: 一行 dev-bypass login — IDE 沙箱 wx.login 永远 timeout 的 workaround
+   * 用法 (IDE console): getApp().devQuickLogin('dev-admin')
+   * 要求: server .env NODE_ENV !== 'production' 且 admins 表有 'dev-admin' openid
+   */
+  devQuickLogin(openid) {
+    openid = openid || 'dev-admin';
+    return new Promise((resolve) => {
+      wx.request({
+        url: `${apiBaseUrl}/api/auth/login`,
+        method: 'POST',
+        data: { code: 'dev-bypass', openid },
+        success: (res) => {
+          if (res.data && res.data.code === 0) {
+            wx.setStorageSync('token', res.data.data.token);
+            wx.setStorageSync('user', res.data.data.user);
+            this.checkAdmin();
+            resolve(res.data.data);
+          } else {
+            resolve({ error: res.data && res.data.message || 'dev-bypass failed' });
+          }
+        },
+        fail: (err) => resolve({ error: (err && err.errMsg) || 'network' }),
+      });
+    });
   },
 
   /**

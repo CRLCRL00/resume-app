@@ -208,4 +208,43 @@ router.post('/logout', async (req, res, next) => {
   }
 });
 
+/**
+ * R50: GET/POST /api/auth/dev-bypass — 单独 dev-only endpoint
+ *
+ * 区别于 /login 路由里的 dev-bypass 短路（那受 NODE_ENV==='production' 强制失效）：
+ * 本 endpoint 仅在 NODE_ENV !== 'production' 注册 → 让 IDE dev (43.139.176.199 + 自签 cert)
+ * 在 production server 上也能跑,完全绕开 wechat code2session + IP 白名单。
+ *
+ * 安全：与 /login 的 dev-bypass 一致 — 仅 openid in admins 表可登录,不接受任意 openid。
+ *
+ * Body: { openid: 'dev-admin' }
+ * 200: { code: 0, data: { token, refreshToken, csrfToken, user } }
+ * 403: openid not in admins
+ * 404: server is in production mode (endpoint disabled)
+ */
+if (process.env.NODE_ENV !== 'production') {
+  router.post('/dev-bypass', async (req, res, next) => {
+    try {
+      const devOpenid = (req.body && req.body.openid) || 'dev-admin';
+      let adminRows;
+      try {
+        [adminRows] = await pool.query(
+          'SELECT id, openid FROM admins WHERE openid = ?',
+          [devOpenid]
+        );
+      } catch (e) {
+        throw new AppError(1502, 'database unavailable', 503);
+      }
+      if (!adminRows.length) {
+        throw new AppError(1003, 'not an admin', 403);
+      }
+      securityLog.recordSync('admin.dev_bypass.endpoint', req, { openid: devOpenid });
+      await issueSession({ openid: devOpenid, bypassDev: true }, req, res);
+    } catch (err) {
+      recordFailure(req).catch(() => {});
+      next(err);
+    }
+  });
+}
+
 module.exports = router;
