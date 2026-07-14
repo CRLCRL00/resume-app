@@ -247,4 +247,30 @@ if (process.env.NODE_ENV !== 'production') {
   });
 }
 
+// R51: prod-safe explicit dev-bypass — 仅在 ENABLE_DEV_BYPASS=1 env 时挂载
+// 不依赖于 NODE_ENV (rest prod invariant). Use case: wechat IP whitelist
+// 还没加好, ops 临开 dev-bypass 调试. 用法:
+//   ENABLE_DEV_BYPASS=1 pm2 restart ...  (或 sed .env + pm2 restart --update-env)
+// 警告: 该 endpoint 不限制 IP 也不锁 NODE_ENV — 任何知道 endpoint 的人都能
+// 拿 admin token. 仅在 trusted dev 阶段临时开, 公开前关.
+if (process.env.ENABLE_DEV_BYPASS === '1') {
+  router.post('/dev-bypass-active', async (req, res, next) => {
+    try {
+      const devOpenid = (req.body && req.body.openid) || 'dev-admin';
+      const [adminRows] = await pool.query(
+        'SELECT id, openid FROM admins WHERE openid = ?',
+        [devOpenid]
+      );
+      if (!adminRows.length) {
+        throw new AppError(1003, 'not an admin', 403);
+      }
+      securityLog.recordSync('admin.dev_bypass.active', req, { openid: devOpenid });
+      await issueSession({ openid: devOpenid, bypassDev: true }, req, res);
+    } catch (err) {
+      next(err);
+    }
+  });
+  logger.warn('R51 dev-bypass-active ENABLED — admin tokens can be issued without wechat.');
+}
+
 module.exports = router;
