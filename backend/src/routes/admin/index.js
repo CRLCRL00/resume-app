@@ -12,5 +12,7 @@ router.use(require('./admins'));
 router.use(require('./resumes'));
 router.use(require('./audit'));
 router.use('/queries', require('./queries'));
+// R54: business dashboard API (mount last so 404-fallthrough is clean)
+router.use('/dashboard', require('./dashboard'));
 
 module.exports = router;

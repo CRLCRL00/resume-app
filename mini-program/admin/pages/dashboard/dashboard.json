@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "业务大屏",
+  "enablePullDownRefresh": true,
+  "backgroundColor": "#0d1424",
+  "navigationBarTextStyle": "white",
+  "navigationBarBackgroundColor": "#0d1424"
+}

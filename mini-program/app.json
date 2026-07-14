@@ -12,6 +12,7 @@
   "subpackages": [{
     "root": "admin",
     "pages": [
+      "pages/dashboard/dashboard",
       "pages/jobs/list",
       "pages/jobs/edit",
       "pages/prompts/list",
