@@ -4,7 +4,8 @@
  * - 永远不要 throw：上报失败绝不能再炸业务
  * - 走 wx.request 不走自家 utils/request（避免循环）
  */
-const BASE = 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com';
+const { apiBaseUrl } = require('../src/config');
+const BASE = apiBaseUrl;
 
 function reportClientError(type, err, extra = {}) {
   try {

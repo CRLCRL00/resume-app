@@ -11,8 +11,9 @@
  */
 const { getToken, clearToken } = require('./auth');
 const { reportClientError } = require('./monitor');
-
-const BASE_URL = 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api';
+// R49: backend host 集中 — 实际值在 src/config.js (gitignored, 真值由 ops 注入)
+const { apiBaseUrl } = require('../src/config');
+const BASE_URL = `${apiBaseUrl}/api`;
 
 function fallbackByStatus(code) {
   if (code === 400) return '请求参数错误';

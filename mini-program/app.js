@@ -1,8 +1,9 @@
-// 工具栏 → 详情 → 本地设置 → 勾「不校验合法域名」才能访问 https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com
+// 工具栏 → 详情 → 本地设置 → 勾「不校验合法域名」才能访问 src/config.js#apiBaseUrl
 // 真机预览时 wx.login 自动跑，模拟器 timeout 所以跳过
 // 注意：sentry 必须 require 在最前面，且早于 App()，SDK 才能 wrap onLaunch
 require('./utils/sentry');
 const { reportClientError } = require('./utils/monitor');
+const { apiBaseUrl } = require('./src/config');
 
 App({
   globalData: {
@@ -86,7 +87,7 @@ App({
     wx.login({
       success: ({ code }) => {
         wx.request({
-          url: 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/auth/login',
+          url: `${apiBaseUrl}/api/auth/login`,
           method: 'POST',
           data: { code },
           success: (res) => {
@@ -118,7 +119,7 @@ App({
    * 后端每次发布新文案：admin POST /api/admin/legal-version 把 version bump 到新日期
    */
   checkPrivacyVersion(accepted) {
-    const url = 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/legal/versions';
+    const url = `${apiBaseUrl}/api/legal/versions`;
     wx.request({
       url,
       success: (res) => {

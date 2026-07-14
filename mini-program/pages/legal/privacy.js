@@ -1,3 +1,4 @@
+const { apiBaseUrl } = require('../../src/config');
 const app = getApp();
 
 Page({
@@ -6,7 +7,7 @@ Page({
   fetch() {
     this.setData({ loading: true, error: false });
     wx.request({
-      url: 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com/api/legal/privacy',
+      url: `${apiBaseUrl}/api/legal/privacy`,
       success: (res) => {
         if (res.data && res.data.code === 0) {
           this.setData({
