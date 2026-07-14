@@ -35,6 +35,26 @@ test('R48 setting has no duplicate keys at top level (parsed)', () => {
   }
 });
 
+// R48.5: WeChat IDE 校验每条 entry 必须有 miniprogramNpmDistDir + packageJsonPath
+// 否则报错 "setting.packNpmRelationList[0].miniprogramNpmDistDir 不能为空"
+// 即使 npm 包已经准备好, 缺这两个字段 IDE 也会拒。
+test('R48.5 packNpmRelationList entries have miniprogramNpmDistDir + packageJsonPath', () => {
+  const cfg = JSON.parse(fs.readFileSync(path.join(root, 'project.config.json'), 'utf8'));
+  for (const e of cfg.setting.packNpmRelationList || []) {
+    assert.ok(e.miniprogramNpmDistDir && e.miniprogramNpmDistDir.length > 0,
+      `entry ${e.packageName} missing miniprogramNpmDistDir (where IDE builds the npm package)`);
+    assert.ok(e.packageJsonPath && e.packageJsonPath.length > 0,
+      `entry ${e.packageName} missing packageJsonPath`);
+    // also verify each path actually exists on disk
+    const npmDist = path.join(root, e.miniprogramNpmDistDir);
+    assert.ok(fs.existsSync(npmDist),
+      `miniprogramNpmDistDir ${e.miniprogramNpmDistDir} not found at ${npmDist}`);
+    const pkgPath = path.join(root, e.packageJsonPath);
+    assert.ok(fs.existsSync(pkgPath),
+      `packageJsonPath ${e.packageJsonPath} not found at ${pkgPath}`);
+  }
+});
+
 test('R48 project.config.json has NO literal "{" duplicates (regex sniff)', () => {
   // Cheap heuristic: a string with `"minified":` appearing more than once
   // indicates a duplicate key. Run a regex hunt over the raw JSON.

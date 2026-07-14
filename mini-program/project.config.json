@@ -16,7 +16,9 @@
     "packNpmRelationList": [
       {
         "packageName": "sentry-miniapp",
-        "version": "1.13.1"
+        "version": "1.13.1",
+        "miniprogramNpmDistDir": "./",
+        "packageJsonPath": "./package.json"
       }
     ],
     "minifyWXSS": true,
