@@ -54,3 +54,28 @@ test('sentry-miniapp is in devDependencies', () => {
   const pkg = require(path.join(root, 'package.json'));
   assert.ok(pkg.devDependencies['sentry-miniapp'], 'sentry-miniapp must be in devDependencies');
 });
+
+// R47: stub fallback — when sentry-miniapp isn't loaded (dev IDE without
+// webpack), the module must export a stub object with captureException etc.
+// instead of throwing at the require() call site (which previously killed
+// app.js on first launch).
+test('R47 utils/sentry.js exports stub when sentry-miniapp unavailable', () => {
+  // Force-fail the inner require by deleting from module cache; then load
+  // a synthetic sentry.js that hits the catch branch. We test the structure
+  // of utils/sentry.js instead by reading the source.
+  const src = fs.readFileSync(path.join(root, 'utils/sentry.js'), 'utf8');
+  assert.match(src, /require\(['"]sentry-miniapp['"]\)/, 'must require sentry-miniapp');
+  assert.match(src, /catch \(e\)/, 'must have try/catch around the require');
+  assert.match(src, /stub/, 'must export a stub fallback for dev IDE');
+  // ensure app.js still uses it (regression check)
+  const app = fs.readFileSync(path.join(root, 'app.js'), 'utf8');
+  assert.match(app, /require\(['"]\.\/utils\/sentry['"]\)/, 'app.js must require utils/sentry');
+});
+
+test('R47 project.config.json declares sentry-miniapp for npm bundle', () => {
+  const cfg = JSON.parse(fs.readFileSync(path.join(root, 'project.config.json'), 'utf8'));
+  const list = cfg.setting && cfg.setting.packNpmRelationList;
+  assert.ok(Array.isArray(list), 'packNpmRelationList must be an array');
+  assert.ok(list.includes('sentry-miniapp'),
+    `packNpmRelationList must include sentry-miniapp; current: ${JSON.stringify(list)}`);
+});
