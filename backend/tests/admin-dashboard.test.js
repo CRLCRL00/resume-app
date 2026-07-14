@@ -70,24 +70,22 @@ async function devQuickToken() {
 }
 
 test('R54 /api/admin/dashboard/overview returns shape with KPI fields', async () => {
-  // Use lightweight approach — directly require the dashboard route module
-  // for SQL logic verification, since HTTP admin auth is gated.
   const dash = require('../src/routes/admin/dashboard');
   assert.equal(typeof dash, 'function', 'dashboard router is exported');
 
+  // R54 fix: dashboard router now self-applies userAuth + adminAuth via router.use.
+  // These tests mock auth by short-circuiting — that's no longer needed since
+  // the route handles auth itself. We test the route shape with a fake user.
   const express = require('express');
   const app = express();
-  app.use(require('../src/middleware/auth').userAuth);
-  app.use(require('../src/middleware/auth').adminAuth);
-  // bypass adminAuth for this shape test
-  app.use('/api/admin/dashboard', (req, res, next) => {
+  // Pre-short-circuit auth: inject a fake user on req before the router sees it.
+  app.use((req, _res, next) => {
     req.user = { openid: 'bypass', id: 1 };
     next();
-  }, dash);
-
-  const server = await new Promise((res) => {
-    const s = app.listen(0, () => res(s));
   });
+  app.use('/api/admin/dashboard', dash);
+
+  const server = await new Promise((res) => app.listen(0, () => res(app)));
   try {
     const r = await new Promise((res2) => {
       http.get(`http://127.0.0.1:${server.address().port}/api/admin/dashboard/overview`, (resp) => {
@@ -104,7 +102,6 @@ test('R54 /api/admin/dashboard/overview returns shape with KPI fields', async ()
       assert.equal(typeof j.data.online_jobs, 'number');
       assert.equal(typeof j.data.total_matches, 'number');
     } else {
-      // db not reachable in this isolated test, accept 5xx but verify shape attempted
       assert.match(r.body, /500|database|503/);
     }
   } finally {
@@ -116,10 +113,8 @@ test('R54 /api/admin/dashboard/cities returns array of {city,n}', async () => {
   const dash = require('../src/routes/admin/dashboard');
   const express = require('express');
   const app = express();
-  app.use('/api/admin/dashboard', (req, res, next) => {
-    req.user = { openid: 'bypass', id: 1 };
-    next();
-  }, dash);
+  app.use((req, _res, next) => { req.user = { openid: 'bypass', id: 1 }; next(); });
+  app.use('/api/admin/dashboard', dash);
   const server = await new Promise((res) => app.listen(0, () => res(app)));
   try {
     const r = await new Promise((res2) => {
@@ -146,10 +141,8 @@ test('R54 /api/admin/dashboard/salary returns 5-7 buckets', async () => {
   const dash = require('../src/routes/admin/dashboard');
   const express = require('express');
   const app = express();
-  app.use('/api/admin/dashboard', (req, res, next) => {
-    req.user = { openid: 'bypass', id: 1 };
-    next();
-  }, dash);
+  app.use((req, _res, next) => { req.user = { openid: 'bypass', id: 1 }; next(); });
+  app.use('/api/admin/dashboard', dash);
   const server = await new Promise((res) => app.listen(0, () => res(app)));
   try {
     const r = await new Promise((res2) => {
@@ -179,10 +172,8 @@ test('R54 /api/admin/dashboard/trends respects ?days param', async () => {
   const dash = require('../src/routes/admin/dashboard');
   const express = require('express');
   const app = express();
-  app.use('/api/admin/dashboard', (req, res, next) => {
-    req.user = { openid: 'bypass', id: 1 };
-    next();
-  }, dash);
+  app.use((req, _res, next) => { req.user = { openid: 'bypass', id: 1 }; next(); });
+  app.use('/api/admin/dashboard', dash);
   const server = await new Promise((res) => app.listen(0, () => res(app)));
   try {
     for (const days of [1, 7, 14]) {

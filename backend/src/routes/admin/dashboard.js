@@ -16,7 +16,12 @@
  */
 const express = require('express');
 const router = express.Router();
+const { userAuth } = require('../../middleware/auth');
+const { adminAuth } = require('../../middleware/adminAuth');
 const { pool } = require('../../config/db');
+
+// R54: admin/business dashboard API — requires userAuth + adminAuth on every route
+router.use(userAuth, adminAuth);
 
 // ---- overview ----
 router.get('/overview', async (req, res, next) => {
