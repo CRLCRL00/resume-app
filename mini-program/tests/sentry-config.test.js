@@ -72,10 +72,30 @@ test('R47 utils/sentry.js exports stub when sentry-miniapp unavailable', () => {
   assert.match(app, /require\(['"]\.\/utils\/sentry['"]\)/, 'app.js must require utils/sentry');
 });
 
-test('R47 project.config.json declares sentry-miniapp for npm bundle', () => {
+test('R47 project.config.json declares sentry-miniapp as object in packNpmRelationList', () => {
   const cfg = JSON.parse(fs.readFileSync(path.join(root, 'project.config.json'), 'utf8'));
   const list = cfg.setting && cfg.setting.packNpmRelationList;
   assert.ok(Array.isArray(list), 'packNpmRelationList must be an array');
-  assert.ok(list.includes('sentry-miniapp'),
-    `packNpmRelationList must include sentry-miniapp; current: ${JSON.stringify(list)}`);
+  // R47.5: 微信小程序 IDE 要求每个 entry 是 {packageName, version} object,
+  // 不能是裸字符串 s,否则 IDE project.config check 会报:
+  //   "setting.packNpmRelationList[0] 字段需为 object"
+  const sentryEntry = list.find((e) => e && e.packageName === 'sentry-miniapp');
+  assert.ok(
+    sentryEntry,
+    `packNpmRelationList must include {packageName: 'sentry-miniapp', version: ...}; current: ${JSON.stringify(list)}`
+  );
+  assert.match(
+    String(sentryEntry.version || ''),
+    /^\d+\.\d+/,
+    `sentry-miniapp version must be semver-shaped; got: ${sentryEntry.version}`
+  );
+  // also: package.json devDeps semver major must satisfy declared major
+  // (e.g. declared 1.13.1 + dep "^1.13.1" both major=1)
+  const pkg = require(path.join(root, 'package.json'));
+  const pkgVer = String(pkg.devDependencies['sentry-miniapp'] || '');
+  const declaredMajor = (sentryEntry.version || '').split('.')[0];
+  // strip leading ^ (or any semver range modifier) and check major digits
+  const pkgMajor = pkgVer.replace(/^[^\d]*/, '').split('.')[0];
+  assert.equal(pkgMajor, declaredMajor,
+    `package.json devDep major ${pkgMajor} (from ${pkgVer}) should equal declared major ${declaredMajor}`);
 });

@@ -13,7 +13,12 @@
     "uploadWithSourceMap": true,
     "enhance": true,
     "packNpmManually": false,
-    "packNpmRelationList": ["sentry-miniapp"],
+    "packNpmRelationList": [
+      {
+        "packageName": "sentry-miniapp",
+        "version": "1.13.1"
+      }
+    ],
     "minifyWXSS": true,
     "minifyWXML": true,
     "localPlugins": false,
