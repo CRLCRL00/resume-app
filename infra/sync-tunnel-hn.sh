@@ -42,8 +42,10 @@ log_line() {
 
 # 1. 抓最近 HN (倒序找第一个匹配的)
 # journal: 类似 "Forwarding HTTP traffic from https://23a18edcbfa51a5e-43-139-176-199.serveousercontent.com"
+# 只抓 HN prefix (16hex-43-139-176-199), 不要 .serveousercontent.com 后缀
+# (openapi.js 会拼完整 URL, 这里只放 prefix 便于 validator + 容错)
 HN_RAW=$(journalctl -u "$UNIT" -n "$JOURNAL_LINES" --no-pager 2>/dev/null \
-  | grep -oE '[a-f0-9]{16}-43-139-176-199\.serveousercontent\.com' \
+  | grep -oE '[a-f0-9]{16}-43-139-176-199' \
   | tail -1 || true)
 
 if [ -z "$HN_RAW" ]; then
@@ -51,8 +53,8 @@ if [ -z "$HN_RAW" ]; then
   exit 1
 fi
 
-# 2. 校验格式 (defense in depth)
-if ! [[ "$HN_RAW" =~ ^[a-f0-9]{16}-43-139-176-199\.serveousercontent\.com$ ]]; then
+# 2. 校验格式 (defense in depth) — 仅 prefix, openapi.js 会拼后缀
+if ! [[ "$HN_RAW" =~ ^[a-f0-9]{16}-43-139-176-199$ ]]; then
   log_line "ERROR: extracted HN does not match expected pattern: $HN_RAW"
   exit 2
 fi
