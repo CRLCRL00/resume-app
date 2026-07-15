@@ -49,9 +49,11 @@ const openapiSpec = {
     })),
   },
   servers: [
-    { url: 'https://fa1b04c679fe9e41-43-139-176-199.serveousercontent.com', description: 'tunnel (真机可达)' },
-    { url: 'https://43.139.176.199', description: 'IP+自签证书 (审核员)' },
-    { url: 'http://127.0.0.1:3003', description: '本地开发' },
+    // R56: tunnel URL placeholder — fill with current serveo hostname from
+    // /var/lib/resume-app/serveo.hostname (R44 systemd-managed).
+    { url: 'https://<tunnel-host>.serveousercontent.com', description: 'serveo tunnel (replace with current)' },
+    { url: 'https://43.139.176.199', description: 'server IP + self-signed cert' },
+    { url: 'http://127.0.0.1:3003', description: 'local dev' },
   ],
   components: {
     securitySchemes: {
