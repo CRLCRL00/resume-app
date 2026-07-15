@@ -18,7 +18,21 @@ const express = require('express');
 const router = express.Router();
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
-const { pool } = require('../../config/db');
+// R55: direct mysql2/promise import — bypass defaultPool wrapping issues
+// where db.js's metrics/slow-query wrappers may swap dashPool.query to non-Promise
+// (e.g., mysql2 3.22 nested Promise incompatibility). Create our own pool.
+const mysql = require('mysql2/promise');
+const config = require('../../config');
+const dashPool = mysql.createPool({
+  host: config.DB.host,
+  port: config.DB.port,
+  user: config.DB.user,
+  password: config.DB.password,
+  database: config.DB.database,
+  waitForConnections: true,
+  connectionLimit: 4,
+  charset: 'utf8mb4',
+});
 
 // R54: admin/business dashboard API — requires userAuth + adminAuth on every route
 router.use(userAuth, adminAuth);
@@ -26,7 +40,7 @@ router.use(userAuth, adminAuth);
 // ---- overview ----
 router.get('/overview', async (req, res, next) => {
   try {
-    const [[row]] = await pool.query(`
+    const [[row]] = await dashPool.query(`
       SELECT
         (SELECT COUNT(*) FROM users) AS users,
         (SELECT COUNT(*) FROM resumes WHERE is_active = 1) AS active_resumes,
@@ -47,7 +61,7 @@ router.get('/overview', async (req, res, next) => {
 // + 岗位城市 (jobs.city)
 router.get('/cities', async (req, res, next) => {
   try {
-    const [users_city_rows] = await pool.query(`
+    const [users_city_rows] = await dashPool.query(`
       SELECT
         COALESCE(JSON_UNQUOTE(JSON_EXTRACT(source_form, '$.expected.city')), 'unknown') AS city,
         COUNT(*) AS n
@@ -58,7 +72,7 @@ router.get('/cities', async (req, res, next) => {
       ORDER BY n DESC
       LIMIT 30
     `);
-    const [jobs_city_rows] = await pool.query(`
+    const [jobs_city_rows] = await dashPool.query(`
       SELECT
         COALESCE(city, 'unknown') AS city,
         COUNT(*) AS n
@@ -82,7 +96,7 @@ router.get('/cities', async (req, res, next) => {
 // jobs: 按 salary_min 分桶 (<10, 10-15, 15-20, 20-30, 30+)
 router.get('/salary', async (req, res, next) => {
   try {
-    const [rows] = await pool.query(`
+    const [rows] = await dashPool.query(`
       SELECT
         CASE
           WHEN salary_min < 10000 THEN '<10K'
@@ -107,7 +121,7 @@ router.get('/salary', async (req, res, next) => {
 // ---- degree ----
 router.get('/degree', async (req, res, next) => {
   try {
-    const [rows] = await pool.query(`
+    const [rows] = await dashPool.query(`
       SELECT COALESCE(degree_required, '不限') AS bucket, COUNT(*) AS n
       FROM jobs
       WHERE is_deleted = 0 AND is_online = 1
@@ -123,21 +137,21 @@ router.get('/degree', async (req, res, next) => {
 router.get('/trends', async (req, res, next) => {
   try {
     const days = Math.min(90, Math.max(1, parseInt(req.query.days, 10) || 14));
-    const [users_rows] = await pool.query(
+    const [users_rows] = await dashPool.query(
       `SELECT DATE(created_at) AS date, COUNT(*) AS n
        FROM users
        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
        GROUP BY DATE(created_at) ORDER BY date`,
       [days]
     );
-    const [resume_rows] = await pool.query(
+    const [resume_rows] = await dashPool.query(
       `SELECT DATE(created_at) AS date, COUNT(*) AS n
        FROM resumes
        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
        GROUP BY DATE(created_at) ORDER BY date`,
       [days]
     );
-    const [match_rows] = await pool.query(
+    const [match_rows] = await dashPool.query(
       `SELECT DATE(created_at) AS date, COUNT(*) AS n
        FROM matches
        WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL ? DAY)
