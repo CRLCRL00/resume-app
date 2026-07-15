@@ -90,23 +90,36 @@ async function applyOne(p, name, sql) {
 
 /**
  * Run all pending migrations. Returns:
- *   { applied: string[], skipped: string[], failed: { file, err } | null }
+ *   { applied: string[], skipped: string[], failed: { file, err } | null, dryRun?: boolean }
  *
  * Always returns — never throws. Caller decides whether to fail boot.
  *
+ * Env:
+ *   MIGRATIONS_DRY_RUN=1  log + return as if applied, but DON'T write to DB
+ *                         (useful for prod deploy validation: "what would change?")
+ *
  * @param {Object} [opts]
  * @param {Object} [opts.pool] - override pool (for tests). Falls back to config/db.
+ * @param {boolean} [opts.dryRun] - override env, force dry-run mode.
  */
-async function runMigrations({ pool: customPool } = {}) {
+async function runMigrations({ pool: customPool, dryRun } = {}) {
   if (process.env.NODE_ENV === 'test' || process.env.npm_lifecycle_event === 'test') {
     return { applied: [], skipped: ['test-env'], failed: null };
   }
+  const isDryRun = dryRun === true || process.env.MIGRATIONS_DRY_RUN === '1';
   const p = customPool || getDefaultPool();
   const result = { applied: [], skipped: [], failed: null };
+  if (isDryRun) result.dryRun = true;
   try {
-    await ensureMigrationsTable(p);
+    if (!isDryRun) {
+      await ensureMigrationsTable(p);
+    } else {
+      logger.warn('MIGRATIONS_DRY_RUN=1 — will NOT write to DB');
+    }
 
-    const [appliedRows] = await p.query('SELECT name FROM schema_migrations');
+    const [appliedRows] = isDryRun
+      ? [[]]  // skip the query — treat as empty (no migrations applied)
+      : await p.query('SELECT name FROM schema_migrations');
     const applied = new Set(appliedRows.map((r) => r.name));
     const files = listMigrationFiles();
     for (const file of files) {
@@ -116,6 +129,12 @@ async function runMigrations({ pool: customPool } = {}) {
         continue;
       }
       const sql = fs.readFileSync(path.join(MIGRATIONS_DIR, file), 'utf8');
+      if (isDryRun) {
+        const stmtCount = splitStatements(sql).length;
+        logger.info({ migration: name, statements: stmtCount }, 'DRY-RUN: would apply');
+        result.applied.push(name);
+        continue;
+      }
       try {
         await applyOne(p, name, sql);
         logger.info({ migration: name }, 'migration applied at boot');
@@ -130,7 +149,19 @@ async function runMigrations({ pool: customPool } = {}) {
     logger.error({ err: err.message }, 'migration runner errored');
     result.failed = { file: '<runner>', err: err.message };
   }
+  _lastResult = result; // R63.D: cache for /api/health/ready endpoint
   return result;
 }
 
-module.exports = { runMigrations, splitStatements, listMigrationFiles };
+// R63.D: track last runMigrations result so /api/health/ready can show migration state
+let _lastResult = null;
+function getLastResult() {
+  return _lastResult;
+}
+
+module.exports = {
+  runMigrations,
+  splitStatements,
+  listMigrationFiles,
+  getLastResult,
+};

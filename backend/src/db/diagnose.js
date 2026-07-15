@@ -4,9 +4,12 @@ const logger = require('../utils/logger');
 const { checkRedisPersistence } = require('./redisCheck');
 
 // 关键表列表（应用主路径用到的）
+// R63: removed phantom `match_results` and `audit_logs` — never implemented,
+// only in REQUIRED_TABLES by mistake. Actual code uses `matches` and
+// `admin_operation_logs` (legacy) + `admin_audit` (R40+).
 const REQUIRED_TABLES = [
-  'users', 'resumes', 'jobs', 'matches', 'match_results',
-  'audit_logs', 'admin_audit', 'privacy_versions',
+  'users', 'resumes', 'jobs', 'matches',
+  'admin_audit', 'privacy_versions',
   'admins', 'prompts', 'schema_migrations',
 ];
 
@@ -16,8 +19,6 @@ const REQUIRED_COLUMNS = {
   resumes: ['id', 'user_id', 'content_md', 'created_at'],
   jobs: ['id', 'title', 'company', 'created_at'],
   matches: ['id', 'user_id', 'created_at'],
-  match_results: ['id', 'match_id', 'score'],
-  audit_logs: ['id', 'openid', 'action', 'created_at'],
   admin_audit: ['id', 'openid', 'action', 'created_at'],
   privacy_versions: ['id', 'doc_type', 'version'],
   admins: ['id', 'openid'],

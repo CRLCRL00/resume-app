@@ -6,6 +6,7 @@ const process = require('node:process');
 const pool = require('../config/db');
 const redis = require('../config/redis');
 const logger = require('../utils/logger');
+const { getLastResult: getLastMigrationResult } = require('../db/migrate');
 
 const VERSION = require('../../package.json').version || '0.1.0';
 
@@ -149,6 +150,20 @@ router.get('/ready', async (_req, res) => {
       'health/ready not_ready: persistence degraded'
     );
   }
+  // R63.D: include migration status so ops can spot unapplied migrations
+  // without digging through logs. Don't fail readiness on migration issues —
+  // a partially-applied schema may still serve requests, and we want the
+  // server to keep responding so alerts surface.
+  const mig = getLastMigrationResult();
+  const migrations = mig
+    ? {
+        ok: mig.failed === null && !mig.dryRun,
+        applied: mig.applied,
+        skipped: mig.skipped,
+        failed: mig.failed,
+        dryRun: !!mig.dryRun,
+      }
+    : { ok: null, note: 'migrations have not run yet (in-flight boot)' };
   res.status(ok ? 200 : 503).json({
     code: ok ? 0 : 1503,
     status: ok ? 'ready' : 'not_ready',
@@ -157,6 +172,7 @@ router.get('/ready', async (_req, res) => {
     persistence: persistenceOk
       ? 'ok'
       : { ok: false, reason: persistenceReason },
+    migrations,
   });
 });
 

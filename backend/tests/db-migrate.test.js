@@ -104,8 +104,10 @@ test('runMigrations: applies pending, skips applied, aborts on failure', async (
   const { runMigrations } = require('../src/db/migrate');
   const result = await runMigrations({ pool: mockPool });
 
-  // Should have applied 005-alerts-dead-letter (since only 004 is in applied set)
-  assert.deepEqual(result.applied, ['005-alerts-dead-letter']);
+  // Should apply migrations NOT in {004-admin-audit}.
+  // Files in migrations/: 002-privacy-versions, 004-admin-audit, 005-alerts-dead-letter, 028-client-errors
+  // Already-applied: 004. So apply order (alphabetical): 002, 005, 028
+  assert.deepEqual(result.applied, ['002-privacy-versions', '005-alerts-dead-letter', '028-client-errors']);
   assert.ok(result.skipped.includes('004-admin-audit'));
   assert.equal(result.failed, null);
 });
@@ -147,10 +149,49 @@ test('runMigrations: aborts on first migration failure', async () => {
   process.env.NODE_ENV = 'test';
   delete require.cache[require.resolve('../src/db/migrate')];
 
-  // First migration (004-admin-audit) should fail on its CREATE TABLE statement
+  // First migration alphabetically (002-privacy-versions) should fail on its CREATE TABLE
   assert.ok(result.failed, 'expected failed to be populated');
-  assert.equal(result.failed.file, '004-admin-audit');
+  assert.equal(result.failed.file, '002-privacy-versions');
   assert.match(result.failed.err, /syntax error/);
   // No migrations should have been marked as applied (transaction rolled back)
   assert.equal(result.applied.length, 0);
+});
+
+test('runMigrations: dry-run mode logs without writing', async () => {
+  // Track all queries to ensure none of them write to DB
+  const queries = [];
+  const mockPool = {
+    async query(sql) {
+      queries.push(sql);
+      if (/SELECT name FROM schema_migrations/i.test(sql)) {
+        return [[]]; // empty applied set
+      }
+      return [{ affectedRows: 0 }];
+    },
+    async getConnection() {
+      // dry-run should NEVER call getConnection
+      throw new Error('dry-run must not open transactions');
+    },
+  };
+
+  process.env.NODE_ENV = 'production';
+  delete require.cache[require.resolve('../src/db/migrate')];
+  const { runMigrations: freshRun } = require('../src/db/migrate');
+  const result = await freshRun({ pool: mockPool, dryRun: true });
+  process.env.NODE_ENV = 'test';
+  delete require.cache[require.resolve('../src/db/migrate')];
+
+  assert.equal(result.dryRun, true, 'dryRun flag set');
+  // In dry-run with empty applied set: all 4 migrations (002, 004, 005, 028) would apply
+  assert.ok(result.applied.length >= 4, `expected all 4 migrations in dry-run applied, got ${result.applied.length}`);
+  // No SELECT against schema_migrations (skipped in dry-run)
+  assert.ok(
+    !queries.some((q) => /SELECT name FROM schema_migrations/i.test(q)),
+    'dry-run must not query schema_migrations'
+  );
+  // No CREATE TABLE queries (no DB writes)
+  assert.ok(
+    !queries.some((q) => /CREATE TABLE/i.test(q)),
+    'dry-run must not execute CREATE TABLE'
+  );
 });
