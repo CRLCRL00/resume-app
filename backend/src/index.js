@@ -4,6 +4,7 @@ const logger = require('./utils/logger');
 const pool = require('./config/db');
 const redis = require('./config/redis');
 const { diagnose } = require('./db/diagnose');
+const { runMigrations } = require('./db/migrate');
 const { setupGracefulShutdown } = require('./lifecycle');
 const { initSentry, Sentry } = require('./sentry');
 const { runAdminLogsCleanup } = require('./jobs/adminLogsCleanup');
@@ -27,8 +28,32 @@ let isShuttingDown = false;
 // you also trust the network).
 const BIND_HOST = process.env.BIND_HOST || (process.env.NODE_ENV === 'production' ? '127.0.0.1' : '0.0.0.0');
 
-const server = app.listen(config.PORT, BIND_HOST, () => {
-  logger.info({ port: config.PORT, host: BIND_HOST, env: config.NODE_ENV }, 'server started');
+// R62: apply pending DB migrations before binding the port so the first
+// request never hits a half-applied schema. Failed migrations log + abort
+// the apply loop, but boot continues (server still listens).
+async function boot() {
+  const mig = await runMigrations();
+  if (mig.applied.length) {
+    logger.info({ count: mig.applied.length, applied: mig.applied }, 'migrations applied');
+  } else if (mig.failed) {
+    logger.warn({ failed: mig.failed }, 'migrations partially failed — server up but schema may be incomplete');
+  } else {
+    logger.info({ skipped: mig.skipped.length }, 'migrations: schema up to date');
+  }
+
+  const server = app.listen(config.PORT, BIND_HOST, () => {
+    logger.info({ port: config.PORT, host: BIND_HOST, env: config.NODE_ENV }, 'server started');
+  });
+  // R43.5: tighten timeouts so keep-alive sockets don't pile up across reloads
+  server.keepAliveTimeout = 65000;
+  server.headersTimeout = 66000;
+  return server;
+}
+
+let server;
+boot().then((s) => { server = s; }).catch((err) => {
+  logger.error({ err: err.message }, 'boot failed');
+  process.exit(1);
 });
 
 // Boot 诊断：表/列/admin seed/schema_migrations 校验
@@ -156,10 +181,6 @@ if (process.env.NODE_ENV !== 'test') {
   }, 10_000).unref();
 }
 
-server.keepAliveTimeout = 65000;
-server.headersTimeout = 66000;
-
-// 自定义 middleware：拒新请求（在 shutdown 时）
 app.use((req, res, next) => {
   if (isShuttingDown) {
     res.set('Connection', 'close');
