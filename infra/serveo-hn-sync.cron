@@ -1,0 +1,4 @@
+# R59: serveo tunnel HN sync cron
+#  每 5 min 一次: 从 systemd journal 抽现 HN, 写 /var/lib/resume-app/serveo.hostname
+#  backend openapi.js 运行时读这个文件, 动态覆盖 server list — 无需 backend restart
+*/5 * * * * root /usr/local/bin/sync-tunnel-hn.sh >> /var/log/resume-app-serveo-hn-sync.log 2>&1

@@ -1,5 +1,7 @@
 const express = require('express');
 const router = express.Router();
+const fs = require('fs');
+const path = require('path');
 const { convertJoiAll } = require('../services/joiToOpenApi');
 const { scanRoutes, routesToOpenApi } = require('../services/routeScanner');
 const {
@@ -7,6 +9,39 @@ const {
   jobSchema,
   promptUpdateSchema,
 } = require('../middleware/validate');
+
+// R59: serveo tunnel HN is dynamic (anonymous tunnel restarts every 1-2 min).
+// infra/sync-tunnel-hn.sh (cron */5) writes current HN to /var/lib/resume-app/serveo.hostname.
+// At /openapi.json request time we read this file and override servers[0].url so
+// Swagger UI always shows the live tunnel URL — no backend restart needed.
+const SERVEEO_HN_FILE = process.env.SERVEO_HN_FILE || '/var/lib/resume-app/serveo.hostname';
+const HN_REGEX = /^[a-f0-9]{16}-43-139-176-199$/;
+let _hnCache = { mtimeMs: 0, hn: null };
+function getCurrentServeoHn() {
+  try {
+    const stat = fs.statSync(SERVEEO_HN_FILE);
+    if (stat.mtimeMs === _hnCache.mtimeMs) return _hnCache.hn;
+    const raw = fs.readFileSync(SERVEEO_HN_FILE, 'utf8').trim();
+    _hnCache = { mtimeMs: stat.mtimeMs, hn: HN_REGEX.test(raw) ? raw : null };
+    return _hnCache.hn;
+  } catch (e) {
+    // file not found / not readable → fallback to placeholder
+    if (_hnCache.mtimeMs !== 0) _hnCache = { mtimeMs: 0, hn: null };
+    return null;
+  }
+}
+function buildServers() {
+  // clone so callers can't mutate the cached const
+  const base = openapiSpec.servers.map((s) => ({ ...s }));
+  const hn = getCurrentServeoHn();
+  if (hn) {
+    base[0] = {
+      url: `https://${hn}.serveousercontent.com`,
+      description: 'serveo tunnel (current, synced by cron)',
+    };
+  }
+  return base;
+}
 
 /* eslint-disable max-len */
 
@@ -519,7 +554,9 @@ function buildMergedPaths(app) {
 
 router.get('/openapi.json', (req, res) => {
   buildMergedPaths(req.app);
-  res.json(openapiSpec);
+  // R59: inject dynamic serveo HN into servers[0].url if available
+  const out = { ...openapiSpec, servers: buildServers() };
+  res.json(out);
 });
 
 const SWAGGER_HTML = `
