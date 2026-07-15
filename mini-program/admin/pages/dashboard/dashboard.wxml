@@ -1,4 +1,14 @@
-<view class="dashboard">
+<view class="dashboard dashboard--{{mode}}">
+  <!-- R58: fullscreen header (title + live clock + exit) -->
+  <view wx:if="{{mode === 'fullscreen'}}" class="fs-header">
+    <view class="fs-title">简历推荐 · 实时业务大屏</view>
+    <view class="fs-time">{{currentTime}}</view>
+    <view class="fs-exit" bindtap="toggleFullscreen">退出全屏</view>
+  </view>
+
+  <!-- R58: compact-only toggle (top-right) when device supports fullscreen -->
+  <view wx:if="{{mode === 'compact' && fullscreenAvailable && showFullscreenHint}}" class="cp-toggle" bindtap="toggleFullscreen">⛶ 全屏</view>
+
   <!-- KPI tiles -->
   <view class="kpi-row">
     <view class="kpi-card">
@@ -87,5 +97,5 @@
   <!-- error state -->
   <view wx:if="{{error}}" class="error-banner">{{error}}</view>
 
-  <view wx:if="{{loading}}" class="loading-mask">加载中…</view>
+  <view wx:if="{{loading && mode === 'compact'}}" class="loading-mask">加载中…</view>
 </view>

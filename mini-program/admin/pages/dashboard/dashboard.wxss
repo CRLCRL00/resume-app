@@ -4,6 +4,136 @@
   min-height: 100vh;
   color: #e6e9f2;
 }
+
+/* R58: fullscreen 大屏模式 - 大字号/大间距/单屏铺满 (1920×1080 电视墙) */
+.dashboard--fullscreen {
+  padding: 32rpx 48rpx;
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  box-sizing: border-box;
+}
+.fs-header {
+  display: flex;
+  align-items: center;
+  padding-bottom: 16rpx;
+  border-bottom: 1rpx solid rgba(92, 182, 255, .25);
+  margin-bottom: 24rpx;
+}
+.fs-title {
+  flex: 1;
+  font-size: 40rpx;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 4rpx;
+}
+.fs-time {
+  font-size: 56rpx;
+  color: #5cb6ff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  margin-right: 32rpx;
+  text-shadow: 0 0 24rpx rgba(60, 160, 255, .35);
+}
+.fs-exit, .cp-toggle {
+  font-size: 24rpx;
+  color: #5cb6ff;
+  border: 1rpx solid rgba(92, 182, 255, .4);
+  padding: 8rpx 24rpx;
+  border-radius: 8rpx;
+  background: rgba(20, 28, 48, .55);
+}
+.fs-exit {
+  font-size: 28rpx;
+  padding: 12rpx 32rpx;
+}
+.cp-toggle {
+  position: fixed;
+  top: 24rpx;
+  right: 24rpx;
+  z-index: 10;
+}
+
+/* R58: fullscreen 内容放大 — 主区用 flex:1 自适应填充 */
+.dashboard--fullscreen .kpi-row {
+  flex: 0 0 auto;
+  margin-bottom: 24rpx;
+}
+.dashboard--fullscreen .kpi-card {
+  padding: 32rpx;
+  border-radius: 16rpx;
+}
+.dashboard--fullscreen .kpi-n {
+  font-size: 96rpx;
+}
+.dashboard--fullscreen .kpi-label {
+  font-size: 30rpx;
+  margin-top: 8rpx;
+}
+.dashboard--fullscreen .kpi-delta {
+  font-size: 26rpx;
+  margin-top: 8rpx;
+}
+.dashboard--fullscreen .block {
+  flex: 1 1 auto;
+  padding: 32rpx;
+  margin-bottom: 16rpx;
+  border-radius: 16rpx;
+  overflow: hidden;
+}
+.dashboard--fullscreen .block-title {
+  font-size: 36rpx;
+  margin-bottom: 4rpx;
+}
+.dashboard--fullscreen .block-sub {
+  font-size: 24rpx;
+  margin-bottom: 16rpx;
+}
+.dashboard--fullscreen .duo {
+  gap: 32rpx;
+}
+.dashboard--fullscreen .duo-head {
+  font-size: 28rpx;
+  margin-bottom: 12rpx;
+}
+.dashboard--fullscreen .bar-row {
+  font-size: 26rpx;
+  margin-bottom: 12rpx;
+}
+.dashboard--fullscreen .bar-row--wide {
+  font-size: 30rpx;
+  margin-bottom: 16rpx;
+}
+.dashboard--fullscreen .bar-label {
+  width: 140rpx;
+}
+.dashboard--fullscreen .bar-track {
+  height: 22rpx;
+  border-radius: 11rpx;
+}
+.dashboard--fullscreen .bar-fill {
+  border-radius: 11rpx;
+}
+.dashboard--fullscreen .bar-n {
+  width: 100rpx;
+  font-size: 28rpx;
+  margin-left: 16rpx;
+}
+.dashboard--fullscreen .trend-wrap {
+  max-height: none;
+}
+.dashboard--fullscreen .trend-row {
+  padding: 14rpx 0;
+  font-size: 26rpx;
+}
+.dashboard--fullscreen .trend-date {
+  width: 140rpx;
+}
+.dashboard--fullscreen .trend-cell {
+  padding: 6rpx 18rpx;
+  font-size: 24rpx;
+}
+
 .kpi-row {
   display: grid;
   grid-template-columns: repeat(4, 1fr);

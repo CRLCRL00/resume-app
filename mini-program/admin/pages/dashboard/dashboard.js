@@ -1,7 +1,10 @@
 // R54: admin/dashboard - 业务数据可视化大屏
-// Pulls from /api/admin/dashboard/{overview,cities,salary,degree,trends}
-// Layout: KPI tiles (top) + city distribution (left) + salary buckets (right) + trends (bottom)
+// R58: + 全屏 1920×1080 大屏模式 (auto-detect on wide screens, manual toggle,
+//      live clock, 30s auto-refresh, lock landscape)
 const app = getApp();
+
+const FULLSCREEN_REFRESH_MS = 30000;
+const FULLSCREEN_MIN_WIDTH = 1024;   // tablet landscape / PC WeChat / wall display
 
 Page({
   data: {
@@ -13,48 +16,142 @@ Page({
     trends: [],
     loading: true,
     error: null,
-    barUsers: [],    // [{ label, width, n }] city visualization
+    barUsers: [],   // [{ label, width, n }]
     barJobs: [],
     barSalary: [],  // [{ label, width, n }]
+    // ---- R58 ----
+    mode: 'compact',            // 'compact' | 'fullscreen'
+    fullscreenAvailable: false, // device wide enough to support fullscreen
+    currentTime: '',            // HH:MM:SS for fs header
+    showFullscreenHint: true,   // small toggle btn in compact mode
   },
 
+  _refreshTimer: null,
+  _clockTimer: null,
+
   onLoad() {
-    this.loadAll();
+    const sys = wx.getSystemInfoSync();
+    // 全屏判定: 屏幕宽 ≥ 1024 = 横屏平板/PC/电视墙
+    const wide = (sys.windowWidth || sys.screenWidth || 0) >= FULLSCREEN_MIN_WIDTH;
+    this.setData({ fullscreenAvailable: wide });
+    if (wide) {
+      this.enterFullscreen();
+    } else {
+      this.loadAll();
+    }
+  },
+
+  onUnload() {
+    this._clearTimers();
   },
 
   onPullDownRefresh() {
-    this.loadAll().then(() => wx.stopPullDownRefresh());
+    // 仅 compact 模式可下拉
+    if (this.data.mode === 'compact') {
+      this.loadAll().then(() => wx.stopPullDownRefresh());
+    } else {
+      wx.stopPullDownRefresh();
+    }
   },
+
+  // ---- R58 mode switching ----
+
+  enterFullscreen() {
+    this.setData({ mode: 'fullscreen', loading: true, error: null });
+    // 尝试锁横屏 (失败静默: 竖屏手机不支持)
+    try {
+      wx.setPageOrientation({ orientation: 'landscape' });
+    } catch (e) { /* keep current orientation */ }
+    this._tickTime();
+    this._clockTimer = setInterval(() => this._tickTime(), 1000);
+    this.loadAll().then(() => {
+      this._startAutoRefresh();
+    });
+  },
+
+  exitFullscreen() {
+    this.setData({ mode: 'compact' });
+    this._clearTimers();
+    try {
+      wx.setPageOrientation({ orientation: 'portrait' });
+    } catch (e) { /* keep current orientation */ }
+    this.loadAll();
+  },
+
+  toggleFullscreen() {
+    if (this.data.mode === 'fullscreen') {
+      this.exitFullscreen();
+    } else {
+      this.enterFullscreen();
+    }
+  },
+
+  _tickTime() {
+    const d = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    this.setData({
+      currentTime: `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`,
+    });
+  },
+
+  _startAutoRefresh() {
+    if (this._refreshTimer) clearInterval(this._refreshTimer);
+    this._refreshTimer = setInterval(() => {
+      // 后台静默刷新，不弹 loading mask
+      this._loadAllSilent();
+    }, FULLSCREEN_REFRESH_MS);
+  },
+
+  _clearTimers() {
+    if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
+    if (this._clockTimer)   { clearInterval(this._clockTimer);   this._clockTimer = null; }
+  },
+
+  // ---- data loading ----
 
   async loadAll() {
     this.setData({ loading: true, error: null });
     try {
-      const [overview, cities, salary, degree, trends] = await Promise.all([
-        this.fetch('/api/admin/dashboard/overview'),
-        this.fetch('/api/admin/dashboard/cities'),
-        this.fetch('/api/admin/dashboard/salary'),
-        this.fetch('/api/admin/dashboard/degree'),
-        this.fetch('/api/admin/dashboard/trends?days=14'),
-      ]);
-      this.setData({
-        loading: false,
-        overview: overview.data,
-        cities_users: cities.data.users_by_city.slice(0, 10),
-        cities_jobs: cities.data.jobs_by_city.slice(0, 10),
-        salary_buckets: salary.data,
-        degree_buckets: degree.data,
-        trends: trends.data,
-        // pre-compute bar widths for CSS rendering
-        barUsers: this.toBar(cities.data.users_by_city),
-        barJobs: this.toBar(cities.data.jobs_by_city),
-        barSalary: this.toBar(salary.data, 'bucket'),
-      });
+      await this._doLoad();
+      this.setData({ loading: false });
     } catch (e) {
       this.setData({ loading: false, error: (e && e.errMsg) || '加载失败' });
     }
   },
 
-  async fetch(path) {
+  // R58: 全屏模式用的静默刷新 — 不切 loading mask，不清空旧数据
+  async _loadAllSilent() {
+    try {
+      await this._doLoad();
+      this.setData({ error: null });
+    } catch (e) {
+      // 静默: 仅更新 error 文字，不闪烁
+      this.setData({ error: (e && e.errMsg) || '刷新失败' });
+    }
+  },
+
+  async _doLoad() {
+    const [overview, cities, salary, degree, trends] = await Promise.all([
+      this._fetch('/api/admin/dashboard/overview'),
+      this._fetch('/api/admin/dashboard/cities'),
+      this._fetch('/api/admin/dashboard/salary'),
+      this._fetch('/api/admin/dashboard/degree'),
+      this._fetch('/api/admin/dashboard/trends?days=14'),
+    ]);
+    this.setData({
+      overview: overview.data,
+      cities_users: cities.data.users_by_city.slice(0, 10),
+      cities_jobs: cities.data.jobs_by_city.slice(0, 10),
+      salary_buckets: salary.data,
+      degree_buckets: degree.data,
+      trends: trends.data,
+      barUsers: this._toBar(cities.data.users_by_city),
+      barJobs: this._toBar(cities.data.jobs_by_city),
+      barSalary: this._toBar(salary.data, 'bucket'),
+    });
+  },
+
+  async _fetch(path) {
     const { request } = require('../../../utils/request');
     return request({
       url: path,
@@ -63,7 +160,7 @@ Page({
     });
   },
 
-  toBar(rows, labelKey = 'city') {
+  _toBar(rows, labelKey = 'city') {
     if (!rows || !rows.length) return [];
     const max = Math.max(...rows.map((r) => Number(r.n) || 0), 1);
     return rows.map((r) => ({
@@ -73,6 +170,5 @@ Page({
     }));
   },
 
-  // jump to KPI detail page (future)
   goJobs() { wx.navigateTo({ url: '/admin/pages/jobs/list' }); },
 });
