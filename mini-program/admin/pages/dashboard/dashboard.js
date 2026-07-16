@@ -135,30 +135,28 @@ Page({
   _startSse() {
     this._stopSse();
     try {
-      const { sseConnect } = require('../../../utils/sseClient');
+      const { sseConnectWithRetry } = require('../../../utils/sseClient');
       const { apiBaseUrl } = require('../../../src/config');
       const token = (function () {
         try { return require('../../../utils/auth').getToken(); } catch (_) { return ''; }
       })();
       this.setData({ sseStatus: 'connecting' });
-      this._sseAbort = sseConnect(`${apiBaseUrl}/api/admin/dashboard/stream`, {
+      // R78: auto-reconnect with exponential backoff (1s -> 2s -> 4s -> ... -> 30s cap)
+      this._sseAbort = sseConnectWithRetry(`${apiBaseUrl}/api/admin/dashboard/stream`, {
         headers: token ? { Authorization: `Bearer ${token}` } : {},
+        backoffMs: 1000,
+        maxBackoffMs: 30000,
+        maxAttempts: 0, // infinite until stop()
+        shouldReconnect: () => this.data.mode === 'fullscreen',
+        onStatus: (status, attempt, delayMs) => {
+          if (status === 'open') this.setData({ sseStatus: 'open' });
+          else if (status === 'connecting') this.setData({ sseStatus: 'connecting' });
+          else if (status === 'waiting') this.setData({ sseStatus: 'reconnecting' });
+          else this.setData({ sseStatus: 'closed' });
+        },
         onEvent: (e) => this._onSseEvent(e),
-        onError: () => {
-          this.setData({ sseStatus: 'closed' });
-          // keep 30s polling as fallback; auto-reconnect after 10s
-          setTimeout(() => {
-            if (this.data.mode === 'fullscreen' && !this._sseAbort?.closed) {
-              this._startSse();
-            }
-          }, 10_000).unref && setTimeout(() => {}, 0);
-          // Plain setTimeout in mp context — rely on outer 30s polling instead
-        },
-        onClose: () => {
-          this.setData({ sseStatus: 'closed' });
-        },
+        onError: () => { /* status already updated via onStatus */ },
       });
-      this.setData({ sseStatus: 'open' });
     } catch (e) {
       this.setData({ sseStatus: 'closed' });
     }
@@ -166,18 +164,30 @@ Page({
 
   _stopSse() {
     if (this._sseAbort) {
-      try { this._sseAbort.abort(); } catch (_) {}
+      try { this._sseAbort.stop(); } catch (_) {}
       this._sseAbort = null;
     }
     this.setData({ sseStatus: 'idle' });
   },
 
   _onSseEvent(e) {
-    if (e.event === 'dashboard-update' && e.data && e.data.overview) {
-      // SSE only pushes overview (lightweight); other sections refresh via 30s polling
-      this.setData({ overview: e.data.overview });
+    if (e.event !== 'dashboard-update' || !e.data) return;
+    // R77: SSE pushes ALL 5 sections. Update state in-place; pre-compute bar widths.
+    const patch = {};
+    if (e.data.overview) patch.overview = e.data.overview;
+    if (e.data.cities) {
+      patch.cities_users = (e.data.cities.users_by_city || []).slice(0, 10);
+      patch.cities_jobs = (e.data.cities.jobs_by_city || []).slice(0, 10);
+      patch.barUsers = this._toBar(e.data.cities.users_by_city || []);
+      patch.barJobs = this._toBar(e.data.cities.jobs_by_city || []);
     }
-    // heartbeat / error / other events: ignore
+    if (e.data.salary) {
+      patch.salary_buckets = e.data.salary;
+      patch.barSalary = this._toBar(e.data.salary, 'bucket');
+    }
+    if (e.data.degree) patch.degree_buckets = e.data.degree;
+    if (e.data.trends) patch.trends = e.data.trends;
+    if (Object.keys(patch).length > 0) this.setData(patch);
   },
 
   // ---- data loading ----

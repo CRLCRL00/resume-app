@@ -124,4 +124,93 @@ function sseConnect(url, opts = {}) {
   };
 }
 
-module.exports = { sseConnect, parseEvent, decodeChunk };
+/**
+ * R78: auto-reconnect SSE wrapper. Wraps sseConnect with exponential backoff
+ * on close/error. Stops when caller calls abort() or shouldReconnect()=false.
+ *
+ * Usage:
+ *   const conn = sseConnectWithRetry(url, {
+ *     headers: {...},
+ *     onEvent: (e) => ...,
+ *     onStatus: (status, attempt) => { ... }, // optional
+ *     backoffMs: 1000,      // initial
+ *     maxBackoffMs: 30000,  // cap
+ *     maxAttempts: 0,       // 0 = infinite
+ *   });
+ *   conn.stop();
+ */
+function sseConnectWithRetry(url, opts = {}) {
+  const {
+    backoffMs = 1000,
+    maxBackoffMs = 30_000,
+    maxAttempts = 0,
+    shouldReconnect,
+    onStatus,
+    ...sseOpts
+  } = opts;
+  let attempt = 0;
+  let stopped = false;
+  let current = null;
+  let reconnectTimer = null;
+
+  function connect() {
+    if (stopped) return;
+    attempt += 1;
+    onStatus && onStatus('connecting', attempt);
+    current = sseConnect(url, {
+      ...sseOpts,
+      onClose: () => {
+        sseOpts.onClose && sseOpts.onClose();
+        if (stopped) return;
+        if (shouldReconnect && !shouldReconnect()) {
+          onStatus && onStatus('stopped', attempt);
+          return;
+        }
+        if (maxAttempts > 0 && attempt >= maxAttempts) {
+          onStatus && onStatus('exhausted', attempt);
+          return;
+        }
+        scheduleReconnect();
+      },
+      onError: (err) => {
+        sseOpts.onError && sseOpts.onError(err);
+        if (stopped) return;
+        if (shouldReconnect && !shouldReconnect()) {
+          onStatus && onStatus('stopped', attempt);
+          return;
+        }
+        if (maxAttempts > 0 && attempt >= maxAttempts) {
+          onStatus && onStatus('exhausted', attempt);
+          return;
+        }
+        scheduleReconnect();
+      },
+    });
+    onStatus && onStatus('open', attempt);
+  }
+
+  function scheduleReconnect() {
+    if (stopped) return;
+    const delay = Math.min(maxBackoffMs, backoffMs * Math.pow(2, attempt - 1));
+    onStatus && onStatus('waiting', attempt, delay);
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      connect();
+    }, delay);
+  }
+
+  connect();
+
+  return {
+    stop() {
+      stopped = true;
+      if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
+      if (current) { try { current.abort(); } catch (_) {} current = null; }
+      onStatus && onStatus('stopped', attempt);
+    },
+    get attempt() { return attempt; },
+    get stopped() { return stopped; },
+  };
+}
+
+module.exports = { sseConnect, sseConnectWithRetry, parseEvent, decodeChunk };
