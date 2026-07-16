@@ -19,6 +19,10 @@
   </view>
 
   <view class="section admin-only" wx:if="{{isAdmin}}">
+    <view class="row admin-row" bindtap="onAdminDashboard">
+      <text class="admin-text">📊 数据大屏</text>
+      <text class="arrow">›</text>
+    </view>
     <view class="row admin-row" bindtap="onAdminJobs">
       <text class="admin-text">⚙ 岗位管理</text>
       <text class="arrow">›</text>

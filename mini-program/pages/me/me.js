@@ -22,6 +22,9 @@ Page({
   onAdminJobs() {
     wx.navigateTo({ url: '/admin/pages/jobs/list' });
   },
+  onAdminDashboard() {
+    wx.navigateTo({ url: '/admin/pages/dashboard/dashboard' });
+  },
   onAdminPrompts() {
     wx.navigateTo({ url: '/admin/pages/prompts/list' });
   },
