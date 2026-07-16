@@ -8,6 +8,7 @@ const { runMigrations } = require('./db/migrate');
 const { setupGracefulShutdown } = require('./lifecycle');
 const { initSentry, Sentry } = require('./sentry');
 const { runAdminLogsCleanup } = require('./jobs/adminLogsCleanup');
+const { runDashboardWeeklyReport } = require('./jobs/dashboardWeeklyReport');
 
 // Sentry 必须在 createApp() 之前 init（让 Express error handler 能注册）
 const sentryEnabled = initSentry();
@@ -74,6 +75,17 @@ if (process.env.NODE_ENV !== 'test') {
     runAdminLogsCleanup({ retentionDays, logger })
       .catch((err) => logger.error({ err: err.message }, 'admin_logs cleanup cron failed'));
   }, 24 * 60 * 60_000).unref();
+
+  // R70: dashboard weekly report — check every hour, fire on Mon 09:00 local
+  // (simple self-scheduling; no node-cron dep)
+  const REPORT_CHECK_MS = 60 * 60_000; // 1h
+  setInterval(() => {
+    const now = new Date();
+    if (now.getDay() === 1 && now.getHours() === 9) {
+      runDashboardWeeklyReport({ logger })
+        .catch((err) => logger.error({ err: err.message }, 'dashboard weekly report failed'));
+    }
+  }, REPORT_CHECK_MS).unref();
 
   // R40 + R42: multi-pod leader election for multiple roles.
   // Each role has independent leader leases; one pod can hold

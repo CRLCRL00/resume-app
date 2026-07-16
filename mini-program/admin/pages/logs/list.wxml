@@ -1,17 +1,49 @@
 <view class="container">
+  <!-- R71: filter bar -->
+  <view class="filter-bar">
+    <picker mode="selector" range="{{actionTypes}}" value="{{actionIdx}}" bindchange="onActionPick">
+      <view class="picker-btn">
+        <text class="picker-label">操作</text>
+        <text class="picker-value">{{actionTypes[actionIdx] || '全部'}}</text>
+      </view>
+    </picker>
+    <picker mode="selector" range="{{actorOpenids}}" value="{{actorIdx}}" bindchange="onActorPick">
+      <view class="picker-btn">
+        <text class="picker-label">管理员</text>
+        <text class="picker-value">{{actorOpenids[actorIdx] || '全部'}}</text>
+      </view>
+    </picker>
+    <view class="sec-toggle {{securityOnly ? 'on' : ''}}" bindtap="toggleSecurity">
+      <text>{{securityOnly ? '✓ 安全' : '安全'}}</text>
+    </view>
+    <view class="refresh-btn" bindtap="onRefresh">↻</view>
+  </view>
+
+  <!-- summary -->
+  <view class="summary" wx:if="{{!loading}}">
+    共 {{total}} 条 · 第 {{page}} / {{totalPages}} 页
+  </view>
+
+  <!-- list -->
   <view class="empty-wrap" wx:if="{{loading}}">
     <text>加载中…</text>
   </view>
   <view class="empty-wrap" wx:elif="{{items.length === 0}}">
     <text class="empty">{{emptyText || '暂无数据'}}</text>
-    <button class="btn-secondary empty-retry" bindtap="loadList">重试</button>
+    <button class="btn-secondary empty-retry" bindtap="onRefresh">重试</button>
   </view>
-  <view wx:for="{{items}}" wx:key="id" class="card">
-    <view style="display:flex; justify-content:space-between;">
-      <view style="font-weight:bold;">{{item.action}}</view>
-      <view class="label">{{item.created_at}}</view>
+  <view wx:for="{{items}}" wx:key="id" class="card card--{{item.result || 'unknown'}}">
+    <view class="row1">
+      <view class="action">{{item.action}}</view>
+      <view class="result result--{{item.result || 'unknown'}}">{{item.result || 'unknown'}}</view>
     </view>
-    <view class="label">admin: {{item.admin_openid}}</view>
-    <view wx:if="{{item.target_id}}" class="label">target: {{item.target_type}}#{{item.target_id}}</view>
+    <view class="row2">
+      <text class="label">admin: {{item.admin_openid}}</text>
+      <text class="time">{{item.created_at}}</text>
+    </view>
+    <view wx:if="{{item.target_id}}" class="row3">
+      target: {{item.target_type}}#{{item.target_id}}
+    </view>
+    <view wx:if="{{item.ip}}" class="row4">ip: {{item.ip}}</view>
   </view>
 </view>

@@ -14,5 +14,7 @@ router.use(require('./audit'));
 router.use('/queries', require('./queries'));
 // R54: business dashboard API (mount last so 404-fallthrough is clean)
 router.use('/dashboard', require('./dashboard'));
+// R72: SSE stream endpoint (separate router to keep response streaming isolated)
+router.use('/dashboard/stream', require('./dashboardStream'));
 
 module.exports = router;

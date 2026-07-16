@@ -1,1 +1,105 @@
+/* R71: log viewer styles */
 .container { padding: 24rpx; padding-bottom: 96rpx; }
+
+.filter-bar {
+  display: flex;
+  gap: 12rpx;
+  margin-bottom: 16rpx;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.picker-btn {
+  background: rgba(20, 28, 48, .55);
+  border: 1rpx solid rgba(255, 255, 255, .08);
+  border-radius: 8rpx;
+  padding: 12rpx 20rpx;
+  display: flex;
+  gap: 12rpx;
+  align-items: center;
+}
+.picker-label { color: #6c7b95; font-size: 22rpx; }
+.picker-value { color: #e6e9f2; font-size: 24rpx; }
+.sec-toggle {
+  background: rgba(20, 28, 48, .55);
+  border: 1rpx solid rgba(255, 255, 255, .08);
+  border-radius: 8rpx;
+  padding: 12rpx 20rpx;
+  color: #6c7b95;
+  font-size: 24rpx;
+}
+.sec-toggle.on {
+  background: rgba(248, 81, 73, .15);
+  border-color: rgba(248, 81, 73, .4);
+  color: #ff9090;
+  font-weight: 600;
+}
+.refresh-btn {
+  background: rgba(47, 109, 246, .25);
+  border: 1rpx solid rgba(92, 182, 255, .4);
+  border-radius: 8rpx;
+  padding: 12rpx 20rpx;
+  color: #5cb6ff;
+  font-size: 28rpx;
+  margin-left: auto;
+}
+
+.summary {
+  font-size: 22rpx;
+  color: #6c7b95;
+  margin-bottom: 16rpx;
+  text-align: right;
+}
+
+.card {
+  background: rgba(20, 28, 48, .55);
+  border: 1rpx solid rgba(255, 255, 255, .08);
+  border-left: 6rpx solid #5cb6ff;
+  border-radius: 8rpx;
+  padding: 16rpx 20rpx;
+  margin-bottom: 12rpx;
+}
+.card--success { border-left-color: #4ade80; }
+.card--failure { border-left-color: #f87171; }
+.card--unknown { border-left-color: #5cb6ff; }
+
+.row1 {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 6rpx;
+}
+.action { color: #fff; font-weight: 600; font-size: 26rpx; }
+.result {
+  font-size: 20rpx;
+  padding: 4rpx 12rpx;
+  border-radius: 4rpx;
+}
+.result--success { color: #4ade80; background: rgba(74, 222, 128, .15); }
+.result--failure { color: #f87171; background: rgba(248, 113, 113, .15); }
+.result--unknown { color: #c4cad8; background: rgba(196, 202, 216, .15); }
+
+.row2 {
+  display: flex;
+  justify-content: space-between;
+  font-size: 22rpx;
+  color: #c4cad8;
+  margin-top: 4rpx;
+}
+.row3, .row4 { font-size: 22rpx; color: #8d96ad; margin-top: 4rpx; }
+
+.empty-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 60rpx 0;
+  gap: 16rpx;
+}
+.empty { color: #6c7b95; font-size: 24rpx; }
+.btn-secondary {
+  background: rgba(47, 109, 246, .25);
+  color: #5cb6ff;
+  border: 1rpx solid rgba(92, 182, 255, .4);
+  border-radius: 6rpx;
+  font-size: 24rpx;
+}
+.empty-retry { margin-top: 16rpx; }

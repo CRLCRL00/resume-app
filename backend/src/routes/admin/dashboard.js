@@ -175,6 +175,48 @@ router.get('/trends', async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+// ---- user segments (R74) ----
+// 按 last_login_at 划分:
+//   active    : 7 天内活跃
+//   recent    : 8-30 天
+//   dormant   : 31-90 天
+//   inactive  : 90+ 天 OR 从未登录
+//   new       : 注册 ≤ 7 天 (不论活跃度)
+router.get('/user-segments', async (req, res, next) => {
+  try {
+    const [rows] = await dashPool.query(`
+      SELECT
+        COUNT(*) AS total,
+        SUM(CASE WHEN last_login_at IS NULL THEN 1 ELSE 0 END) AS never_logged_in,
+        SUM(CASE WHEN last_login_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS active_7d,
+        SUM(CASE WHEN last_login_at >= DATE_SUB(NOW(), INTERVAL 30 DAY)
+                  AND last_login_at < DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS recent_8_30d,
+        SUM(CASE WHEN last_login_at >= DATE_SUB(NOW(), INTERVAL 90 DAY)
+                  AND last_login_at < DATE_SUB(NOW(), INTERVAL 30 DAY) THEN 1 ELSE 0 END) AS dormant_31_90d,
+        SUM(CASE WHEN last_login_at < DATE_SUB(NOW(), INTERVAL 90 DAY) THEN 1 ELSE 0 END) AS inactive_90d_plus,
+        SUM(CASE WHEN created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY) THEN 1 ELSE 0 END) AS new_7d
+      FROM users
+    `);
+    const r = rows[0] || {};
+    const segments = [
+      { key: 'active', label: '活跃 (≤7d)', count: Number(r.active_7d || 0), color: '#4ade80' },
+      { key: 'recent', label: '近期 (8-30d)', count: Number(r.recent_8_30d || 0), color: '#5cb6ff' },
+      { key: 'dormant', label: '沉睡 (31-90d)', count: Number(r.dormant_31_90d || 0), color: '#fbbf24' },
+      { key: 'inactive', label: '流失 (90d+)', count: Number(r.inactive_90d_plus || 0), color: '#f87171' },
+      { key: 'never', label: '从未登录', count: Number(r.never_logged_in || 0), color: '#6c7b95' },
+      { key: 'new', label: '新注册 (≤7d)', count: Number(r.new_7d || 0), color: '#a78bfa' },
+    ];
+    res.json({
+      code: 0,
+      data: {
+        total: Number(r.total || 0),
+        new_7d: Number(r.new_7d || 0),
+        segments,
+      },
+    });
+  } catch (err) { next(err); }
+});
+
 // ---- export (CSV) ----
 // R68: dashboard data export — admin only, query `type=` and optional `days=`
 // Returns text/csv with attachment Content-Disposition so WeChat mp / browser
