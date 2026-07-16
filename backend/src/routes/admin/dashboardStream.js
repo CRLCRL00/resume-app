@@ -446,9 +446,11 @@ function _stats() {
 
 module.exports = router;
 module.exports._stats = _stats;
-// R84: replay buffer size via async Redis call
+// R84+R86: replay buffer size via async Redis call (returns {count, ttlSeconds})
 module.exports._buffer = {
   size: () => replayStore.size(),
+  ttl: () => replayStore.ttl(),
   capacity: replayStore.REPLAY_BUFFER_SIZE,
+  ttlSeconds: replayStore.REPLAY_TTL_SECONDS,
   key: replayStore.REPLAY_BUFFER_KEY,
 };

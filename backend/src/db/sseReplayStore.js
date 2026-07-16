@@ -28,6 +28,7 @@ const logger = require('../utils/logger');
 const REPLAY_BUFFER_KEY = 'sse:replay:buffer';
 const EVENT_ID_KEY = 'sse:event:id';   // R85: shared atomic counter (multi-pod safe)
 const REPLAY_BUFFER_SIZE = 100;
+const REPLAY_TTL_SECONDS = 86_400; // R86: 24h rolling TTL (auto-clear if no new events)
 
 // Lazy-load redis (avoid hard dep at import time)
 function getRedis() {
@@ -51,10 +52,12 @@ async function push({ id, event, data, ts }) {
   try {
     const r = getRedis();
     // LPUSH adds to head, LTRIM keeps 0..size-1 (newest 100)
-    // Pipeline: 1 round-trip for both ops
+    // R86: EXPIRE sets rolling 24h TTL (resets on each push)
+    // Pipeline: 1 round-trip for all 3 ops
     await r.multi()
       .lpush(REPLAY_BUFFER_KEY, payload)
       .ltrim(REPLAY_BUFFER_KEY, 0, REPLAY_BUFFER_SIZE - 1)
+      .expire(REPLAY_BUFFER_KEY, REPLAY_TTL_SECONDS)
       .exec();
     return true;
   } catch (e) {
@@ -98,14 +101,36 @@ async function since(sinceId) {
 }
 
 /**
- * Size (for ops + tests). Uses Redis LLEN, falls back to fallback.
+ * Size (for ops + tests). Returns { count, ttlSeconds }.
+ * - count: Redis LLEN, or fallback.length if Redis down
+ * - ttlSeconds: Redis TTL (R86), or null if Redis down / key missing
  */
 async function size() {
   try {
     const r = getRedis();
-    return Number(await r.llen(REPLAY_BUFFER_KEY)) || 0;
+    const [n, ttl] = await Promise.all([
+      r.llen(REPLAY_BUFFER_KEY),
+      r.ttl(REPLAY_BUFFER_KEY),
+    ]);
+    return {
+      count: Number(n) || 0,
+      ttlSeconds: ttl >= 0 ? Number(ttl) : null,
+    };
   } catch (_) {
-    return fallbackBuffer.length;
+    return { count: fallbackBuffer.length, ttlSeconds: null };
+  }
+}
+
+/**
+ * TTL only (cheap inspect). Returns seconds, or null if unavailable.
+ */
+async function ttl() {
+  try {
+    const r = getRedis();
+    const v = await r.ttl(REPLAY_BUFFER_KEY);
+    return v >= 0 ? Number(v) : null;
+  } catch (_) {
+    return null;
   }
 }
 
@@ -162,7 +187,7 @@ async function currentEventId() {
 }
 
 module.exports = {
-  push, since, size, clear,
+  push, since, size, ttl, clear,
   nextEventId, currentEventId,
-  REPLAY_BUFFER_SIZE, REPLAY_BUFFER_KEY, EVENT_ID_KEY,
+  REPLAY_BUFFER_SIZE, REPLAY_BUFFER_KEY, REPLAY_TTL_SECONDS, EVENT_ID_KEY,
 };
