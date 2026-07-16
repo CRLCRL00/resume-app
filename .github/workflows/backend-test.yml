@@ -77,6 +77,13 @@ jobs:
         working-directory: backend
         run: npm test -- --test-force-exit --test-concurrency=1
 
+      - name: Verify R89 live Redis (sseReplayStore)
+        working-directory: backend
+        run: |
+          # Explicit run — confirm live Redis ops work end-to-end
+          # (npm test already runs it, this asserts the result in CI logs)
+          node --test tests/sseReplayStoreLive.test.js --test-reporter=spec
+
       - name: Run mini-program unit tests
         working-directory: mini-program
         run: |

@@ -1,0 +1,137 @@
+# R90-D: Prometheus alert rules for SSE health.
+#
+# Drop into /etc/prometheus/rules/ on Prometheus server, then:
+#   kubectl create configmap prometheus-rules --from-file=sse-alerts.yml
+#   # OR add rule_files: ['/etc/prometheus/rules/*.yml'] to prometheus.yml
+#
+# These rules fire on the SSE metrics exposed by backend /api/metrics
+# (R80: sse_active_connections, sse_connections_total, sse_snapshots_total,
+#  sse_snapshot_duration_seconds, sse_rejected_connections_total,
+#  sse_replayed_events_total, sse_cache_age_seconds).
+#
+# Severity:
+#   - warning: investigate within working hours
+#   - critical: page on-call (we don't have PagerDuty yet, just email)
+
+groups:
+  - name: sse_alerts
+    interval: 30s
+    rules:
+
+      # ─── Critical: service broken ──────────────────────
+      - alert: SSEConnectionsRejectedHigh
+        expr: sum(rate(sse_rejected_connections_total{reason="per_admin_cap"}[5m])) > 0.5
+        for: 2m
+        labels:
+          severity: critical
+          service: resume-app
+          component: sse
+        annotations:
+          summary: "SSE rejecting connections (per-admin cap)"
+          description: |
+            SSE has rejected >0.5 connections/sec for 2 minutes.
+            Clients hitting the per-admin cap (5 concurrent) — likely stuck connections.
+            Check: connections may not be closing cleanly.
+            Run: curl -s http://127.0.0.1:3003/api/health/live
+            Inspect: pm2 logs resume-app-backend | grep sse
+
+      - alert: SSESnapshotStalled
+        expr: rate(sse_snapshots_total[5m]) == 0 and sum(sse_active_connections) > 0
+        for: 1m
+        labels:
+          severity: critical
+          service: resume-app
+          component: sse
+        annotations:
+          summary: "SSE snapshot generation stalled"
+          description: |
+            Snapshot ticker has not generated any new snapshots for 1 minute
+            despite having active connections. Dashboard is frozen.
+            Likely: DB unreachable or ticker crash.
+            Check: mysql admin ping, redis-cli ping
+
+      - alert: SSEBufferStale
+        expr: redis_key_ttl_seconds{key="sse:replay:buffer"} < 3600
+        for: 1m
+        labels:
+          severity: critical
+          service: resume-app
+          component: sse
+        annotations:
+          summary: "SSE replay buffer is going stale"
+          description: |
+            sse:replay:buffer TTL is <1h. Normal TTL is ~24h.
+            TTL decays when no new events are pushed (= no active connections = service idle)
+            OR Redis just restarted.
+            If idle: fine. If unexpected: backend not pushing.
+
+      # ─── Warning: degradation ──────────────────────────
+      - alert: SSESnapshotSlow
+        expr: histogram_quantile(0.95, sum(rate(sse_snapshot_duration_seconds_bucket[5m])) by (le)) > 1
+        for: 2m
+        labels:
+          severity: warning
+          service: resume-app
+          component: sse
+        annotations:
+          summary: "SSE snapshot p95 >1s"
+          description: |
+            Snapshot DB queries taking >1s at p95. Dashboard refresh laggy.
+            Likely: DB load, missing index, or large data set.
+            Check: mysql slow log, table sizes.
+
+      - alert: SSEConnectionsHigh
+        expr: sum(sse_active_connections) > 50
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app
+          component: sse
+        annotations:
+          summary: "SSE active connections >50"
+          description: |
+            More than 50 admin tabs open concurrently.
+            Approaching per-admin cap territory. May indicate stuck connections.
+            Current per-admin cap: 5. With 10 admins, max 50.
+
+      - alert: SSECacheAgeHigh
+        expr: max(sse_cache_age_seconds) > 10
+        for: 2m
+        labels:
+          severity: warning
+          service: resume-app
+          component: sse
+        annotations:
+          summary: "SSE snapshot cache stale >10s"
+          description: |
+            Cached snapshot hasn't refreshed in 10s. Should refresh every 10s tick.
+            Clients see stale data. Snapshot generation slow.
+
+      - alert: SSEReplayRateHigh
+        expr: rate(sse_replayed_events_total[5m]) > 1
+        for: 5m
+        labels:
+          severity: warning
+          service: resume-app
+          component: sse
+        annotations:
+          summary: "SSE replay rate >1 event/sec"
+          description: |
+            Clients reconnecting frequently with Last-Event-ID.
+            Indicates network instability or client reconnection logic.
+            Normal: <0.1/sec.
+
+      # ─── Info: configuration drift ──────────────────────
+      - alert: SSEEncryptionDisabled
+        expr: up{job="resume-app-backend"} == 1
+        for: 1h
+        labels:
+          severity: info
+          service: resume-app
+          component: sse
+        annotations:
+          summary: "SSE replay encryption check"
+          description: |
+            Backend is up. Verify SSE_REPLAY_KEY is set in production for PII protection.
+            Run: pm2 env resume-app-backend | grep SSE_REPLAY_KEY
+            See: docs-site/operations/secret-rotation.md

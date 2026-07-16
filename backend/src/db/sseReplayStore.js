@@ -23,6 +23,7 @@
  */
 'use strict';
 
+const crypto = require('crypto');
 const logger = require('../utils/logger');
 
 const REPLAY_BUFFER_KEY = 'sse:replay:buffer';
@@ -43,12 +44,80 @@ const FALLBACK_CAP = REPLAY_BUFFER_SIZE;
 // per process; multi-pod only when Redis is down, will be unique enough)
 let _localEventId = 0;
 
+// ───────────────────────────────────────────────────────────────
+// R90-C: Optional encryption (AES-256-GCM) for replay buffer values.
+// Opt-in via SSE_REPLAY_KEY env var (64 hex chars = 32 bytes).
+// Without env var → plaintext (back-compat, R84-R89 behavior preserved).
+//
+// Format on disk: base64( iv(12) || authTag(16) || ciphertext )
+//   iv: random per encrypt (GCM nonce reuse = catastrophic, so random)
+//   authTag: GCM integrity check (16 bytes)
+//   ciphertext: AES-256-GCM(JSON.stringify(event))
+//
+// Failure modes:
+//   - Decrypt fails (key rotated, data corrupted) → skip that entry, log warn
+//   - Plaintext data already in Redis from R84-R89 → first read after opt-in
+//     will fail to decrypt → skipped (then OVERWRITTEN by next encrypted push)
+//   - Process startup without key → fallback plaintext, no crash
+// ───────────────────────────────────────────────────────────────
+let _encKey = null;       // Buffer | null (32 bytes)
+let _encWarned = false;   // log plaintext mode once
+
+function _loadEncKey() {
+  if (_encKey !== null || _encWarned) return _encKey;
+  const hex = process.env.SSE_REPLAY_KEY;
+  if (!hex) {
+    if (!_encWarned) {
+      logger.warn('sse replay: SSE_REPLAY_KEY not set — storing plaintext (insecure for PII)');
+      _encWarned = true;
+    }
+    _encKey = false; // sentinel: not configured
+    return null;
+  }
+  if (!/^[0-9a-fA-F]{64}$/.test(hex)) {
+    logger.error('sse replay: SSE_REPLAY_KEY must be 64 hex chars (32 bytes) — disabling encryption');
+    _encKey = false;
+    return null;
+  }
+  _encKey = Buffer.from(hex, 'hex');
+  logger.info('sse replay: encryption enabled (AES-256-GCM)');
+  return _encKey;
+}
+
+function _encrypt(plaintext) {
+  const key = _loadEncKey();
+  if (!key) return plaintext; // no key → plaintext passthrough
+  const iv = crypto.randomBytes(12);
+  const cipher = crypto.createCipheriv('aes-256-gcm', key, iv);
+  const ct = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
+  const tag = cipher.getAuthTag();
+  return Buffer.concat([iv, tag, ct]).toString('base64');
+}
+
+function _decrypt(b64) {
+  const key = _loadEncKey();
+  if (!key) return b64; // plaintext mode → return as-is
+  try {
+    const buf = Buffer.from(b64, 'base64');
+    if (buf.length < 28) return null; // iv(12)+tag(16)=28 min, no payload
+    const iv = buf.subarray(0, 12);
+    const tag = buf.subarray(12, 28);
+    const ct = buf.subarray(28);
+    const decipher = crypto.createDecipheriv('aes-256-gcm', key, iv);
+    decipher.setAuthTag(tag);
+    return Buffer.concat([decipher.update(ct), decipher.final()]).toString('utf8');
+  } catch (e) {
+    return null; // corrupt or wrong key → caller skips
+  }
+}
+
 /**
  * Push an event to the replay buffer (Redis + fallback on failure).
  * Returns true on success, false if both Redis + fallback failed.
  */
 async function push({ id, event, data, ts }) {
-  const payload = JSON.stringify({ id, event, data, ts });
+  const plaintext = JSON.stringify({ id, event, data, ts });
+  const payload = _encrypt(plaintext); // R90-C: encrypt if key set
   try {
     const r = getRedis();
     // LPUSH adds to head, LTRIM keeps 0..size-1 (newest 100)
@@ -61,7 +130,7 @@ async function push({ id, event, data, ts }) {
       .exec();
     return true;
   } catch (e) {
-    // Fallback to in-memory
+    // Fallback to in-memory (plaintext — fallback never touches Redis)
     fallbackBuffer.unshift({ id, event, data, ts });
     if (fallbackBuffer.length > FALLBACK_CAP) fallbackBuffer.length = FALLBACK_CAP;
     logger.warn({ err: e.message, id }, 'sse replay: redis push failed, used in-memory fallback');
@@ -88,10 +157,15 @@ async function since(sinceId) {
     // so the LIST has newest at head (index 0). Reverse to chronological.
     const items = [];
     for (let i = raw.length - 1; i >= 0; i--) {
+      let plaintext = _decrypt(raw[i]); // R90-C
+      if (plaintext == null) {
+        // Decrypt failed (corrupt or wrong key) — skip
+        continue;
+      }
       try {
-        const obj = JSON.parse(raw[i]);
+        const obj = JSON.parse(plaintext);
         if (Number(obj.id) > target) items.push(obj);
-      } catch (_) { /* skip malformed */ }
+      } catch (_) { /* skip malformed JSON */ }
     }
     return items;
   } catch (e) {
