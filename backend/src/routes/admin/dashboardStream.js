@@ -89,11 +89,49 @@ const sseCacheAge = globalThis.__sseCacheAge
   });
 globalThis.__sseCacheAge = sseCacheAge;
 
-// R79: connection registry + shared snapshot cache
-const connections = new Set(); // Set<{ res, id, connectedAt }>
+// R81: total rejected connections due to per-admin cap
+const sseRejectedConnections = globalThis.__sseRejectedConnections
+  || new client.Counter({
+    name: 'sse_rejected_connections_total',
+    help: 'SSE connections rejected (per-admin cap exceeded)',
+    labelNames: ['reason'],
+  });
+globalThis.__sseRejectedConnections = sseRejectedConnections;
+
+// R79+R81: connection registry indexed by admin openid. Map<openid, Set<conn>>
+// so we can enforce per-admin cap and quickly count active conns per admin.
+const connectionsByAdmin = new Map(); // openid → Set<{ res, id, openid, connectedAt }>
 let cachedSnapshot = null;
 let cachedSnapshotAt = 0;
 let snapshotPromise = null;
+
+function _addConn(conn) {
+  let set = connectionsByAdmin.get(conn.openid);
+  if (!set) { set = new Set(); connectionsByAdmin.set(conn.openid, set); }
+  set.add(conn);
+  sseActiveConnections.set(_totalCount());
+  sseConnectionsTotal.inc();
+}
+
+function _removeConn(conn) {
+  const set = connectionsByAdmin.get(conn.openid);
+  if (set) {
+    set.delete(conn);
+    if (set.size === 0) connectionsByAdmin.delete(conn.openid);
+  }
+  sseActiveConnections.set(_totalCount());
+}
+
+function _totalCount() {
+  let n = 0;
+  for (const set of connectionsByAdmin.values()) n += set.size;
+  return n;
+}
+
+function _connCount(openid) {
+  const set = connectionsByAdmin.get(openid);
+  return set ? set.size : 0;
+}
 
 async function fetchSnapshot() {
   const t0 = Date.now();
@@ -243,19 +281,40 @@ router.get('/', async (req, res) => {
     connectedAt: Date.now(),
     openid: (req.user && req.user.openid) || 'unknown',
   };
-  connections.add(conn);
-  // R80: metrics on connect/disconnect
-  sseActiveConnections.set(connections.size);
-  sseConnectionsTotal.inc();
-  logger.info({ connId: conn.id, openid: conn.openid, total: connections.size }, 'sse: client connected');
+
+  // R81: enforce per-admin cap before committing resources
+  const current = _connCount(conn.openid);
+  if (current >= MAX_CONNECTIONS_PER_ADMIN) {
+    sseRejectedConnections.inc({ reason: 'per_admin_cap' });
+    logger.warn(
+      { openid: conn.openid, current, cap: MAX_CONNECTIONS_PER_ADMIN },
+      'sse: rejected connection (per-admin cap)'
+    );
+    // Drain headers / close cleanly so client sees a proper response
+    res.status(429).json({
+      code: 1429,
+      message: `too many concurrent SSE connections for this admin (max ${MAX_CONNECTIONS_PER_ADMIN})`,
+      current,
+      cap: MAX_CONNECTIONS_PER_ADMIN,
+    });
+    return;
+  }
+
+  _addConn(conn);
+  logger.info(
+    { connId: conn.id, openid: conn.openid, total: _totalCount(), perAdmin: _connCount(conn.openid) },
+    'sse: client connected'
+  );
 
   let alive = true;
   function cleanup() {
     if (!alive) return;
     alive = false;
-    connections.delete(conn);
-    sseActiveConnections.set(connections.size);
-    logger.info({ connId: conn.id, total: connections.size }, 'sse: client disconnected');
+    _removeConn(conn);
+    logger.info(
+      { connId: conn.id, total: _totalCount(), perAdmin: _connCount(conn.openid) },
+      'sse: client disconnected'
+    );
   }
   req.on('close', cleanup);
   req.on('error', cleanup);
@@ -277,30 +336,34 @@ function ensureTickerStarted() {
   tickerStarted = true;
 
   setInterval(async () => {
-    if (connections.size === 0) return; // skip DB when no listeners
+    if (_totalCount() === 0) return; // skip DB when no listeners
     const snap = await getSharedSnapshot();
     const payload = `event: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`;
     let sent = 0;
     let failed = 0;
-    for (const conn of connections) {
-      try {
-        conn.res.write(payload);
-        sent += 1;
-      } catch (e) {
-        failed += 1;
-        // Dead connection — let 'close' handler clean it up
+    for (const set of connectionsByAdmin.values()) {
+      for (const conn of set) {
+        try {
+          conn.res.write(payload);
+          sent += 1;
+        } catch (e) {
+          failed += 1;
+          // Dead connection — let 'close' handler clean it up
+        }
       }
     }
     if (sent > 0 || failed > 0) {
-      logger.debug({ sent, failed, total: connections.size }, 'sse: tick broadcast');
+      logger.debug({ sent, failed, total: _totalCount() }, 'sse: tick broadcast');
     }
   }, PUSH_INTERVAL_MS);
 
   // Heartbeat — keep connections warm through proxies (15s)
   setInterval(() => {
     const payload = `event: heartbeat\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`;
-    for (const conn of connections) {
-      try { conn.res.write(payload); } catch (_) { /* dead */ }
+    for (const set of connectionsByAdmin.values()) {
+      for (const conn of set) {
+        try { conn.res.write(payload); } catch (_) { /* dead */ }
+      }
     }
   }, HEARTBEAT_MS);
 }
@@ -308,8 +371,14 @@ ensureTickerStarted();
 
 // Expose stats for ops/tests
 function _stats() {
+  const perAdmin = {};
+  for (const [openid, set] of connectionsByAdmin.entries()) {
+    perAdmin[openid] = set.size;
+  }
   return {
-    connections: connections.size,
+    connections: _totalCount(),
+    admins: connectionsByAdmin.size,
+    perAdmin,
     lastSnapshotAt: cachedSnapshotAt,
     cacheAgeMs: cachedSnapshotAt ? Date.now() - cachedSnapshotAt : null,
   };
