@@ -1,24 +1,31 @@
 /**
- * R72+R77: Server-Sent Events for dashboard realtime push.
+ * R72+R77+R79: Server-Sent Events for dashboard realtime push.
+ *
+ * R79: Shared snapshot — ONE snapshot generation per tick, broadcast to
+ * all open connections. Without this, N admin tabs × 1 snapshot/10s = N
+ * duplicate DB queries per tick. With 50 connections that's 300 req/min
+ * on dashboard endpoints — wasteful.
+ *
+ * Coalescing:
+ *   - tick interval (default 10s) generates ONE snapshot
+ *   - all registered connections get the same payload
+ *   - if multiple snapshot requests arrive close together, in-flight
+ *     promise is shared (no duplicate fetches)
+ *   - connections are tracked in a Set; dead ones auto-remove on res.close
+ *
+ * Per-connection lifecycle:
+ *   1. Auth middleware (userAuth + adminAuth) — runs first
+ *   2. SSE headers set
+ *   3. Connection added to registry
+ *   4. Initial snapshot written
+ *   5. Subsequent ticks broadcast to this connection
+ *   6. On req.close: connection removed from registry
  *
  * Why SSE not WebSocket:
  *   - One-way (server → client) is all we need
  *   - mp-IDE / WeChat mini-program supports wx.request + onChunkReceived (HTTP chunked)
  *   - No socket lib / no upgrade dance / works through proxies
  *   - Auto-reconnect built into clients
- *
- * Endpoint: GET /api/admin/dashboard/stream
- *   - Headers: text/event-stream, Cache-Control: no-cache, Connection: keep-alive
- *   - Events:
- *       event: dashboard-update
- *       data: {"ts":<unix_ms>,"overview":{...},"cities":{...},"salary":[...],...}
- *
- *   - Heartbeat every 15s:
- *       event: heartbeat
- *       data: {"ts":<unix_ms>}
- *
- * Push cadence: 10s (R77: now pushes ALL sections; mp client can replace
- * polling entirely when SSE is open)
  */
 const express = require('express');
 const router = express.Router();
@@ -26,6 +33,7 @@ const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
 const mysql = require('mysql2/promise');
 const config = require('../../config');
+const logger = require('../../utils/logger');
 
 const streamPool = mysql.createPool({
   host: config.DB.host,
@@ -40,6 +48,138 @@ const streamPool = mysql.createPool({
 
 const PUSH_INTERVAL_MS = 10_000;
 const HEARTBEAT_MS = 15_000;
+const MIN_SNAPSHOT_INTERVAL_MS = 1_000; // coalesce burst requests within this window
+
+// R79: connection registry + shared snapshot cache
+const connections = new Set(); // Set<{ res, id, connectedAt }>
+let cachedSnapshot = null;
+let cachedSnapshotAt = 0;
+let snapshotPromise = null;
+
+async function fetchSnapshot() {
+  const snap = { ts: Date.now() };
+  try {
+    const [[overview]] = await streamPool.query(`
+      SELECT
+        (SELECT COUNT(*) FROM users) AS users,
+        (SELECT COUNT(*) FROM resumes WHERE is_active = 1) AS active_resumes,
+        (SELECT COUNT(*) FROM resumes) AS total_resumes,
+        (SELECT COUNT(*) FROM jobs WHERE is_online = 1 AND is_deleted = 0) AS online_jobs,
+        (SELECT COUNT(*) FROM jobs WHERE is_deleted = 0) AS total_jobs,
+        (SELECT COUNT(*) FROM matches) AS total_matches,
+        (SELECT COUNT(*) FROM matches WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS matches_7d,
+        (SELECT COUNT(*) FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS users_7d,
+        (SELECT COUNT(*) FROM resumes WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS resumes_7d
+    `);
+    snap.overview = overview;
+
+    const [users_city_rows] = await streamPool.query(`
+      SELECT
+        COALESCE(JSON_UNQUOTE(JSON_EXTRACT(source_form, '$.expected.city')), 'unknown') AS city,
+        COUNT(*) AS n
+      FROM resumes
+      WHERE JSON_EXTRACT(source_form, '$.expected.city') IS NOT NULL
+        AND is_active = 1
+      GROUP BY city ORDER BY n DESC LIMIT 30
+    `);
+    const [jobs_city_rows] = await streamPool.query(`
+      SELECT COALESCE(city, 'unknown') AS city, COUNT(*) AS n
+      FROM jobs WHERE is_deleted = 0 AND is_online = 1
+      GROUP BY city ORDER BY n DESC LIMIT 30
+    `);
+    snap.cities = {
+      users_by_city: users_city_rows.slice(0, 10),
+      jobs_by_city: jobs_city_rows.slice(0, 10),
+    };
+
+    const [salary_rows] = await streamPool.query(`
+      SELECT
+        CASE
+          WHEN salary_min < 10000 THEN '<10K'
+          WHEN salary_min < 15000 THEN '10-15K'
+          WHEN salary_min < 20000 THEN '15-20K'
+          WHEN salary_min < 30000 THEN '20-30K'
+          WHEN salary_min < 50000 THEN '30-50K'
+          ELSE '50K+'
+        END AS bucket,
+        COUNT(*) AS n,
+        ROUND(AVG(salary_min)/1000, 1) AS avg_min_k,
+        ROUND(AVG(salary_max)/1000, 1) AS avg_max_k
+      FROM jobs
+      WHERE is_deleted = 0 AND is_online = 1
+      GROUP BY bucket
+      ORDER BY FIELD(bucket, '<10K', '10-15K', '15-20K', '20-30K', '30-50K', '50K+')
+    `);
+    snap.salary = salary_rows;
+
+    const [degree_rows] = await streamPool.query(`
+      SELECT COALESCE(degree_required, '不限') AS bucket, COUNT(*) AS n
+      FROM jobs WHERE is_deleted = 0 AND is_online = 1
+      GROUP BY bucket ORDER BY n DESC
+    `);
+    snap.degree = degree_rows;
+
+    const [users_t] = await streamPool.query(
+      `SELECT DATE(created_at) AS date, COUNT(*) AS n
+       FROM users WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+       GROUP BY DATE(created_at) ORDER BY date`
+    );
+    const [resumes_t] = await streamPool.query(
+      `SELECT DATE(created_at) AS date, COUNT(*) AS n
+       FROM resumes WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+       GROUP BY DATE(created_at) ORDER BY date`
+    );
+    const [matches_t] = await streamPool.query(
+      `SELECT DATE(created_at) AS date, COUNT(*) AS n
+       FROM matches WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
+       GROUP BY DATE(created_at) ORDER BY date`
+    );
+    const byDate = new Map();
+    const setN = (rows, key) => {
+      for (const r of rows) {
+        const k = r.date.toISOString ? r.date.toISOString().slice(0, 10) : String(r.date);
+        const obj = byDate.get(k) || { date: k, users: 0, resumes: 0, matches: 0 };
+        obj[key] = Number(r.n);
+        byDate.set(k, obj);
+      }
+    };
+    setN(users_t, 'users');
+    setN(resumes_t, 'resumes');
+    setN(matches_t, 'matches');
+    snap.trends = Array.from(byDate.values());
+  } catch (e) {
+    snap.error = e.message;
+  }
+  return snap;
+}
+
+/**
+ * R79: get a recent snapshot (cached or in-flight). Coalesces burst requests.
+ */
+async function getSharedSnapshot() {
+  const now = Date.now();
+  // Fresh cache: use it
+  if (cachedSnapshot && now - cachedSnapshotAt < MIN_SNAPSHOT_INTERVAL_MS) {
+    return cachedSnapshot;
+  }
+  // Stale or missing: kick off fetch (or join in-flight)
+  if (snapshotPromise) return snapshotPromise;
+  snapshotPromise = fetchSnapshot()
+    .then((s) => {
+      cachedSnapshot = s;
+      cachedSnapshotAt = Date.now();
+      return s;
+    })
+    .catch((e) => {
+      // Don't poison cache on error
+      logger.warn({ err: e.message }, 'sse snapshot fetch failed');
+      return cachedSnapshot || { ts: Date.now(), error: e.message };
+    })
+    .finally(() => {
+      snapshotPromise = null;
+    });
+  return snapshotPromise;
+}
 
 router.use(userAuth, adminAuth);
 
@@ -52,129 +192,79 @@ router.get('/', async (req, res) => {
   });
   res.flushHeaders && res.flushHeaders();
 
-  let closed = false;
-  req.on('close', () => { closed = true; clearInterval(pushTimer); clearInterval(hbTimer); });
+  const conn = {
+    res,
+    id: Math.random().toString(36).slice(2, 10),
+    connectedAt: Date.now(),
+    openid: (req.user && req.user.openid) || 'unknown',
+  };
+  connections.add(conn);
+  logger.info({ connId: conn.id, openid: conn.openid, total: connections.size }, 'sse: client connected');
 
-  async function fetchSnapshot() {
-    const snap = { ts: Date.now() };
-    try {
-      // 1. overview
-      const [[overview]] = await streamPool.query(`
-        SELECT
-          (SELECT COUNT(*) FROM users) AS users,
-          (SELECT COUNT(*) FROM resumes WHERE is_active = 1) AS active_resumes,
-          (SELECT COUNT(*) FROM resumes) AS total_resumes,
-          (SELECT COUNT(*) FROM jobs WHERE is_online = 1 AND is_deleted = 0) AS online_jobs,
-          (SELECT COUNT(*) FROM jobs WHERE is_deleted = 0) AS total_jobs,
-          (SELECT COUNT(*) FROM matches) AS total_matches,
-          (SELECT COUNT(*) FROM matches WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS matches_7d,
-          (SELECT COUNT(*) FROM users WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS users_7d,
-          (SELECT COUNT(*) FROM resumes WHERE created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS resumes_7d
-      `);
-      snap.overview = overview;
-
-      // 2. cities
-      const [users_city_rows] = await streamPool.query(`
-        SELECT
-          COALESCE(JSON_UNQUOTE(JSON_EXTRACT(source_form, '$.expected.city')), 'unknown') AS city,
-          COUNT(*) AS n
-        FROM resumes
-        WHERE JSON_EXTRACT(source_form, '$.expected.city') IS NOT NULL
-          AND is_active = 1
-        GROUP BY city ORDER BY n DESC LIMIT 30
-      `);
-      const [jobs_city_rows] = await streamPool.query(`
-        SELECT COALESCE(city, 'unknown') AS city, COUNT(*) AS n
-        FROM jobs WHERE is_deleted = 0 AND is_online = 1
-        GROUP BY city ORDER BY n DESC LIMIT 30
-      `);
-      snap.cities = {
-        users_by_city: users_city_rows.slice(0, 10),
-        jobs_by_city: jobs_city_rows.slice(0, 10),
-      };
-
-      // 3. salary
-      const [salary_rows] = await streamPool.query(`
-        SELECT
-          CASE
-            WHEN salary_min < 10000 THEN '<10K'
-            WHEN salary_min < 15000 THEN '10-15K'
-            WHEN salary_min < 20000 THEN '15-20K'
-            WHEN salary_min < 30000 THEN '20-30K'
-            WHEN salary_min < 50000 THEN '30-50K'
-            ELSE '50K+'
-          END AS bucket,
-          COUNT(*) AS n,
-          ROUND(AVG(salary_min)/1000, 1) AS avg_min_k,
-          ROUND(AVG(salary_max)/1000, 1) AS avg_max_k
-        FROM jobs
-        WHERE is_deleted = 0 AND is_online = 1
-        GROUP BY bucket
-        ORDER BY FIELD(bucket, '<10K', '10-15K', '15-20K', '20-30K', '30-50K', '50K+')
-      `);
-      snap.salary = salary_rows;
-
-      // 4. degree
-      const [degree_rows] = await streamPool.query(`
-        SELECT COALESCE(degree_required, '不限') AS bucket, COUNT(*) AS n
-        FROM jobs WHERE is_deleted = 0 AND is_online = 1
-        GROUP BY bucket ORDER BY n DESC
-      `);
-      snap.degree = degree_rows;
-
-      // 5. trends (14d)
-      const [users_t] = await streamPool.query(
-        `SELECT DATE(created_at) AS date, COUNT(*) AS n
-         FROM users WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
-         GROUP BY DATE(created_at) ORDER BY date`
-      );
-      const [resumes_t] = await streamPool.query(
-        `SELECT DATE(created_at) AS date, COUNT(*) AS n
-         FROM resumes WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
-         GROUP BY DATE(created_at) ORDER BY date`
-      );
-      const [matches_t] = await streamPool.query(
-        `SELECT DATE(created_at) AS date, COUNT(*) AS n
-         FROM matches WHERE created_at >= DATE_SUB(CURDATE(), INTERVAL 14 DAY)
-         GROUP BY DATE(created_at) ORDER BY date`
-      );
-      const byDate = new Map();
-      const setN = (rows, key) => {
-        for (const r of rows) {
-          const k = r.date.toISOString ? r.date.toISOString().slice(0, 10) : String(r.date);
-          const obj = byDate.get(k) || { date: k, users: 0, resumes: 0, matches: 0 };
-          obj[key] = Number(r.n);
-          byDate.set(k, obj);
-        }
-      };
-      setN(users_t, 'users');
-      setN(resumes_t, 'resumes');
-      setN(matches_t, 'matches');
-      snap.trends = Array.from(byDate.values());
-    } catch (e) {
-      snap.error = e.message;
-    }
-    return snap;
+  let alive = true;
+  function cleanup() {
+    if (!alive) return;
+    alive = false;
+    connections.delete(conn);
+    logger.info({ connId: conn.id, total: connections.size }, 'sse: client disconnected');
   }
+  req.on('close', cleanup);
+  req.on('error', cleanup);
 
-  // initial snapshot
-  const initial = await fetchSnapshot();
-  res.write(`event: dashboard-update\ndata: ${JSON.stringify(initial)}\n\n`);
+  // initial snapshot (uses shared cache → coalesces if many connect at once)
+  try {
+    const snap = await getSharedSnapshot();
+    res.write(`event: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`);
+  } catch (e) {
+    res.write(`event: error\ndata: ${JSON.stringify({ err: e.message })}\n\n`);
+  }
+});
 
-  const pushTimer = setInterval(async () => {
-    if (closed) return;
-    try {
-      const snap = await fetchSnapshot();
-      res.write(`event: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`);
-    } catch (e) {
-      res.write(`event: error\ndata: ${JSON.stringify({ err: e.message })}\n\n`);
+// R79: single ticker — broadcast cached snapshot to all connections.
+// Runs continuously regardless of connection count (cheap when 0 conn).
+let tickerStarted = false;
+function ensureTickerStarted() {
+  if (tickerStarted) return;
+  tickerStarted = true;
+
+  setInterval(async () => {
+    if (connections.size === 0) return; // skip DB when no listeners
+    const snap = await getSharedSnapshot();
+    const payload = `event: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`;
+    let sent = 0;
+    let failed = 0;
+    for (const conn of connections) {
+      try {
+        conn.res.write(payload);
+        sent += 1;
+      } catch (e) {
+        failed += 1;
+        // Dead connection — let 'close' handler clean it up
+      }
+    }
+    if (sent > 0 || failed > 0) {
+      logger.debug({ sent, failed, total: connections.size }, 'sse: tick broadcast');
     }
   }, PUSH_INTERVAL_MS);
 
-  const hbTimer = setInterval(() => {
-    if (closed) return;
-    res.write(`event: heartbeat\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`);
+  // Heartbeat — keep connections warm through proxies (15s)
+  setInterval(() => {
+    const payload = `event: heartbeat\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`;
+    for (const conn of connections) {
+      try { conn.res.write(payload); } catch (_) { /* dead */ }
+    }
   }, HEARTBEAT_MS);
-});
+}
+ensureTickerStarted();
+
+// Expose stats for ops/tests
+function _stats() {
+  return {
+    connections: connections.size,
+    lastSnapshotAt: cachedSnapshotAt,
+    cacheAgeMs: cachedSnapshotAt ? Date.now() - cachedSnapshotAt : null,
+  };
+}
 
 module.exports = router;
+module.exports._stats = _stats;
