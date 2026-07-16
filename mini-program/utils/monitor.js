@@ -11,7 +11,7 @@ function reportClientError(type, err, extra = {}) {
   try {
     const message = (err && (err.message || err.errMsg)) || String(err);
     const stack = (err && err.stack) || '';
-    const platform = (wx.getSystemInfoSync && wx.getSystemInfoSync().platform) || '';
+    const platform = (wx.getDeviceInfo && wx.getDeviceInfo().platform) || '';
     let version = '';
     try {
       const info = (wx.getAccountInfoSync && wx.getAccountInfoSync()) || {};

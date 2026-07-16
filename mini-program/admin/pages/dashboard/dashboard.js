@@ -32,7 +32,10 @@ Page({
   _sseAbort: null,
 
   onLoad() {
-    const sys = wx.getSystemInfoSync();
+    // R91: getSystemInfoSync deprecated → use getWindowInfo for size + getDeviceInfo for platform
+    const win = (wx.getWindowInfo && wx.getWindowInfo()) || {};
+    const dev = (wx.getDeviceInfo && wx.getDeviceInfo()) || {};
+    const sys = { ...win, ...dev };
     // 全屏判定: 屏幕宽 ≥ 1024 = 横屏平板/PC/电视墙
     const wide = (sys.windowWidth || sys.screenWidth || 0) >= FULLSCREEN_MIN_WIDTH;
     this.setData({ fullscreenAvailable: wide });

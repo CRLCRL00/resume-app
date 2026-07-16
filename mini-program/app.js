@@ -55,8 +55,8 @@ App({
       return;
     }
 
-    if (typeof wx.getSystemInfoSync === 'function') {
-      const info = wx.getSystemInfoSync();
+    if (typeof wx.getDeviceInfo === 'function') {
+      const info = wx.getDeviceInfo();
       if (info.platform === 'devtools') return;
     }
 
