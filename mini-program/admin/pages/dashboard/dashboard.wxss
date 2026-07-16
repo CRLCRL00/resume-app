@@ -54,6 +54,34 @@
   z-index: 10;
 }
 
+/* R68: CSV export buttons */
+.fs-export-btn, .cp-export-btn {
+  color: #fff;
+  background: linear-gradient(135deg, #2d7df7, #5cb6ff);
+  border: 1rpx solid rgba(92, 182, 255, .6);
+  border-radius: 8rpx;
+  font-weight: 600;
+}
+.fs-export-btn {
+  font-size: 26rpx;
+  padding: 10rpx 24rpx;
+  margin-right: 24rpx;
+}
+.cp-export-row {
+  display: flex;
+  justify-content: flex-end;
+  padding: 16rpx 0 0;
+}
+.cp-export-btn {
+  font-size: 26rpx;
+  padding: 12rpx 28rpx;
+}
+.dashboard--fullscreen .fs-export-btn {
+  font-size: 30rpx;
+  padding: 14rpx 32rpx;
+  margin-right: 32rpx;
+}
+
 /* R58: fullscreen 内容放大 — 主区用 flex:1 自适应填充 */
 .dashboard--fullscreen .kpi-row {
   flex: 0 0 auto;

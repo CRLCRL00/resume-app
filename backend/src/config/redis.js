@@ -1,5 +1,6 @@
 const Redis = require('ioredis');
 const config = require('./index');
+const logger = require('../utils/logger');
 
 function createRedis() {
   return new Redis({
@@ -15,8 +16,9 @@ function createRedis() {
 const defaultRedis = createRedis();
 
 defaultRedis.on('error', (err) => {
-  // eslint-disable-next-line no-console
-  console.error('[redis] error:', err.message);
+  // R65: route through structured logger (was console.error — pm2 captured it
+  // but it bypassed our pino format + missing service tag)
+  logger.error({ component: 'redis', err: err.message }, 'redis error');
 });
 
 module.exports = defaultRedis;

@@ -3,7 +3,13 @@
   <view wx:if="{{mode === 'fullscreen'}}" class="fs-header">
     <view class="fs-title">简历推荐 · 实时业务大屏</view>
     <view class="fs-time">{{currentTime}}</view>
-    <view class="fs-exit" bindtap="toggleFullscreen">退出全屏</view>
+    <view class="fs-export-btn" bindtap="onExportTap">导出</view>
+    <view class="fs-exit" bindtap="toggleFullscreen">退出</view>
+  </view>
+
+  <!-- R68: compact mode export row -->
+  <view wx:if="{{mode === 'compact'}}" class="cp-export-row">
+    <view class="cp-export-btn" bindtap="onExportTap">📥 导出 CSV</view>
   </view>
 
   <!-- R58: compact-only toggle (top-right) when device supports fullscreen -->

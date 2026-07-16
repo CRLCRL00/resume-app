@@ -2,9 +2,10 @@
  * joiToOpenApi: convert a Joi 17 schema (or its describe()) into OpenAPI 3.0 schema JSON.
  *
  * Self-contained — no deps. Drives off schema.describe() so we don't peek at internals.
- * On any unhandled construct, falls back to {} (with console.warn).
+ * On any unhandled construct, falls back to {} (with logger.warn).
  */
 
+const logger = require('../utils/logger');
 const FLAG_CHARS = new Set(['u', 'i', 'm', 's']);
 
 function extractRegex(rule) {
@@ -41,11 +42,11 @@ function convertDescribed(node) {
       case 'date': return { type: 'string', format: 'date-time' };
       case 'binary': return { type: 'string', format: 'binary' };
       default:
-        console.warn(`joiToOpenApi: unhandled type ${t}, falling back to {}`);
+        logger.warn({ joiType: t }, 'joiToOpenApi: unhandled type, falling back to {}');
         return {};
     }
   } catch (err) {
-    console.warn(`joiToOpenApi: error converting type ${t}:`, err.message);
+    logger.warn({ joiType: t, err: err.message }, 'joiToOpenApi: error converting type');
     return {};
   }
 }

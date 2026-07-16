@@ -39,9 +39,27 @@ Page({
     } else {
       this.loadAll();
     }
+    // R67: re-evaluate mode when user rotates device or resizes window
+    // (tablet/PC users especially flip landscape ↔ portrait)
+    try {
+      wx.onWindowResize((res) => {
+        const w = (res && res.windowWidth) || sys.windowWidth || 0;
+        const shouldFs = w >= FULLSCREEN_MIN_WIDTH;
+        const currentMode = this.data.mode;
+        // Only switch on transitions, not every pixel change
+        if (shouldFs && currentMode !== 'fullscreen') {
+          this.enterFullscreen();
+        } else if (!shouldFs && currentMode === 'fullscreen') {
+          this.exitFullscreen();
+        }
+      });
+    } catch (e) {
+      // onWindowResize may not exist on older mp runtimes — fail silent
+    }
   },
 
   onUnload() {
+    try { wx.offWindowResize && wx.offWindowResize(); } catch (e) {}
     this._clearTimers();
   },
 
@@ -171,4 +189,60 @@ Page({
   },
 
   goJobs() { wx.navigateTo({ url: '/admin/pages/jobs/list' }); },
+
+  // R68: CSV export — show action sheet to pick section, then call backend,
+  // copy temp file URL for user to share / open with Excel.
+  onExportTap() {
+    wx.showActionSheet({
+      itemList: ['总览 (overview)', '城市 (cities)', '薪资 (salary)', '学历 (degree)', '趋势 (trends)'],
+      success: (res) => {
+        const types = ['overview', 'cities', 'salary', 'degree', 'trends'];
+        const type = types[res.tapIndex];
+        if (type) this._exportCsv(type);
+      },
+    });
+  },
+
+  async _exportCsv(type) {
+    wx.showLoading({ title: '生成中…' });
+    try {
+      const { request } = require('../../../utils/request');
+      // request() expects JSON; for CSV we hit the URL directly via downloadFile.
+      const { apiBaseUrl } = require('../../../src/config');
+      const token = (function () {
+        try { return require('../../../utils/auth').getToken(); } catch (_) { return ''; }
+      })();
+      const url = `${apiBaseUrl}/api/admin/dashboard/export?type=${type}`;
+      // Download via wx.downloadFile (returns temp file path)
+      const dl = await new Promise((resolve, reject) => {
+        wx.downloadFile({
+          url,
+          header: token ? { Authorization: `Bearer ${token}` } : {},
+          success: resolve,
+          fail: reject,
+        });
+      });
+      wx.hideLoading();
+      if (dl.statusCode !== 200) {
+        wx.showToast({ title: `导出失败 (${dl.statusCode})`, icon: 'none' });
+        return;
+      }
+      wx.showModal({
+        title: '已导出',
+        content: 'CSV 已下载。可点击"打开"用 Excel 查看。',
+        confirmText: '打开',
+        cancelText: '复制路径',
+        success: (m) => {
+          if (m.confirm) {
+            wx.openDocument({ filePath: dl.tempFilePath, fileType: 'csv', showMenu: true });
+          } else if (m.cancel) {
+            wx.setClipboardData({ data: dl.tempFilePath });
+          }
+        },
+      });
+    } catch (e) {
+      wx.hideLoading();
+      wx.showToast({ title: '导出失败: ' + (e.errMsg || e.message || ''), icon: 'none' });
+    }
+  },
 });
