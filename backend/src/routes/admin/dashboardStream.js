@@ -32,6 +32,7 @@ const router = express.Router();
 const { userAuth } = require('../../middleware/auth');
 const { adminAuth } = require('../../middleware/adminAuth');
 const mysql = require('mysql2/promise');
+const client = require('prom-client');
 const config = require('../../config');
 const logger = require('../../utils/logger');
 
@@ -50,6 +51,44 @@ const PUSH_INTERVAL_MS = 10_000;
 const HEARTBEAT_MS = 15_000;
 const MIN_SNAPSHOT_INTERVAL_MS = 1_000; // coalesce burst requests within this window
 
+// R80: prom metrics for SSE observability. Singleton via globalThis to
+// avoid double-register in require cycles (same pattern as metrics.js).
+const sseActiveConnections = globalThis.__sseActiveConnections
+  || new client.Gauge({
+    name: 'sse_active_connections',
+    help: 'Current number of open SSE connections',
+  });
+globalThis.__sseActiveConnections = sseActiveConnections;
+
+const sseConnectionsTotal = globalThis.__sseConnectionsTotal
+  || new client.Counter({
+    name: 'sse_connections_total',
+    help: 'Total SSE connections accepted (lifetime)',
+  });
+globalThis.__sseConnectionsTotal = sseConnectionsTotal;
+
+const sseSnapshotsTotal = globalThis.__sseSnapshotsTotal
+  || new client.Counter({
+    name: 'sse_snapshots_total',
+    help: 'Dashboard snapshot generations (after coalesce)',
+  });
+globalThis.__sseSnapshotsTotal = sseSnapshotsTotal;
+
+const sseSnapshotDuration = globalThis.__sseSnapshotDuration
+  || new client.Histogram({
+    name: 'sse_snapshot_duration_seconds',
+    help: 'Duration of one snapshot generation (DB queries)',
+    buckets: [0.01, 0.05, 0.1, 0.25, 0.5, 1, 2.5, 5],
+  });
+globalThis.__sseSnapshotDuration = sseSnapshotDuration;
+
+const sseCacheAge = globalThis.__sseCacheAge
+  || new client.Gauge({
+    name: 'sse_cache_age_seconds',
+    help: 'Age of the latest shared snapshot',
+  });
+globalThis.__sseCacheAge = sseCacheAge;
+
 // R79: connection registry + shared snapshot cache
 const connections = new Set(); // Set<{ res, id, connectedAt }>
 let cachedSnapshot = null;
@@ -57,6 +96,7 @@ let cachedSnapshotAt = 0;
 let snapshotPromise = null;
 
 async function fetchSnapshot() {
+  const t0 = Date.now();
   const snap = { ts: Date.now() };
   try {
     const [[overview]] = await streamPool.query(`
@@ -150,6 +190,8 @@ async function fetchSnapshot() {
   } catch (e) {
     snap.error = e.message;
   }
+  // R80: record snapshot duration
+  sseSnapshotDuration.observe((Date.now() - t0) / 1000);
   return snap;
 }
 
@@ -160,6 +202,7 @@ async function getSharedSnapshot() {
   const now = Date.now();
   // Fresh cache: use it
   if (cachedSnapshot && now - cachedSnapshotAt < MIN_SNAPSHOT_INTERVAL_MS) {
+    sseCacheAge.set((now - cachedSnapshotAt) / 1000);
     return cachedSnapshot;
   }
   // Stale or missing: kick off fetch (or join in-flight)
@@ -168,6 +211,8 @@ async function getSharedSnapshot() {
     .then((s) => {
       cachedSnapshot = s;
       cachedSnapshotAt = Date.now();
+      sseSnapshotsTotal.inc();
+      sseCacheAge.set(0);
       return s;
     })
     .catch((e) => {
@@ -199,6 +244,9 @@ router.get('/', async (req, res) => {
     openid: (req.user && req.user.openid) || 'unknown',
   };
   connections.add(conn);
+  // R80: metrics on connect/disconnect
+  sseActiveConnections.set(connections.size);
+  sseConnectionsTotal.inc();
   logger.info({ connId: conn.id, openid: conn.openid, total: connections.size }, 'sse: client connected');
 
   let alive = true;
@@ -206,6 +254,7 @@ router.get('/', async (req, res) => {
     if (!alive) return;
     alive = false;
     connections.delete(conn);
+    sseActiveConnections.set(connections.size);
     logger.info({ connId: conn.id, total: connections.size }, 'sse: client disconnected');
   }
   req.on('close', cleanup);
