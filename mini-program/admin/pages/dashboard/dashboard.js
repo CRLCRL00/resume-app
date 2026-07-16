@@ -24,10 +24,12 @@ Page({
     fullscreenAvailable: false, // device wide enough to support fullscreen
     currentTime: '',            // HH:MM:SS for fs header
     showFullscreenHint: true,   // small toggle btn in compact mode
+    sseStatus: 'idle',          // R76: 'idle' | 'connecting' | 'open' | 'closed'
   },
 
   _refreshTimer: null,
   _clockTimer: null,
+  _sseAbort: null,
 
   onLoad() {
     const sys = wx.getSystemInfoSync();
@@ -61,6 +63,7 @@ Page({
   onUnload() {
     try { wx.offWindowResize && wx.offWindowResize(); } catch (e) {}
     this._clearTimers();
+    this._stopSse();
   },
 
   onPullDownRefresh() {
@@ -84,12 +87,14 @@ Page({
     this._clockTimer = setInterval(() => this._tickTime(), 1000);
     this.loadAll().then(() => {
       this._startAutoRefresh();
+      this._startSse();
     });
   },
 
   exitFullscreen() {
     this.setData({ mode: 'compact' });
     this._clearTimers();
+    this._stopSse();
     try {
       wx.setPageOrientation({ orientation: 'portrait' });
     } catch (e) { /* keep current orientation */ }
@@ -123,6 +128,56 @@ Page({
   _clearTimers() {
     if (this._refreshTimer) { clearInterval(this._refreshTimer); this._refreshTimer = null; }
     if (this._clockTimer)   { clearInterval(this._clockTimer);   this._clockTimer = null; }
+  },
+
+  // ---- R76: SSE ----
+
+  _startSse() {
+    this._stopSse();
+    try {
+      const { sseConnect } = require('../../../utils/sseClient');
+      const { apiBaseUrl } = require('../../../src/config');
+      const token = (function () {
+        try { return require('../../../utils/auth').getToken(); } catch (_) { return ''; }
+      })();
+      this.setData({ sseStatus: 'connecting' });
+      this._sseAbort = sseConnect(`${apiBaseUrl}/api/admin/dashboard/stream`, {
+        headers: token ? { Authorization: `Bearer ${token}` } : {},
+        onEvent: (e) => this._onSseEvent(e),
+        onError: () => {
+          this.setData({ sseStatus: 'closed' });
+          // keep 30s polling as fallback; auto-reconnect after 10s
+          setTimeout(() => {
+            if (this.data.mode === 'fullscreen' && !this._sseAbort?.closed) {
+              this._startSse();
+            }
+          }, 10_000).unref && setTimeout(() => {}, 0);
+          // Plain setTimeout in mp context — rely on outer 30s polling instead
+        },
+        onClose: () => {
+          this.setData({ sseStatus: 'closed' });
+        },
+      });
+      this.setData({ sseStatus: 'open' });
+    } catch (e) {
+      this.setData({ sseStatus: 'closed' });
+    }
+  },
+
+  _stopSse() {
+    if (this._sseAbort) {
+      try { this._sseAbort.abort(); } catch (_) {}
+      this._sseAbort = null;
+    }
+    this.setData({ sseStatus: 'idle' });
+  },
+
+  _onSseEvent(e) {
+    if (e.event === 'dashboard-update' && e.data && e.data.overview) {
+      // SSE only pushes overview (lightweight); other sections refresh via 30s polling
+      this.setData({ overview: e.data.overview });
+    }
+    // heartbeat / error / other events: ignore
   },
 
   // ---- data loading ----
