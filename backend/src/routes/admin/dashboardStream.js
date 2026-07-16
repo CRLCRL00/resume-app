@@ -98,12 +98,40 @@ const sseRejectedConnections = globalThis.__sseRejectedConnections
   });
 globalThis.__sseRejectedConnections = sseRejectedConnections;
 
+// R83: total events replayed on connect with Last-Event-ID
+const sseReplayedTotal = globalThis.__sseReplayedTotal
+  || new client.Counter({
+    name: 'sse_replayed_events_total',
+    help: 'Total events replayed on reconnect with Last-Event-ID',
+  });
+globalThis.__sseReplayedTotal = sseReplayedTotal;
+
 // R82: monotonically-increasing event id (process-local). Each event sent to
 // clients includes `id: <n>` so they can reconnect with `Last-Event-ID` header
 // and resume from where they left off. The header value is captured on
 // connect (logged + exposed via _stats for ops debug).
 let _eventId = 0;
 function nextEventId() { return ++_eventId; }
+
+// R83: ring buffer of recent events for resume. On reconnect with a valid
+// Last-Event-ID, replay all events with id > Last-Event-ID before streaming
+// live. Buffer cap = 100 events ≈ ~16 min at 10s tick + 15s heartbeats.
+// Beyond that, resume silently fails — client gets current snapshot instead.
+const REPLAY_BUFFER_SIZE = 100;
+const replayBuffer = []; // [{id, event, data, ts}] in id order (oldest first)
+function bufferEvent(id, event, data, ts) {
+  replayBuffer.push({ id, event, data, ts });
+  if (replayBuffer.length > REPLAY_BUFFER_SIZE) {
+    replayBuffer.splice(0, replayBuffer.length - REPLAY_BUFFER_SIZE);
+  }
+}
+function getReplaySince(lastEventId) {
+  const id = Number(lastEventId);
+  if (!Number.isFinite(id)) return [];
+  // replayBuffer may contain events with id < id (if buffer rotated past it);
+  // in that case return empty (client too stale) and caller can still send current snapshot.
+  return replayBuffer.filter((e) => e.id > id);
+}
 
 // R79+R81: connection registry indexed by admin openid. Map<openid, Set<conn>>
 // so we can enforce per-admin cap and quickly count active conns per admin.
@@ -290,12 +318,25 @@ router.get('/', async (req, res) => {
     lastEventId: req.headers['last-event-id'] || null, // R82
   };
 
-  // R82: log Last-Event-ID on connect (resume from previous session)
+  // R82+R83: replay missed events since lastEventId
   if (conn.lastEventId) {
+    const replay = getReplaySince(conn.lastEventId);
+    sseReplayedTotal.inc(replay.length);
     logger.info(
-      { connId: conn.id, openid: conn.openid, lastEventId: conn.lastEventId },
-      'sse: client resumed with Last-Event-ID'
+      {
+        connId: conn.id,
+        openid: conn.openid,
+        lastEventId: conn.lastEventId,
+        replayEvents: replay.length,
+      },
+      replay.length ? 'sse: replaying missed events' : 'sse: client too stale for replay'
     );
+    for (const e of replay) {
+      try {
+        res.write(`id: ${e.id}\nevent: ${e.event}\ndata: ${JSON.stringify(e.data)}\n\n`);
+      } catch (_) { /* dead conn, let close handler clean */ }
+    }
+    // If buffer empty (or replayed all), still continue to initial snapshot below
   }
 
   // R81: enforce per-admin cap before committing resources
@@ -338,9 +379,13 @@ router.get('/', async (req, res) => {
   // initial snapshot (uses shared cache → coalesces if many connect at once)
   try {
     const snap = await getSharedSnapshot();
-    res.write(`id: ${nextEventId()}\nevent: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`);
+    const eid = nextEventId();
+    res.write(`id: ${eid}\nevent: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`);
+    bufferEvent(eid, 'dashboard-update', snap, Date.now());
   } catch (e) {
-    res.write(`id: ${nextEventId()}\nevent: error\ndata: ${JSON.stringify({ err: e.message })}\n\n`);
+    const eid = nextEventId();
+    res.write(`id: ${eid}\nevent: error\ndata: ${JSON.stringify({ err: e.message })}\n\n`);
+    bufferEvent(eid, 'error', { err: e.message }, Date.now());
   }
 });
 
@@ -356,6 +401,7 @@ function ensureTickerStarted() {
     const snap = await getSharedSnapshot();
     const eid = nextEventId();
     const payload = `id: ${eid}\nevent: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`;
+    bufferEvent(eid, 'dashboard-update', snap, Date.now());
     let sent = 0;
     let failed = 0;
     for (const set of connectionsByAdmin.values()) {
@@ -376,7 +422,9 @@ function ensureTickerStarted() {
 
   // Heartbeat — keep connections warm through proxies (15s)
   setInterval(() => {
-    const payload = `id: ${nextEventId()}\nevent: heartbeat\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`;
+    const eid = nextEventId();
+    const payload = `id: ${eid}\nevent: heartbeat\ndata: ${JSON.stringify({ ts: eid })}\n\n`;
+    bufferEvent(eid, 'heartbeat', { ts: eid }, Date.now());
     for (const set of connectionsByAdmin.values()) {
       for (const conn of set) {
         try { conn.res.write(payload); } catch (_) { /* dead */ }
@@ -399,8 +447,17 @@ function _stats() {
     lastSnapshotAt: cachedSnapshotAt,
     cacheAgeMs: cachedSnapshotAt ? Date.now() - cachedSnapshotAt : null,
     nextEventId: _eventId,
+    replayBufferSize: replayBuffer.length,
+    replayBufferCapacity: REPLAY_BUFFER_SIZE,
   };
 }
 
 module.exports = router;
 module.exports._stats = _stats;
+// R83: expose buffer helpers for ops/tests (read-only)
+module.exports._buffer = {
+  size: () => replayBuffer.length,
+  capacity: REPLAY_BUFFER_SIZE,
+  oldest: () => replayBuffer[0] || null,
+  newest: () => replayBuffer[replayBuffer.length - 1] || null,
+};
