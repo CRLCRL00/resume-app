@@ -37,6 +37,7 @@ function parseEvent(raw, onEvent) {
   let eventName = 'message';
   const dataLines = [];
   let hasDataField = false;
+  let eventId = null;
   for (const line of raw.split('\n')) {
     if (!line || line.startsWith(':')) continue; // empty / SSE comment
     const ci = line.indexOf(':');
@@ -49,7 +50,8 @@ function parseEvent(raw, onEvent) {
       hasDataField = true;
       dataLines.push(value);
     }
-    // ignore id:, retry:, others
+    else if (field === 'id') eventId = value; // R82
+    // ignore retry:, others
   }
   // SSE spec: an event with no data field is a no-op (don't dispatch).
   // Empty-string data still counts as a field present.
@@ -57,7 +59,7 @@ function parseEvent(raw, onEvent) {
   const dataStr = dataLines.join('\n');
   let data = dataStr;
   try { data = JSON.parse(dataStr); } catch (_) { /* keep as string */ }
-  try { onEvent && onEvent({ event: eventName, data, raw: dataStr }); } catch (_) { /* consumer best-effort */ }
+  try { onEvent && onEvent({ event: eventName, data, raw: dataStr, id: eventId }); } catch (_) { /* consumer best-effort */ }
 }
 
 /**
@@ -72,15 +74,19 @@ function parseEvent(raw, onEvent) {
  * @returns {{ abort: () => void, closed: boolean }}
  */
 function sseConnect(url, opts = {}) {
-  const { headers = {}, onEvent, onError, onClose, timeoutMs = 0 } = opts;
-  const state = { buffer: '', closed: false };
+  const { headers = {}, onEvent, onError, onClose, timeoutMs = 0, lastEventId = null } = opts;
+  const state = { buffer: '', closed: false, lastEventId: null };
   let requestTask = null;
+
+  const reqHeaders = { ...headers };
+  // R82: include Last-Event-ID header on (re)connect so server can resume
+  if (lastEventId) reqHeaders['Last-Event-ID'] = String(lastEventId);
 
   try {
     requestTask = wx.request({
       url,
       method: 'GET',
-      header: headers,
+      header: reqHeaders,
       enableChunked: true,
       responseType: 'text',
       timeout: timeoutMs || 600000, // mp max ~ 600s default safety; SSE should reset via noop
@@ -103,7 +109,11 @@ function sseConnect(url, opts = {}) {
         while ((idx = state.buffer.indexOf('\n\n')) !== -1) {
           const rawEvent = state.buffer.slice(0, idx);
           state.buffer = state.buffer.slice(idx + 2);
-          parseEvent(rawEvent, onEvent);
+          // R82: capture lastEventId from each event for resume
+          parseEvent(rawEvent, (e) => {
+            if (e.id) state.lastEventId = e.id;
+            if (onEvent) onEvent(e);
+          });
         }
       } catch (e) {
         // best-effort: keep going on parse error
@@ -121,6 +131,7 @@ function sseConnect(url, opts = {}) {
       try { requestTask && requestTask.abort && requestTask.abort(); } catch (_) {}
     },
     get closed() { return state.closed; },
+    get lastEventId() { return state.lastEventId; }, // R82: expose for resume
   };
 }
 
@@ -152,6 +163,8 @@ function sseConnectWithRetry(url, opts = {}) {
   let stopped = false;
   let current = null;
   let reconnectTimer = null;
+  // R82: preserve lastEventId across reconnects
+  let preservedLastEventId = null;
 
   function connect() {
     if (stopped) return;
@@ -159,7 +172,12 @@ function sseConnectWithRetry(url, opts = {}) {
     onStatus && onStatus('connecting', attempt);
     current = sseConnect(url, {
       ...sseOpts,
+      lastEventId: preservedLastEventId, // R82
       onClose: () => {
+        // Capture lastEventId BEFORE clearing the connection
+        if (current && current.lastEventId) {
+          preservedLastEventId = current.lastEventId;
+        }
         sseOpts.onClose && sseOpts.onClose();
         if (stopped) return;
         if (shouldReconnect && !shouldReconnect()) {
@@ -173,6 +191,9 @@ function sseConnectWithRetry(url, opts = {}) {
         scheduleReconnect();
       },
       onError: (err) => {
+        if (current && current.lastEventId) {
+          preservedLastEventId = current.lastEventId;
+        }
         sseOpts.onError && sseOpts.onError(err);
         if (stopped) return;
         if (shouldReconnect && !shouldReconnect()) {
@@ -210,6 +231,7 @@ function sseConnectWithRetry(url, opts = {}) {
     },
     get attempt() { return attempt; },
     get stopped() { return stopped; },
+    get lastEventId() { return preservedLastEventId || (current && current.lastEventId); }, // R82
   };
 }
 

@@ -98,6 +98,13 @@ const sseRejectedConnections = globalThis.__sseRejectedConnections
   });
 globalThis.__sseRejectedConnections = sseRejectedConnections;
 
+// R82: monotonically-increasing event id (process-local). Each event sent to
+// clients includes `id: <n>` so they can reconnect with `Last-Event-ID` header
+// and resume from where they left off. The header value is captured on
+// connect (logged + exposed via _stats for ops debug).
+let _eventId = 0;
+function nextEventId() { return ++_eventId; }
+
 // R79+R81: connection registry indexed by admin openid. Map<openid, Set<conn>>
 // so we can enforce per-admin cap and quickly count active conns per admin.
 const connectionsByAdmin = new Map(); // openid → Set<{ res, id, openid, connectedAt }>
@@ -280,7 +287,16 @@ router.get('/', async (req, res) => {
     id: Math.random().toString(36).slice(2, 10),
     connectedAt: Date.now(),
     openid: (req.user && req.user.openid) || 'unknown',
+    lastEventId: req.headers['last-event-id'] || null, // R82
   };
+
+  // R82: log Last-Event-ID on connect (resume from previous session)
+  if (conn.lastEventId) {
+    logger.info(
+      { connId: conn.id, openid: conn.openid, lastEventId: conn.lastEventId },
+      'sse: client resumed with Last-Event-ID'
+    );
+  }
 
   // R81: enforce per-admin cap before committing resources
   const current = _connCount(conn.openid);
@@ -322,9 +338,9 @@ router.get('/', async (req, res) => {
   // initial snapshot (uses shared cache → coalesces if many connect at once)
   try {
     const snap = await getSharedSnapshot();
-    res.write(`event: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`);
+    res.write(`id: ${nextEventId()}\nevent: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`);
   } catch (e) {
-    res.write(`event: error\ndata: ${JSON.stringify({ err: e.message })}\n\n`);
+    res.write(`id: ${nextEventId()}\nevent: error\ndata: ${JSON.stringify({ err: e.message })}\n\n`);
   }
 });
 
@@ -338,7 +354,8 @@ function ensureTickerStarted() {
   setInterval(async () => {
     if (_totalCount() === 0) return; // skip DB when no listeners
     const snap = await getSharedSnapshot();
-    const payload = `event: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`;
+    const eid = nextEventId();
+    const payload = `id: ${eid}\nevent: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`;
     let sent = 0;
     let failed = 0;
     for (const set of connectionsByAdmin.values()) {
@@ -353,13 +370,13 @@ function ensureTickerStarted() {
       }
     }
     if (sent > 0 || failed > 0) {
-      logger.debug({ sent, failed, total: _totalCount() }, 'sse: tick broadcast');
+      logger.debug({ sent, failed, total: _totalCount(), eventId: eid }, 'sse: tick broadcast');
     }
   }, PUSH_INTERVAL_MS);
 
   // Heartbeat — keep connections warm through proxies (15s)
   setInterval(() => {
-    const payload = `event: heartbeat\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`;
+    const payload = `id: ${nextEventId()}\nevent: heartbeat\ndata: ${JSON.stringify({ ts: Date.now() })}\n\n`;
     for (const set of connectionsByAdmin.values()) {
       for (const conn of set) {
         try { conn.res.write(payload); } catch (_) { /* dead */ }
@@ -381,6 +398,7 @@ function _stats() {
     perAdmin,
     lastSnapshotAt: cachedSnapshotAt,
     cacheAgeMs: cachedSnapshotAt ? Date.now() - cachedSnapshotAt : null,
+    nextEventId: _eventId,
   };
 }
 

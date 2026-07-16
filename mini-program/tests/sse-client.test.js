@@ -94,6 +94,29 @@ test('parseEvent: blank line in middle is event separator', () => {
   assert.equal(events[1].event, 'b');
 });
 
+// ---- R82: id field ----
+
+test('parseEvent: id field captured', () => {
+  const events = [];
+  parseEvent('id: 42\nevent: dashboard-update\ndata: {"users":5}', (e) => events.push(e));
+  assert.equal(events.length, 1);
+  assert.equal(events[0].id, '42');
+  assert.equal(events[0].event, 'dashboard-update');
+  assert.deepEqual(events[0].data, { users: 5 });
+});
+
+test('parseEvent: no id field → id is null', () => {
+  const events = [];
+  parseEvent('event: ping\ndata: ok', (e) => events.push(e));
+  assert.equal(events[0].id, null);
+});
+
+test('parseEvent: id field without data is no-op (per spec)', () => {
+  const events = [];
+  parseEvent('id: 99', (e) => events.push(e));
+  assert.equal(events.length, 0);
+});
+
 // ---- R78: sseConnectWithRetry backoff calculation ----
 // (We can't test the actual reconnect without mocking wx; just verify
 // the exponential backoff math via the public API surface.)
