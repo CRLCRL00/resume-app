@@ -107,12 +107,14 @@ const sseReplayedTotal = globalThis.__sseReplayedTotal
   });
 globalThis.__sseReplayedTotal = sseReplayedTotal;
 
-// R82: monotonically-increasing event id (process-local). Each event sent to
-// clients includes `id: <n>` so they can reconnect with `Last-Event-ID` header
-// and resume from where they left off. The header value is captured on
-// connect (logged + exposed via _stats for ops debug).
-let _eventId = 0;
-function nextEventId() { return ++_eventId; }
+// R82+R85: monotonically-increasing event id. Was process-local (R82), now
+// Redis INCR (R85) for multi-pod safety. Each event includes `id: <n>` so
+// clients can reconnect with `Last-Event-ID` header and resume from where
+// they left off. The header value is captured on connect (logged + exposed
+// via _stats for ops debug).
+async function nextEventId() {
+  return replayStore.nextEventId();
+}
 
 // R84: persistent replay buffer (Redis LIST). Replaces R83 in-memory ring.
 // Survives backend restart so client reconnect after pm2 restart still works.
@@ -371,11 +373,11 @@ router.get('/', async (req, res) => {
   // initial snapshot (uses shared cache → coalesces if many connect at once)
   try {
     const snap = await getSharedSnapshot();
-    const eid = nextEventId();
+    const eid = await nextEventId();
     res.write(`id: ${eid}\nevent: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`);
     bufferEvent(eid, 'dashboard-update', snap, Date.now());
   } catch (e) {
-    const eid = nextEventId();
+    const eid = await nextEventId();
     res.write(`id: ${eid}\nevent: error\ndata: ${JSON.stringify(e.data || e.message)}\n\n`);
     bufferEvent(eid, 'error', { err: e.message }, Date.now());
   }
@@ -391,7 +393,7 @@ function ensureTickerStarted() {
   setInterval(async () => {
     if (_totalCount() === 0) return; // skip DB when no listeners
     const snap = await getSharedSnapshot();
-    const eid = nextEventId();
+    const eid = await nextEventId();
     const payload = `id: ${eid}\nevent: dashboard-update\ndata: ${JSON.stringify(snap)}\n\n`;
     bufferEvent(eid, 'dashboard-update', snap, Date.now());
     let sent = 0;
@@ -413,8 +415,8 @@ function ensureTickerStarted() {
   }, PUSH_INTERVAL_MS);
 
   // Heartbeat — keep connections warm through proxies (15s)
-  setInterval(() => {
-    const eid = nextEventId();
+  setInterval(async () => {
+    const eid = await nextEventId();
     const payload = `id: ${eid}\nevent: heartbeat\ndata: ${JSON.stringify({ ts: eid })}\n\n`;
     bufferEvent(eid, 'heartbeat', { ts: eid }, Date.now());
     for (const set of connectionsByAdmin.values()) {
@@ -432,14 +434,13 @@ function _stats() {
   for (const [openid, set] of connectionsByAdmin.entries()) {
     perAdmin[openid] = set.size;
   }
-  // R84: replayBufferSize now async (Redis-backed) — caller should use _buffer.size()
+  // R85: nextEventId now async (Redis-backed) — caller can use currentEventId()
   return {
     connections: _totalCount(),
     admins: connectionsByAdmin.size,
     perAdmin,
     lastSnapshotAt: cachedSnapshotAt,
     cacheAgeMs: cachedSnapshotAt ? Date.now() - cachedSnapshotAt : null,
-    nextEventId: _eventId,
   };
 }
 

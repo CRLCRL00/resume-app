@@ -26,6 +26,7 @@
 const logger = require('../utils/logger');
 
 const REPLAY_BUFFER_KEY = 'sse:replay:buffer';
+const EVENT_ID_KEY = 'sse:event:id';   // R85: shared atomic counter (multi-pod safe)
 const REPLAY_BUFFER_SIZE = 100;
 
 // Lazy-load redis (avoid hard dep at import time)
@@ -36,6 +37,10 @@ function getRedis() {
 // Fallback in-memory buffer (only used if Redis push fails — last-ditch)
 const fallbackBuffer = []; // [{id, event, data, ts}]
 const FALLBACK_CAP = REPLAY_BUFFER_SIZE;
+
+// R85: fallback process-local counter (only if Redis INCR fails — at-most-once
+// per process; multi-pod only when Redis is down, will be unique enough)
+let _localEventId = 0;
 
 /**
  * Push an event to the replay buffer (Redis + fallback on failure).
@@ -111,11 +116,53 @@ async function clear() {
   try {
     const r = getRedis();
     await r.del(REPLAY_BUFFER_KEY);
+    await r.del(EVENT_ID_KEY);
     fallbackBuffer.length = 0;
+    _localEventId = 0;
     return true;
   } catch (_) {
     return false;
   }
 }
 
-module.exports = { push, since, size, clear, REPLAY_BUFFER_SIZE, REPLAY_BUFFER_KEY };
+/**
+ * R85: atomic, multi-pod-safe event id generator.
+ *
+ * Uses Redis INCR which is atomic and shared across all backend pods. Each
+ * pod sees the same monotonic sequence. Without this, multi-pod deployments
+ * would generate overlapping id ranges (each pod starts from 0) and
+ * replay semantics would break (e.g., lastEventId=5 from pod A might
+ * collide with event from pod B).
+ *
+ * Falls back to process-local counter if Redis unreachable — single-pod
+ * safe (no overlap within one process), multi-pod unsafe during Redis
+ * outage (caller can detect via offline flag).
+ */
+async function nextEventId() {
+  try {
+    const id = await getRedis().incr(EVENT_ID_KEY);
+    return Number(id);
+  } catch (e) {
+    _localEventId += 1;
+    logger.warn({ err: e.message }, 'sse event id: Redis INCR failed, using process-local fallback');
+    return _localEventId;
+  }
+}
+
+/**
+ * Inspect current id value (for ops/tests). Returns null if Redis unreachable.
+ */
+async function currentEventId() {
+  try {
+    const v = await getRedis().get(EVENT_ID_KEY);
+    return v ? Number(v) : null;
+  } catch (_) {
+    return _localEventId || null;
+  }
+}
+
+module.exports = {
+  push, since, size, clear,
+  nextEventId, currentEventId,
+  REPLAY_BUFFER_SIZE, REPLAY_BUFFER_KEY, EVENT_ID_KEY,
+};
