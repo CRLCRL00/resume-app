@@ -35,6 +35,7 @@ const mysql = require('mysql2/promise');
 const client = require('prom-client');
 const config = require('../../config');
 const logger = require('../../utils/logger');
+const replayStore = require('../../db/sseReplayStore');
 
 const streamPool = mysql.createPool({
   host: config.DB.host,
@@ -113,24 +114,15 @@ globalThis.__sseReplayedTotal = sseReplayedTotal;
 let _eventId = 0;
 function nextEventId() { return ++_eventId; }
 
-// R83: ring buffer of recent events for resume. On reconnect with a valid
-// Last-Event-ID, replay all events with id > Last-Event-ID before streaming
-// live. Buffer cap = 100 events ≈ ~16 min at 10s tick + 15s heartbeats.
-// Beyond that, resume silently fails — client gets current snapshot instead.
-const REPLAY_BUFFER_SIZE = 100;
-const replayBuffer = []; // [{id, event, data, ts}] in id order (oldest first)
-function bufferEvent(id, event, data, ts) {
-  replayBuffer.push({ id, event, data, ts });
-  if (replayBuffer.length > REPLAY_BUFFER_SIZE) {
-    replayBuffer.splice(0, replayBuffer.length - REPLAY_BUFFER_SIZE);
+// R84: persistent replay buffer (Redis LIST). Replaces R83 in-memory ring.
+// Survives backend restart so client reconnect after pm2 restart still works.
+const REPLAY_BUFFER_SIZE = replayStore.REPLAY_BUFFER_SIZE; // 100
+async function bufferEvent(id, event, data, ts) {
+  try {
+    await replayStore.push({ id, event, data, ts });
+  } catch (e) {
+    logger.warn({ err: e.message, id }, 'sse replay: bufferEvent failed');
   }
-}
-function getReplaySince(lastEventId) {
-  const id = Number(lastEventId);
-  if (!Number.isFinite(id)) return [];
-  // replayBuffer may contain events with id < id (if buffer rotated past it);
-  // in that case return empty (client too stale) and caller can still send current snapshot.
-  return replayBuffer.filter((e) => e.id > id);
 }
 
 // R79+R81: connection registry indexed by admin openid. Map<openid, Set<conn>>
@@ -318,9 +310,9 @@ router.get('/', async (req, res) => {
     lastEventId: req.headers['last-event-id'] || null, // R82
   };
 
-  // R82+R83: replay missed events since lastEventId
+  // R82+R83+R84: replay missed events since lastEventId (Redis-backed)
   if (conn.lastEventId) {
-    const replay = getReplaySince(conn.lastEventId);
+    const replay = await replayStore.since(Number(conn.lastEventId));
     sseReplayedTotal.inc(replay.length);
     logger.info(
       {
@@ -384,7 +376,7 @@ router.get('/', async (req, res) => {
     bufferEvent(eid, 'dashboard-update', snap, Date.now());
   } catch (e) {
     const eid = nextEventId();
-    res.write(`id: ${eid}\nevent: error\ndata: ${JSON.stringify({ err: e.message })}\n\n`);
+    res.write(`id: ${eid}\nevent: error\ndata: ${JSON.stringify(e.data || e.message)}\n\n`);
     bufferEvent(eid, 'error', { err: e.message }, Date.now());
   }
 });
@@ -440,6 +432,7 @@ function _stats() {
   for (const [openid, set] of connectionsByAdmin.entries()) {
     perAdmin[openid] = set.size;
   }
+  // R84: replayBufferSize now async (Redis-backed) — caller should use _buffer.size()
   return {
     connections: _totalCount(),
     admins: connectionsByAdmin.size,
@@ -447,17 +440,14 @@ function _stats() {
     lastSnapshotAt: cachedSnapshotAt,
     cacheAgeMs: cachedSnapshotAt ? Date.now() - cachedSnapshotAt : null,
     nextEventId: _eventId,
-    replayBufferSize: replayBuffer.length,
-    replayBufferCapacity: REPLAY_BUFFER_SIZE,
   };
 }
 
 module.exports = router;
 module.exports._stats = _stats;
-// R83: expose buffer helpers for ops/tests (read-only)
+// R84: replay buffer size via async Redis call
 module.exports._buffer = {
-  size: () => replayBuffer.length,
-  capacity: REPLAY_BUFFER_SIZE,
-  oldest: () => replayBuffer[0] || null,
-  newest: () => replayBuffer[replayBuffer.length - 1] || null,
+  size: () => replayStore.size(),
+  capacity: replayStore.REPLAY_BUFFER_SIZE,
+  key: replayStore.REPLAY_BUFFER_KEY,
 };
