@@ -413,6 +413,25 @@ PageImpl({
   },
 
   onSubmit() {
+    // R106: token 缺失提示 (避免反复 401)
+    const token = typeof wx !== 'undefined' ? wx.getStorageSync('token') : '';
+    if (!token) {
+      if (typeof wx !== 'undefined') {
+        wx.showModal({
+          title: '请先获取 Token',
+          content: 'IDE Console 粘贴这段拿 token:',
+          confirmText: '看代码',
+          success: () => {
+            wx.showModal({
+              title: '复制这段到 Console',
+              content: 'wx.request({url:"https://43.139.176.199/api/test/dev-reissue",method:"POST",header:{"Content-Type":"application/json"},data:{userId:2},success:(res)=>{if(res.data.code===0){wx.setStorageSync("token",res.data.data.token);wx.setStorageSync("user",{id:2,openid:res.data.data.openid,nickname:res.data.data.nickname,avatar:null});console.log("TOKEN OK")}else{console.error("FAIL",res.data)}}})',
+              showCancel: false,
+            });
+          },
+        });
+      }
+      return;
+    }
     const raw = this.data.form;
     const form = {
       ...raw,

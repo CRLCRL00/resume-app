@@ -251,6 +251,14 @@ test('R104: wxml canvas uses type="2d"', () => {
   assert.ok(!src.includes("canvas-id=\"starfield-lines\""), 'should NOT use old canvas-id (replaced by id for type=2d)');
 });
 
+test('R106: onSubmit shows modal when token is missing', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
+  assert.ok(src.includes('请先获取 Token'), 'js missing R106 token-missing prompt');
+  assert.ok(src.includes('wx.getStorageSync(\'token\')'), 'js missing token storage check');
+  assert.ok(src.includes('dev-reissue'), 'js missing dev-reissue hint');
+});
+
 test('R95: form (mobile version) is removed', () => {
   const fs = require('node:fs');
   assert.ok(!fs.existsSync('./pages/form/form.js'), 'form/form.js should be removed');
