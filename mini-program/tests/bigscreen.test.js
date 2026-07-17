@@ -171,6 +171,49 @@ test('R98: js has constellation + modal + particle tap logic', () => {
   assert.ok(src.includes('modalVisible'), 'js missing modalVisible');
 });
 
+test('R99: every field has ai prompt (chat + starfield fusion)', () => {
+  const { CONSTELLATIONS } = require('../pages/form/bigscreen/bigscreen')._test;
+  let totalFields = 0;
+  let fieldsWithAi = 0;
+  for (const c of CONSTELLATIONS) {
+    for (const f of c.fields) {
+      totalFields++;
+      assert.ok(f.ai && f.ai.length > 0, `field ${c.id}/${f.id} missing ai prompt`);
+      fieldsWithAi++;
+    }
+  }
+  assert.strictEqual(fieldsWithAi, totalFields, 'all fields must have ai prompt');
+  assert.ok(totalFields >= 14, 'expected ≥14 fields');
+});
+
+test('R99: modal state includes ai + label + placeholder', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
+  assert.ok(src.includes('modalFieldAi'), 'js missing modalFieldAi state');
+  assert.ok(src.includes('modalFieldLabel'), 'js missing modalFieldLabel state');
+  assert.ok(src.includes('modalPlaceholder'), 'js missing modalPlaceholder state');
+  assert.ok(src.includes('modalConstColor'), 'js missing modalConstColor state');
+});
+
+test('R99: wxml modal has ai-bubble markup', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  assert.ok(src.includes('modal-ai-bubble'), 'wxml missing modal-ai-bubble');
+  assert.ok(src.includes('modal-ai-avatar'), 'wxml missing modal-ai-avatar');
+  assert.ok(src.includes('modal-ai-text'), 'wxml missing modal-ai-text');
+  assert.ok(src.includes('modalFieldAi'), 'wxml missing modalFieldAi bind');
+});
+
+test('R99: wxss has ai bubble styles (no chat-bubble leftovers)', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(src.includes('.modal-ai-bubble'), 'wxss missing .modal-ai-bubble');
+  assert.ok(src.includes('.modal-ai-avatar'), 'wxss missing .modal-ai-avatar');
+  assert.ok(src.includes('.modal-ai-text'), 'wxss missing .modal-ai-text');
+  assert.ok(src.includes('border-left'), 'wxss should use border-left accent');
+  assert.ok(!src.includes('.msg-bubble'), 'wxss should NOT have leftover chat bubble');
+});
+
 test('R95: form (mobile version) is removed', () => {
   const fs = require('node:fs');
   assert.ok(!fs.existsSync('./pages/form/form.js'), 'form/form.js should be removed');

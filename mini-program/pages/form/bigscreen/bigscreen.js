@@ -10,49 +10,67 @@
  *   - submit 复用原 form 提交
  */
 
-// 5 个星座, 每个含字段 (id, label, type, options?)
+// 5 个星座, 每个含字段 (id, label, type, options?, ai 文案)
 const CONSTELLATIONS = [
   {
     id: 'basic', name: '基本信息', color: '#6366f1', colorRgb: '99,102,241',
     fields: [
-      { id: 'name', label: '姓名', type: 'text', required: true },
-      { id: 'gender', label: '性别', type: 'chips', options: [{label:'男',value:'male'},{label:'女',value:'female'},{label:'其他',value:'other'}], required: true },
-      { id: 'degree', label: '学历', type: 'picker', options: ['高中','大专','本科','硕士','博士'], required: true },
-      { id: 'phone', label: '手机', type: 'text', optional: true },
+      { id: 'name', label: '姓名', type: 'text', required: true,
+        ai: '嗨, 先告诉我你的名字吧?' },
+      { id: 'gender', label: '性别', type: 'chips', options: [{label:'男',value:'male'},{label:'女',value:'female'},{label:'其他',value:'other'}], required: true,
+        ai: '好的, 请问性别是?' },
+      { id: 'degree', label: '学历', type: 'picker', options: ['高中','大专','本科','硕士','博士'], required: true,
+        ai: '最高学历呢?' },
+      { id: 'phone', label: '手机', type: 'text', optional: true,
+        ai: '留个手机号吗? (选填, 用作简历联系方式)' },
     ],
   },
   {
     id: 'education', name: '教育', color: '#06b6d4', colorRgb: '6,182,212',
     fields: [
-      { id: 'edu_school', label: '学校', type: 'text', required: true },
-      { id: 'edu_major', label: '专业', type: 'text', required: true },
-      { id: 'edu_start', label: '起', type: 'text', placeholder: '2020-09', required: true },
-      { id: 'edu_end', label: '止', type: 'text', placeholder: '至今', required: true },
+      { id: 'edu_school', label: '学校', type: 'text', required: true,
+        ai: '你的毕业院校是?' },
+      { id: 'edu_major', label: '专业', type: 'text', required: true,
+        ai: '专业呢?' },
+      { id: 'edu_start', label: '起', type: 'text', placeholder: '2020-09', required: true,
+        ai: '起始时间 (例: 2020-09)?' },
+      { id: 'edu_end', label: '止', type: 'text', placeholder: '至今', required: true,
+        ai: '结束时间 (至今 或 YYYY-MM)?' },
     ],
   },
   {
     id: 'work', name: '工作', color: '#f59e0b', colorRgb: '245,158,11',
     fields: [
-      { id: 'work_company', label: '公司', type: 'text', required: true },
-      { id: 'work_title', label: '职位', type: 'text', required: true },
-      { id: 'work_start', label: '起', type: 'text', placeholder: '2021-07', required: true },
-      { id: 'work_end', label: '止', type: 'text', placeholder: '至今', required: true },
-      { id: 'work_desc', label: '描述', type: 'textarea' },
+      { id: 'work_company', label: '公司', type: 'text', required: true,
+        ai: '在哪家公司工作过?' },
+      { id: 'work_title', label: '职位', type: 'text', required: true,
+        ai: '职位是什么?' },
+      { id: 'work_start', label: '起', type: 'text', placeholder: '2021-07', required: true,
+        ai: '起始时间?' },
+      { id: 'work_end', label: '止', type: 'text', placeholder: '至今', required: true,
+        ai: '结束时间?' },
+      { id: 'work_desc', label: '描述', type: 'textarea',
+        ai: '简述工作内容 (一两句话)?' },
     ],
   },
   {
     id: 'expected', name: '期望', color: '#ec4899', colorRgb: '236,72,153',
     fields: [
-      { id: 'exp_city', label: '城市', type: 'text', required: true },
-      { id: 'exp_position', label: '岗位', type: 'text', required: true },
-      { id: 'exp_salary_min', label: '薪资下限 K', type: 'text', placeholder: '15' },
-      { id: 'exp_salary_max', label: '薪资上限 K', type: 'text', placeholder: '25' },
+      { id: 'exp_city', label: '城市', type: 'text', required: true,
+        ai: '想去哪个城市工作?' },
+      { id: 'exp_position', label: '岗位', type: 'text', required: true,
+        ai: '想做什么岗位?' },
+      { id: 'exp_salary_min', label: '薪资下限 K', type: 'text', placeholder: '15',
+        ai: '期望薪资下限 (K)?' },
+      { id: 'exp_salary_max', label: '薪资上限 K', type: 'text', placeholder: '25',
+        ai: '期望薪资上限 (K)?' },
     ],
   },
   {
     id: 'skills', name: '技能', color: '#eab308', colorRgb: '234,179,8',
     fields: [
-      { id: 'skills_list', label: '技能 (逗号分隔)', type: 'textarea', placeholder: 'React, Node.js, Python', required: true },
+      { id: 'skills_list', label: '技能 (逗号分隔)', type: 'textarea', placeholder: 'React, Node.js, Python', required: true,
+        ai: '最后, 列出你的技能 (逗号分隔)' },
     ],
   },
 ];
@@ -171,9 +189,13 @@ PageImpl({
     // Modal 状态
     modalVisible: false,
     modalField: null,
+    modalFieldLabel: '',
+    modalFieldAi: '',
     modalConstId: '',
+    modalConstColor: '#6366f1',
     modalValue: '',
     modalOptions: null,
+    modalPlaceholder: '',
   },
 
   onLoad() {
@@ -196,13 +218,19 @@ PageImpl({
 
   onParticleTap(e) {
     const { field, constId } = e.currentTarget.dataset;
-    let value = this._getFieldValue(field);
+    const constDef = CONSTELLATIONS.find(c => c.id === constId);
+    const fieldDef = constDef?.fields.find(f => f.id === field);
+    const value = this._getFieldValue(field);
     this.setData({
       modalVisible: true,
       modalField: field,
+      modalFieldLabel: fieldDef?.label || field,
+      modalFieldAi: fieldDef?.ai || '',
       modalConstId: constId,
+      modalConstColor: constDef?.color || '#6366f1',
       modalValue: value || '',
-      modalOptions: CONSTELLATIONS.find(c => c.id === constId)?.fields.find(f => f.id === field)?.options || null,
+      modalOptions: fieldDef?.options || null,
+      modalPlaceholder: fieldDef?.placeholder || `请输入${fieldDef?.label || ''}`,
     });
   },
 
@@ -230,8 +258,13 @@ PageImpl({
     this.setData({
       modalVisible: false,
       modalField: null,
+      modalFieldLabel: '',
+      modalFieldAi: '',
+      modalConstId: '',
+      modalConstColor: '#6366f1',
       modalValue: '',
       modalOptions: null,
+      modalPlaceholder: '',
     });
   },
 
@@ -270,8 +303,13 @@ PageImpl({
       completion,
       modalVisible: false,
       modalField: null,
+      modalFieldLabel: '',
+      modalFieldAi: '',
+      modalConstId: '',
+      modalConstColor: '#6366f1',
       modalValue: '',
       modalOptions: null,
+      modalPlaceholder: '',
     });
   },
 
