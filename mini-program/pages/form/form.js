@@ -133,4 +133,9 @@ Page({
       // request.js 已 toast 过错误
     }
   },
+
+  // R94: 进入大屏填简历模式
+  goBigscreen() {
+    wx.navigateTo({ url: '/pages/form/bigscreen/bigscreen' });
+  },
 });

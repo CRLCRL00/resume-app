@@ -2,6 +2,7 @@
   "pages": [
     "pages/index/index",
     "pages/form/form",
+    "pages/form/bigscreen/bigscreen",
     "pages/preview/preview",
     "pages/match/list",
     "pages/match/detail",

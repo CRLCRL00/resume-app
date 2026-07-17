@@ -1,4 +1,14 @@
 <view class="container">
+  <!-- R94: 大屏模式入口 -->
+  <view class="btn-bigscreen" bindtap="goBigscreen">
+    <text class="bs-icon">🖥️</text>
+    <view class="bs-text">
+      <text class="bs-title">大屏模式填简历</text>
+      <text class="bs-hint">步骤化 + 实时预览, 适合大屏/平板</text>
+    </view>
+    <text class="bs-arrow">›</text>
+  </view>
+
   <view class="card">
     <view class="section-title">基本信息</view>
     <input class="input" placeholder="姓名" value="{{form.name}}" bindinput="setField" data-field="name" />
