@@ -372,13 +372,17 @@ PageImpl({
       ? require('../../../utils/request')
       : { request: async () => ({ data: { data: { resume_id: 1 } } }) };
 
+    wx.showLoading({ title: '正在生成简历...', mask: true });
     request({ url: '/resume/save', method: 'POST', data: { source_form: form } })
       .then((saveRes) => request({ url: '/resume/generate', method: 'POST', data: { resume_id: saveRes.data.data.resume_id } }))
       .then(() => {
         wx.hideLoading();
         wx.redirectTo({ url: '/pages/preview/preview' });
       })
-      .catch(() => wx.hideLoading());
+      .catch((err) => {
+        wx.hideLoading();
+        console.error('submit failed:', err);
+      });
   },
 
   goBack() {
