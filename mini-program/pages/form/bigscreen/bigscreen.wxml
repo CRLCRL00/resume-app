@@ -7,7 +7,7 @@
       style="width: {{width}}px; height: {{height}}px;">
 
   <!-- 背景小星点 -->
-  <view wx:for="{{backgroundStars}}" wx:key="*this"
+  <view wx:for="{{backgroundStars}}" wx:key="x"
         class="bg-star"
         style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
 
@@ -24,7 +24,7 @@
   </view>
 
   <!-- 5 星座 -->
-  <view wx:for="{{constellations}}" wx:key="*this" wx:for-item="con">
+  <view wx:for="{{constellations}}" wx:key="id" wx:for-item="con">
 
     <!-- 星座标签 (中心) -->
     <view class="const-label"
@@ -37,7 +37,7 @@
           style="left: {{item.cx - 50}}px; top: {{item.cy - 50}}px; border-color: {{item.color}}; box-shadow: 0 0 60rpx {{item.color}}88, 0 0 120rpx {{item.color}}44;"></view>
 
     <!-- 粒子 (字段) -->
-    <view wx:for="{{item.particles}}" wx:key="*this" wx:for-item="particle"
+    <view wx:for="{{item.particles}}" wx:key="id" wx:for-item="particle"
           class="particle {{_isFieldFilled(item.id) ? 'filled' : ''}}"
           style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{item.color}}; --pcrgb: {{item.colorRgb}};"
           data-field="{{particle.id}}"
@@ -105,7 +105,7 @@
       <block wx:if="{{modalOptions && modalOptions[0].label}}">
         <view class="modal-chips">
           <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}"
-                wx:for="{{modalOptions}}" wx:key="mc-{{index}}"
+                wx:for="{{modalOptions}}" wx:key="value"
                 data-value="{{item.value}}"
                 bindtap="onModalChip">{{item.label}}</view>
         </view>
