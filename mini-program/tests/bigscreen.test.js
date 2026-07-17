@@ -214,6 +214,34 @@ test('R99: wxss has ai bubble styles (no chat-bubble leftovers)', () => {
   assert.ok(!src.includes('.msg-bubble'), 'wxss should NOT have leftover chat bubble');
 });
 
+test('R103: wxml has canvas for line drawing', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  assert.ok(src.includes('canvas-id="starfield-lines"'), 'wxml missing canvas-id');
+  assert.ok(src.includes('class="lines-canvas"'), 'wxml missing lines-canvas class');
+  assert.ok(src.includes('disable-scroll="true"'), 'canvas should disable scroll');
+});
+
+test('R103: wxss has canvas + particle float animation', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(src.includes('.lines-canvas'), 'wxss missing .lines-canvas');
+  assert.ok(src.includes('pointer-events: none'), 'canvas should not block clicks');
+  assert.ok(src.includes('@keyframes float'), 'wxss missing float animation');
+  assert.ok(src.includes('animation: float'), 'particle should animate');
+  assert.ok(src.includes('translate'), 'float should use translate');
+});
+
+test('R103: js has _drawLines method using Canvas API', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
+  assert.ok(src.includes('_drawLines'), 'js missing _drawLines');
+  assert.ok(src.includes("createCanvasContext('starfield-lines'"), 'js missing canvas context');
+  assert.ok(src.includes('setStrokeStyle'), 'js missing stroke style');
+  assert.ok(src.includes('beginPath'), 'js missing beginPath');
+  assert.ok(src.includes('_isFieldFilled(p.id)'), 'lines should only draw between filled particles');
+});
+
 test('R95: form (mobile version) is removed', () => {
   const fs = require('node:fs');
   assert.ok(!fs.existsSync('./pages/form/form.js'), 'form/form.js should be removed');

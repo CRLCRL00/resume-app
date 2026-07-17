@@ -15,6 +15,17 @@
   box-shadow: 0 0 4rpx #fff;
 }
 
+/* R103: 连线 canvas (覆盖全屏) */
+.lines-canvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;  /* 不拦截点击 */
+  z-index: 2;
+}
+
 /* ─── 顶部 header ───────────────────────── */
 .space-header {
   position: absolute;
@@ -158,6 +169,18 @@
   height: 60rpx;
   cursor: pointer;
   z-index: 4;
+  /* R103: 漂浮 (sin 模拟, 6 个粒子错位延迟看起来独立) */
+  animation: float 4s ease-in-out infinite;
+}
+.particle:nth-child(2) { animation-delay: 0.5s; animation-duration: 4.5s; }
+.particle:nth-child(3) { animation-delay: 1s; animation-duration: 5s; }
+.particle:nth-child(4) { animation-delay: 1.5s; animation-duration: 4.2s; }
+.particle:nth-child(5) { animation-delay: 2s; animation-duration: 4.8s; }
+@keyframes float {
+  0%, 100% { transform: translate(0, 0); }
+  25% { transform: translate(2rpx, -4rpx); }
+  50% { transform: translate(0, -8rpx); }
+  75% { transform: translate(-2rpx, -4rpx); }
 }
 .particle-glow {
   position: absolute;

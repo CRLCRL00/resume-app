@@ -203,17 +203,83 @@ PageImpl({
     const wide = (win.windowWidth || 0) >= 1024;
     const width = win.windowWidth || 375;
     const height = win.windowHeight || 667;
-    this._initLayout(width, height, wide);
+    const dpr = (win.pixelRatio || 2);
+    this._initLayout(width, height, wide, dpr);
+  },
+
+  onShow() {
+    // R103: 数据更新后重绘连线 (中心完成度变 / 字段填满)
+    setTimeout(() => this._drawLines(), 100);
   },
 
   onUnload() {
     try { wx.offWindowResize && wx.offWindowResize(); } catch (_) {}
   },
 
-  _initLayout(width, height, wide) {
+  _initLayout(width, height, wide, dpr = 2) {
     const constellations = layoutParticles(width, height);
     const backgroundStars = genBackgroundStars(80, width, height);
     this.setData({ width, height, wide, constellations, backgroundStars });
+    // R103: 划线 (需 dpr 适配 retina)
+    setTimeout(() => this._drawLines(width, height, dpr), 50);
+  },
+
+  // R103: 在 Canvas 画 filled 粒子之间连线
+  _drawLines(width, height, dpr = 2) {
+    const ctx = wx.createCanvasContext('starfield-lines', this);
+    if (!ctx) return;
+    if (!width || !height) return;
+    const w = width * dpr;
+    const h = height * dpr;
+    ctx.clearRect(0, 0, w, h);
+
+    // 收集所有 filled 粒子 (按星座上色)
+    const filledPoints = [];
+    for (const c of this.data.constellations || []) {
+      for (const p of c.particles || []) {
+        if (this._isFieldFilled(p.id)) {
+          filledPoints.push({ x: p.x * dpr, y: p.y * dpr, color: c.color, rgb: c.colorRgb });
+        }
+      }
+    }
+    if (filledPoints.length < 2) {
+      ctx.draw();
+      return;
+    }
+
+    // 两两连线 (透明度 = 距中心越近越亮)
+    const cx = w / 2, cy = h / 2;
+    const maxDist = Math.hypot(w, h) / 2;
+    ctx.setLineWidth(1);
+    for (let i = 0; i < filledPoints.length; i++) {
+      for (let j = i + 1; j < filledPoints.length; j++) {
+        const a = filledPoints[i], b = filledPoints[j];
+        const dx = a.x - b.x, dy = a.y - b.y;
+        const dist = Math.hypot(dx, dy);
+        const maxEdge = Math.max(w, h) * 0.45;
+        if (dist > maxEdge) continue;
+        // 透明度: 中心近的亮, 远的暗
+        const midX = (a.x + b.x) / 2;
+        const midY = (a.y + b.y) / 2;
+        const distToCenter = Math.hypot(midX - cx, midY - cy);
+        const alpha = Math.max(0.15, 1 - distToCenter / maxDist);
+        ctx.setStrokeStyle(`rgba(${a.rgb}, ${alpha.toFixed(2)})`);
+        ctx.beginPath();
+        ctx.moveTo(a.x, a.y);
+        ctx.lineTo(b.x, b.y);
+        ctx.stroke();
+      }
+    }
+    // 中心 → 每个 filled 粒子的连线 (毛笔效应)
+    ctx.setLineWidth(2);
+    for (const p of filledPoints) {
+      ctx.setStrokeStyle(`rgba(${p.rgb}, 0.6)`);
+      ctx.beginPath();
+      ctx.moveTo(cx, cy);
+      ctx.lineTo(p.x, p.y);
+      ctx.stroke();
+    }
+    ctx.draw();
   },
 
   onParticleTap(e) {
@@ -310,7 +376,7 @@ PageImpl({
       modalValue: '',
       modalOptions: null,
       modalPlaceholder: '',
-    });
+    }, () => this._drawLines(this.data.width, this.data.height));
   },
 
   _getFieldValue(field) {

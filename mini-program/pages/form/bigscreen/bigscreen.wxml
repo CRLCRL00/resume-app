@@ -11,6 +11,12 @@
         class="bg-star"
         style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
 
+  <!-- R103: 连线 canvas (filled 粒子之间) -->
+  <canvas canvas-id="starfield-lines"
+          class="lines-canvas"
+          style="width: {{width}}px; height: {{height}}px;"
+          disable-scroll="true"></canvas>
+
   <!-- 中心 "完成度" 节点 -->
   <view class="center-node"
         style="left: {{width/2 - 80}}px; top: {{height/2 - 80}}px;"
