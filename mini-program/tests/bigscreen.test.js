@@ -93,25 +93,39 @@ test('R94: STEP_HINTS aligned with labels', () => {
   assert.strictEqual(STEP_HINTS.length, STEP_LABELS.length);
 });
 
-test('R94: form.js exposes goBigscreen handler', () => {
+test('R95: form (mobile version) is removed', () => {
   const fs = require('node:fs');
-  const src = fs.readFileSync('./pages/form/form.js', 'utf8');
-  assert.ok(src.includes('goBigscreen'), 'form.js missing goBigscreen');
-  assert.ok(src.includes("/pages/form/bigscreen/bigscreen"), 'form.js missing bigscreen route');
+  assert.ok(!fs.existsSync('./pages/form/form.js'), 'form/form.js should be removed');
+  assert.ok(!fs.existsSync('./pages/form/form.wxml'), 'form/form.wxml should be removed');
+  assert.ok(!fs.existsSync('./pages/form/form.wxss'), 'form/form.wxss should be removed');
+  assert.ok(!fs.existsSync('./pages/form/form.json'), 'form/form.json should be removed');
 });
 
-test('R94: form.wxml has bigscreen entry button', () => {
+test('R95: index.js goForm routes to bigscreen', () => {
   const fs = require('node:fs');
-  const src = fs.readFileSync('./pages/form/form.wxml', 'utf8');
-  assert.ok(src.includes('goBigscreen'), 'form.wxml missing bindtap');
-  assert.ok(src.includes('btn-bigscreen'), 'form.wxml missing btn-bigscreen class');
+  const src = fs.readFileSync('./pages/index/index.js', 'utf8');
+  assert.ok(src.includes('goForm'), 'index.js missing goForm');
+  assert.ok(
+    src.includes("/pages/form/bigscreen/bigscreen"),
+    'index.js goForm should route to bigscreen'
+  );
 });
 
-test('R94: app.json registers bigscreen route', () => {
+test('R95: app.json no longer references form/form', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./app.json', 'utf8');
+  assert.ok(
+    !src.match(/pages\/form\/form[^/]/),
+    'app.json should not list pages/form/form'
+  );
   assert.ok(
     src.includes('pages/form/bigscreen/bigscreen'),
     'app.json missing bigscreen route'
   );
+});
+
+test('R95: bigscreen.json title = 填简历', () => {
+  const fs = require('node:fs');
+  const cfg = JSON.parse(fs.readFileSync('./pages/form/bigscreen/bigscreen.json', 'utf8'));
+  assert.strictEqual(cfg.navigationBarTitleText, '填简历');
 });
