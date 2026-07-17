@@ -81,71 +81,94 @@ test('R94: calcCompletion cap at 100', () => {
   assert.ok(r <= 100, `should cap at 100, got ${r}`);
 });
 
-test('R94: STEP_LABELS has 5 steps', () => {
-  const { STEP_LABELS } = require('../pages/form/bigscreen/bigscreen')._test;
+test('R98: STEP_LABELS derived from CONSTELLATIONS (5 stars)', () => {
+  const { STEP_LABELS, CONSTELLATIONS } = require('../pages/form/bigscreen/bigscreen')._test;
   assert.strictEqual(STEP_LABELS.length, 5);
-  assert.deepStrictEqual(STEP_LABELS, ['基本信息', '教育经历', '工作经历', '求职期望', '技能']);
+  assert.deepStrictEqual(STEP_LABELS, CONSTELLATIONS.map(c => c.name));
 });
 
-test('R97: CHAT_SCRIPT has 5 steps with all required fields', () => {
-  const { CHAT_SCRIPT } = require('../pages/form/bigscreen/bigscreen')._test;
-  // 至少 13 个对话节点 (5 步)
-  assert.ok(CHAT_SCRIPT.length >= 13, `expected ≥13 chat nodes, got ${CHAT_SCRIPT.length}`);
-  // 5 个不同 step
-  const steps = new Set(CHAT_SCRIPT.map(s => s.step));
-  assert.strictEqual(steps.size, 5, 'should cover all 5 form steps');
-  // 每节点有 ai + field + type
-  for (const s of CHAT_SCRIPT) {
-    assert.ok(s.ai && s.ai.length > 0, `script[${CHAT_SCRIPT.indexOf(s)}].ai empty`);
-    assert.ok(s.field, `script[${CHAT_SCRIPT.indexOf(s)}].field empty`);
-    assert.ok(s.type, `script[${CHAT_SCRIPT.indexOf(s)}].type empty`);
+test('R98: CONSTELLATIONS has 5 star systems covering all form steps', () => {
+  const { CONSTELLATIONS } = require('../pages/form/bigscreen/bigscreen')._test;
+  assert.strictEqual(CONSTELLATIONS.length, 5);
+  // Each constellation must have a color + ≥1 field
+  for (const c of CONSTELLATIONS) {
+    assert.ok(c.color && c.color.startsWith('#'), `${c.id} missing color`);
+    assert.ok(Array.isArray(c.fields) && c.fields.length > 0, `${c.id} missing fields`);
+  }
+  // Field IDs across all constellations cover all form data fields
+  const ids = new Set();
+  for (const c of CONSTELLATIONS) for (const f of c.fields) ids.add(f.id);
+  for (const required of ['name', 'gender', 'degree', 'edu_school', 'edu_major', 'work_company', 'exp_city']) {
+    assert.ok(ids.has(required), `missing field id: ${required}`);
   }
 });
 
-test('R97: CHAT_SCRIPT contains key question types', () => {
-  const { CHAT_SCRIPT } = require('../pages/form/bigscreen/bigscreen')._test;
-  const types = new Set(CHAT_SCRIPT.map(s => s.type));
-  for (const required of ['text', 'chips', 'picker', 'dateRange', 'textarea', 'addMore']) {
-    assert.ok(types.has(required), `missing question type: ${required}`);
+test('R98: layoutParticles produces 5 constellations at orbit positions', () => {
+  const { layoutParticles } = require('../pages/form/bigscreen/bigscreen')._test;
+  const cs = layoutParticles(750, 1200);
+  assert.strictEqual(cs.length, 5);
+  // All constellation centers should be within canvas bounds
+  for (const c of cs) {
+    assert.ok(c.cx > 0 && c.cx < 750, `cx out of bounds: ${c.cx}`);
+    assert.ok(c.cy > 0 && c.cy < 1200, `cy out of bounds: ${c.cy}`);
+    assert.ok(c.particles.length > 0, 'no particles');
+    // Particles should be near constellation center
+    for (const p of c.particles) {
+      const dist = Math.hypot(p.x - c.cx, p.y - c.cy);
+      assert.ok(dist < 100, `particle too far from constellation: dist=${dist}`);
+    }
   }
 });
 
-test('R97: CHAT_SCRIPT step 0 covers basic info (name + gender + degree + phone)', () => {
-  const { CHAT_SCRIPT } = require('../pages/form/bigscreen/bigscreen')._test;
-  const step0 = CHAT_SCRIPT.filter(s => s.step === 0);
-  const fields = step0.map(s => s.field);
-  assert.ok(fields.includes('name'));
-  assert.ok(fields.includes('gender'));
-  assert.ok(fields.includes('degree'));
-  assert.ok(fields.includes('phone'));
+test('R98: genBackgroundStars produces deterministic stars', () => {
+  const { genBackgroundStars } = require('../pages/form/bigscreen/bigscreen')._test;
+  const a = genBackgroundStars(50, 750, 1200);
+  const b = genBackgroundStars(50, 750, 1200);
+  assert.strictEqual(a.length, 50);
+  assert.deepStrictEqual(a, b, 'should be deterministic with same seed');
+  // All within bounds
+  for (const s of a) {
+    assert.ok(s.x >= 0 && s.x < 750);
+    assert.ok(s.y >= 0 && s.y < 1200);
+  }
 });
 
-test('R97: wxml has chat-style markup (msg-bubble class)', () => {
+test('R98: wxml has starfield + particle + modal markup', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(src.includes('msg-bubble'), 'wxml missing msg-bubble class');
-  assert.ok(src.includes('msg-row'), 'wxml missing msg-row class');
-  assert.ok(src.includes('chat-stream'), 'wxml missing chat-stream container');
-  assert.ok(src.includes('chat-input-bar'), 'wxml missing chat-input-bar');
+  assert.ok(src.includes('starfield'), 'wxml missing starfield container');
+  assert.ok(src.includes('particle'), 'wxml missing particle class');
+  assert.ok(src.includes('bg-star'), 'wxml missing bg-star');
+  assert.ok(src.includes('center-node'), 'wxml missing center-node');
+  assert.ok(src.includes('const-halo'), 'wxml missing constellation halo');
+  assert.ok(src.includes('floating-preview'), 'wxml missing floating-preview');
+  assert.ok(src.includes('modal-card'), 'wxml missing modal-card');
+  assert.ok(src.includes('onParticleTap'), 'wxml missing onParticleTap');
+  assert.ok(!src.includes('msg-bubble'), 'wxml should NOT have chat bubbles');
 });
 
-test('R97: wxss has bubble styles (no traditional form-card class)', () => {
+test('R98: wxss has dark space + glowing particles', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(src.includes('.msg-bubble'), 'wxss missing msg-bubble style');
-  assert.ok(src.includes('.msg-row.ai'), 'wxss missing ai message alignment');
-  assert.ok(src.includes('.msg-row.user'), 'wxss missing user message alignment');
-  assert.ok(!src.includes('.field-big'), 'wxss should not have traditional .field-big (chat-only mode)');
+  assert.ok(src.includes('.starfield'), 'wxss missing starfield');
+  assert.ok(src.includes('.bg-star'), 'wxss missing bg-star');
+  assert.ok(src.includes('.particle-core'), 'wxss missing particle-core');
+  assert.ok(src.includes('radial-gradient'), 'wxss should use radial gradients');
+  assert.ok(src.includes('box-shadow'), 'wxss should use glow shadows');
+  assert.ok(src.includes('@keyframes'), 'wxss should have animations');
+  assert.ok(src.includes('#050810') || src.includes('radial-gradient(ellipse'), 'wxss should have dark space bg');
+  assert.ok(!src.includes('.msg-bubble'), 'wxss should NOT have chat bubble styles');
 });
 
-test('R97: js has chatScript + chatStep + messages state', () => {
+test('R98: js has constellation + modal + particle tap logic', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
-  assert.ok(src.includes('chatScript'), 'js missing chatScript');
-  assert.ok(src.includes('chatStep'), 'js missing chatStep');
-  assert.ok(src.includes('messages:'), 'js missing messages array');
-  assert.ok(src.includes('_pushAI'), 'js missing _pushAI');
-  assert.ok(src.includes('_submitAnswer'), 'js missing _submitAnswer');
+  assert.ok(src.includes('CONSTELLATIONS'), 'js missing CONSTELLATIONS');
+  assert.ok(src.includes('layoutParticles'), 'js missing layoutParticles');
+  assert.ok(src.includes('onParticleTap'), 'js missing onParticleTap');
+  assert.ok(src.includes('onModalSave'), 'js missing onModalSave');
+  assert.ok(src.includes('_saveModal'), 'js missing _saveModal');
+  assert.ok(src.includes('modalVisible'), 'js missing modalVisible');
 });
 
 test('R95: form (mobile version) is removed', () => {

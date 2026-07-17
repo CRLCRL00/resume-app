@@ -1,180 +1,118 @@
 <!--
-  R97 大屏填简历 — AI 对话式气泡 UI
-  推翻传统表单, 用 chat 推进 5 步
-  自适应: ≥1024 → 左 chat + 右 sticky preview; 否则 chat 顶满, preview 折叠到底
+  R98 粒子星图 — 5 星座, 字段 = 发光粒子
+  点击粒子 → 弹窗填字段
+  实时预览在右下浮动
 -->
-<view class="bigscreen {{wide ? 'wide' : 'narrow'}}">
+<view class="starfield"
+      style="width: {{width}}px; height: {{height}}px;">
 
-  <!-- 顶部 header: 进度 + 关闭 -->
-  <view class="chat-header">
-    <view class="chat-header-left">
-      <text class="chat-header-icon">💬</text>
-      <view class="chat-header-info">
-        <text class="chat-header-title">智能简历助手</text>
-        <text class="chat-header-progress">对话 {{chatStep + 1}} / {{chatScript.length}} · {{stepLabels[step]}}</text>
-      </view>
+  <!-- 背景小星点 -->
+  <view wx:for="{{backgroundStars}}" wx:key="bs-{{index}}"
+        class="bg-star"
+        style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
+
+  <!-- 中心 "完成度" 节点 -->
+  <view class="center-node"
+        style="left: {{width/2 - 80}}px; top: {{height/2 - 80}}px;"
+        bindtap="onSubmit">
+    <view class="center-pulse"></view>
+    <view class="center-circle {{completion >= 100 ? 'complete' : ''}}">
+      <text class="center-num">{{completion}}</text>
+      <text class="center-pct">%</text>
     </view>
-    <view class="chat-header-close" bindtap="goBack">✕</view>
+    <text class="center-label">{{completion >= 100 ? '点我生成' : '完成度'}}</text>
   </view>
 
-  <!-- 主区 -->
-  <view class="chat-main">
-    <!-- 左侧: 聊天流 -->
-    <scroll-view class="chat-stream" scroll-y enhanced show-scrollbar="{{false}}" scroll-into-view="{{lastId}}">
-      <view class="chat-list">
-        <view wx:for="{{messages}}" wx:key="index" wx:for-item="msg" wx:for-index="mi"
-              id="msg-{{mi}}"
-              class="msg-row {{msg.role}}">
-          <view wx:if="{{msg.role === 'ai'}}" class="msg-avatar ai">✨</view>
-          <view class="msg-bubble {{msg.role}}">
-            <text class="msg-text">{{msg.text}}</text>
-          </view>
-          <view wx:if="{{msg.role === 'user'}}" class="msg-avatar user">我</view>
-        </view>
+  <!-- 5 星座 -->
+  <view wx:for="{{constellations}}" wx:key="c-{{item.id}}" wx:for-item="con">
 
-        <!-- 当前 AI 问题 (等待回答) -->
-        <view wx:if="{{!done}}" class="msg-row ai" id="current-question">
-          <view class="msg-avatar ai">✨</view>
-          <view class="msg-bubble ai current">
-            <text class="msg-text">{{chatScript[chatStep].ai}}</text>
-          </view>
-        </view>
+    <!-- 星座标签 (中心) -->
+    <view class="const-label"
+          style="left: {{item.cx - 50}}px; top: {{item.cy - 50}}px; color: {{item.color}};">
+      <text class="const-name">{{item.name}}</text>
+    </view>
 
-        <!-- 滚动锚点 -->
-        <view class="chat-end" id="chat-end"></view>
+    <!-- 星座晕圈 (中心) -->
+    <view class="const-halo"
+          style="left: {{item.cx - 50}}px; top: {{item.cy - 50}}px; border-color: {{item.color}}; box-shadow: 0 0 60rpx {{item.color}}88, 0 0 120rpx {{item.color}}44;"></view>
+
+    <!-- 粒子 (字段) -->
+    <view wx:for="{{item.particles}}" wx:key="p-{{item.id}}" wx:for-item="particle"
+          class="particle {{_isFieldFilled(item.id) ? 'filled' : ''}}"
+          style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{item.color}}; --pcrgb: {{item.colorRgb}};"
+          data-field="{{particle.id}}"
+          data-const-id="{{item.id}}"
+          bindtap="onParticleTap">
+      <view class="particle-glow"></view>
+      <view class="particle-core"></view>
+      <text class="particle-label">{{particle.label}}</text>
+    </view>
+  </view>
+
+  <!-- 浮动预览卡 (右下) -->
+  <view class="floating-preview" wx:if="{{completion > 0}}">
+    <view class="fp-header">
+      <text class="fp-title">简历预览</text>
+      <text class="fp-completion">{{completion}}%</text>
+    </view>
+    <text class="fp-name" wx:if="{{form.name}}">{{form.name}}</text>
+    <text class="fp-meta" wx:if="{{form.gender || form.degree}}">
+      {{form.gender === 'male' ? '男' : form.gender === 'female' ? '女' : ''}}{{form.degree ? ' · ' + form.degree : ''}}
+    </text>
+    <text class="fp-line" wx:if="{{form.expected.position}}">🎯 {{form.expected.position}} · {{form.expected.city}}</text>
+    <text class="fp-line" wx:if="{{form.educations[0].school}}">🎓 {{form.educations[0].school}}</text>
+    <text class="fp-line" wx:if="{{form.experiences[0].company}}">💼 {{form.experiences[0].company}}</text>
+    <text class="fp-line" wx:if="{{skillsCount > 0}}">✨ {{form.skills.slice(0, 4).join(' · ')}}</text>
+  </view>
+
+  <!-- 顶部 header -->
+  <view class="space-header">
+    <view class="sh-left">
+      <text class="sh-icon">🌌</text>
+      <view>
+        <text class="sh-title">星空简历</text>
+        <text class="sh-sub">点击星点填写 · {{completion}}%</text>
       </view>
+    </view>
+    <view class="sh-close" bindtap="goBack">✕</view>
+  </view>
 
-      <!-- 输入区 (固定底部) -->
-      <view class="chat-input-bar" wx:if="{{!done}}">
-        <!-- text input -->
-        <block wx:if="{{currentType === 'text'}}">
-          <input class="chat-input"
-                 placeholder="输入你的回答..."
-                 value="{{currentInput}}"
-                 bindinput="onInput"
-                 bindconfirm="onSend"
-                 confirm-type="send"
-                 focus="{{true}}" />
-          <view class="chat-send" bindtap="onSend">发送 →</view>
-          <view wx:if="{{chatScript[chatStep].optional}}" class="chat-skip" bindtap="onSkip">跳过</view>
-        </block>
+  <!-- 弹窗: 填字段 -->
+  <view class="modal-mask" wx:if="{{modalVisible}}" bindtap="onModalCancel">
+    <view class="modal-card" catchtap="">
+      <text class="modal-title">填写</text>
+      <text class="modal-label">{{modalField}}</text>
 
-        <!-- textarea -->
-        <block wx:if="{{currentType === 'textarea'}}">
-          <textarea class="chat-input chat-textarea"
-                    placeholder="输入你的回答..."
-                    value="{{currentInput}}"
-                    bindinput="onInput" />
-          <view class="chat-send" bindtap="onSend">发送 →</view>
-        </block>
+      <!-- text input -->
+      <block wx:if="{{!modalOptions}}">
+        <input class="modal-input"
+               placeholder="..."
+               value="{{modalValue}}"
+               bindinput="onModalInput"
+               focus="{{true}}"
+               bindconfirm="onModalSave" />
+      </block>
 
-        <!-- chips (性别) -->
-        <block wx:if="{{currentType === 'chips'}}">
-          <view class="chat-chips">
-            <view class="chat-chip"
-                  wx:for="{{currentOptions}}" wx:key="value" wx:for-item="opt"
-                  data-value="{{opt.value}}"
-                  bindtap="onChip">{{opt.label}}</view>
-          </view>
-        </block>
-
-        <!-- picker (学历) -->
-        <block wx:if="{{currentType === 'picker'}}">
-          <picker mode="selector" range="{{currentOptions}}" bindchange="onPicker">
-            <view class="chat-picker">点击选择学历 ▾</view>
-          </picker>
-        </block>
-
-        <!-- dateRange (教育/工作 起止) -->
-        <block wx:if="{{currentType === 'dateRange'}}">
-          <view class="chat-date-row">
-            <input class="chat-date-input" placeholder="2020-09" value="{{currentDateStart}}" bindinput="onDateStart" />
-            <text class="chat-date-sep">至</text>
-            <input class="chat-date-input" placeholder="至今" value="{{currentDateEnd}}" bindinput="onDateEnd" />
-          </view>
-          <view class="chat-send" bindtap="onSend">下一步 →</view>
-        </block>
-
-        <!-- work (公司+职位 一行输入) -->
-        <block wx:if="{{currentType === 'work'}}">
-          <input class="chat-input"
-                 placeholder="例: 阿里巴巴 · 前端工程师"
-                 value="{{currentInput}}"
-                 bindinput="onInput"
-                 bindconfirm="onSend"
-                 confirm-type="send" />
-          <view class="chat-send" bindtap="onSend">发送 →</view>
-        </block>
-
-        <!-- salaryRange (薪资) -->
-        <block wx:if="{{currentType === 'salaryRange'}}">
-          <view class="chat-date-row">
-            <input class="chat-date-input" type="number" placeholder="下限 K" value="{{currentSalaryMin}}" bindinput="onSalaryMin" />
-            <text class="chat-date-sep">—</text>
-            <input class="chat-date-input" type="number" placeholder="上限 K" value="{{currentSalaryMax}}" bindinput="onSalaryMax" />
-          </view>
-          <view class="chat-send" bindtap="onSend">下一步 →</view>
-        </block>
-
-        <!-- addMore (教育/工作) -->
-        <block wx:if="{{currentType === 'addMore'}}">
-          <view class="chat-addmore">
-            <view class="chat-addmore-btn yes" bindtap="onAddMore">+ 再加一条</view>
-            <view class="chat-addmore-btn no" bindtap="onNoMore">✓ 没有了</view>
-          </view>
-        </block>
-      </view>
-
-      <!-- 完成: 显示提交按钮 -->
-      <view class="chat-complete" wx:if="{{done}}">
-        <view class="chat-complete-text">🎉 信息收集完成</view>
-        <view class="chat-submit" bindtap="onSubmit">生成简历 ✨</view>
-      </view>
-    </scroll-view>
-
-    <!-- 右侧: 浮动预览卡片 (≥1024 显示) -->
-    <view class="chat-preview" wx:if="{{wide && !narrow}}">
-      <view class="preview-card">
-        <view class="preview-header">
-          <text class="preview-name">{{form.name || '未填姓名'}}</text>
-          <view class="preview-completion">
-            <text class="completion-num">{{completion}}</text>
-            <text class="completion-pct">%</text>
-          </view>
+      <!-- chips -->
+      <block wx:if="{{modalOptions && modalOptions[0].label}}">
+        <view class="modal-chips">
+          <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}"
+                wx:for="{{modalOptions}}" wx:key="mc-{{index}}"
+                data-value="{{item.value}}"
+                bindtap="onModalChip">{{item.label}}</view>
         </view>
-        <view class="preview-meta">
-          <text wx:if="{{form.gender}}">{{form.gender === 'male' ? '男' : form.gender === 'female' ? '女' : '其他'}}</text>
-          <text wx:if="{{form.degree}}">{{form.degree}}</text>
-          <text wx:if="{{form.phone}}">{{form.phone}}</text>
-        </view>
+      </block>
 
-        <view class="preview-section" wx:if="{{form.expected.city || form.expected.position}}">
-          <view class="preview-section-title">求职期望</view>
-          <text class="preview-line">{{form.expected.position || '岗位待定'}} · {{form.expected.city || '城市待定'}}</text>
-          <text class="preview-line" wx:if="{{form.expected.salary_min || form.expected.salary_max}}">薪资 {{form.expected.salary_min || '?'}}-{{form.expected.salary_max || '?'}}K</text>
-        </view>
+      <!-- picker -->
+      <block wx:if="{{modalOptions && !modalOptions[0].label}}">
+        <picker mode="selector" range="{{modalOptions}}" bindchange="onModalPicker">
+          <view class="modal-picker">点击选择 ▾</view>
+        </picker>
+      </block>
 
-        <view class="preview-section" wx:if="{{form.educations.length && form.educations[0].school}}">
-          <view class="preview-section-title">教育</view>
-          <view wx:for="{{form.educations}}" wx:key="eidx" wx:for-item="edu" wx:for-index="eidx" wx:if="{{edu.school}}">
-            <text class="preview-line">{{edu.school}} · {{edu.major || '专业'}}</text>
-            <text class="preview-line-mini">{{edu.start || '?'}} - {{edu.end || '?'}}</text>
-          </view>
-        </view>
-
-        <view class="preview-section" wx:if="{{form.experiences.length && form.experiences[0].company}}">
-          <view class="preview-section-title">工作</view>
-          <view wx:for="{{form.experiences}}" wx:key="xidx" wx:for-item="exp" wx:for-index="xidx" wx:if="{{exp.company}}">
-            <text class="preview-line">{{exp.company}} · {{exp.title || '职位'}}</text>
-            <text class="preview-line-mini">{{exp.start || '?'}} - {{exp.end || '?'}}</text>
-            <text class="preview-line-mini" wx:if="{{exp.desc}}">{{exp.desc}}</text>
-          </view>
-        </view>
-
-        <view class="preview-section" wx:if="{{skillsCount > 0}}">
-          <view class="preview-section-title">技能</view>
-          <text class="preview-line">{{form.skills.join(' · ')}}</text>
-        </view>
+      <view class="modal-actions">
+        <view class="modal-cancel" bindtap="onModalCancel">取消</view>
+        <view class="modal-save" bindtap="onModalSave">保存 ✨</view>
       </view>
     </view>
   </view>
