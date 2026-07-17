@@ -224,62 +224,65 @@ PageImpl({
     setTimeout(() => this._drawLines(width, height, dpr), 50);
   },
 
-  // R103: 在 Canvas 画 filled 粒子之间连线
+  // R103+R104: 在 type=2d Canvas 画 filled 粒子之间连线
   _drawLines(width, height, dpr = 2) {
-    const ctx = wx.createCanvasContext('starfield-lines', this);
-    if (!ctx) return;
     if (!width || !height) return;
-    const w = width * dpr;
-    const h = height * dpr;
-    ctx.clearRect(0, 0, w, h);
+    if (typeof wx === 'undefined') return; // node test 跳过
+    const query = wx.createSelectorQuery();
+    query.select('#starfield-lines')
+      .fields({ node: true, size: true })
+      .exec((res) => {
+        const canvas = res && res[0] && res[0].node;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const w = width;
+        const h = height;
+        ctx.clearRect(0, 0, w, h);
 
-    // 收集所有 filled 粒子 (按星座上色)
-    const filledPoints = [];
-    for (const c of this.data.constellations || []) {
-      for (const p of c.particles || []) {
-        if (this._isFieldFilled(p.id)) {
-          filledPoints.push({ x: p.x * dpr, y: p.y * dpr, color: c.color, rgb: c.colorRgb });
+        // 收集所有 filled 粒子 (按星座上色)
+        const filledPoints = [];
+        for (const c of this.data.constellations || []) {
+          for (const p of c.particles || []) {
+            if (this._isFieldFilled(p.id)) {
+              filledPoints.push({ x: p.x, y: p.y, color: c.color, rgb: c.colorRgb });
+            }
+          }
         }
-      }
-    }
-    if (filledPoints.length < 2) {
-      ctx.draw();
-      return;
-    }
+        if (filledPoints.length < 2) return;
 
-    // 两两连线 (透明度 = 距中心越近越亮)
-    const cx = w / 2, cy = h / 2;
-    const maxDist = Math.hypot(w, h) / 2;
-    ctx.setLineWidth(1);
-    for (let i = 0; i < filledPoints.length; i++) {
-      for (let j = i + 1; j < filledPoints.length; j++) {
-        const a = filledPoints[i], b = filledPoints[j];
-        const dx = a.x - b.x, dy = a.y - b.y;
-        const dist = Math.hypot(dx, dy);
-        const maxEdge = Math.max(w, h) * 0.45;
-        if (dist > maxEdge) continue;
-        // 透明度: 中心近的亮, 远的暗
-        const midX = (a.x + b.x) / 2;
-        const midY = (a.y + b.y) / 2;
-        const distToCenter = Math.hypot(midX - cx, midY - cy);
-        const alpha = Math.max(0.15, 1 - distToCenter / maxDist);
-        ctx.setStrokeStyle(`rgba(${a.rgb}, ${alpha.toFixed(2)})`);
-        ctx.beginPath();
-        ctx.moveTo(a.x, a.y);
-        ctx.lineTo(b.x, b.y);
-        ctx.stroke();
-      }
-    }
-    // 中心 → 每个 filled 粒子的连线 (毛笔效应)
-    ctx.setLineWidth(2);
-    for (const p of filledPoints) {
-      ctx.setStrokeStyle(`rgba(${p.rgb}, 0.6)`);
-      ctx.beginPath();
-      ctx.moveTo(cx, cy);
-      ctx.lineTo(p.x, p.y);
-      ctx.stroke();
-    }
-    ctx.draw();
+        // 两两连线 (透明度 = 距中心越近越亮)
+        const cx = w / 2, cy = h / 2;
+        const maxDist = Math.hypot(w, h) / 2;
+        ctx.lineWidth = 1;
+        for (let i = 0; i < filledPoints.length; i++) {
+          for (let j = i + 1; j < filledPoints.length; j++) {
+            const a = filledPoints[i], b = filledPoints[j];
+            const dx = a.x - b.x, dy = a.y - b.y;
+            const dist = Math.hypot(dx, dy);
+            const maxEdge = Math.max(w, h) * 0.45;
+            if (dist > maxEdge) continue;
+            const midX = (a.x + b.x) / 2;
+            const midY = (a.y + b.y) / 2;
+            const distToCenter = Math.hypot(midX - cx, midY - cy);
+            const alpha = Math.max(0.15, 1 - distToCenter / maxDist);
+            ctx.strokeStyle = `rgba(${a.rgb}, ${alpha.toFixed(2)})`;
+            ctx.beginPath();
+            ctx.moveTo(a.x, a.y);
+            ctx.lineTo(b.x, b.y);
+            ctx.stroke();
+          }
+        }
+        // 中心 → 每个 filled 粒子的连线 (毛笔效应)
+        ctx.lineWidth = 2;
+        for (const p of filledPoints) {
+          ctx.strokeStyle = `rgba(${p.rgb}, 0.6)`;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(p.x, p.y);
+          ctx.stroke();
+        }
+      });
   },
 
   onParticleTap(e) {

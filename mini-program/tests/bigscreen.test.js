@@ -217,7 +217,7 @@ test('R99: wxss has ai bubble styles (no chat-bubble leftovers)', () => {
 test('R103: wxml has canvas for line drawing', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(src.includes('canvas-id="starfield-lines"'), 'wxml missing canvas-id');
+  assert.ok(src.includes('id="starfield-lines"'), 'wxml missing id');
   assert.ok(src.includes('class="lines-canvas"'), 'wxml missing lines-canvas class');
   assert.ok(src.includes('disable-scroll="true"'), 'canvas should disable scroll');
 });
@@ -236,10 +236,19 @@ test('R103: js has _drawLines method using Canvas API', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
   assert.ok(src.includes('_drawLines'), 'js missing _drawLines');
-  assert.ok(src.includes("createCanvasContext('starfield-lines'"), 'js missing canvas context');
-  assert.ok(src.includes('setStrokeStyle'), 'js missing stroke style');
+  assert.ok(src.includes("createSelectorQuery"), 'js missing createSelectorQuery (R104 type=2d)');
+  assert.ok(src.includes("getContext('2d')"), 'js missing getContext 2d (R104)');
+  assert.ok(src.includes('strokeStyle'), 'js missing strokeStyle (R104)');
   assert.ok(src.includes('beginPath'), 'js missing beginPath');
   assert.ok(src.includes('_isFieldFilled(p.id)'), 'lines should only draw between filled particles');
+});
+
+test('R104: wxml canvas uses type="2d"', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  assert.ok(src.includes('type="2d"'), 'wxml canvas should use type=2d');
+  assert.ok(src.includes('id="starfield-lines"'), 'wxml canvas id');
+  assert.ok(!src.includes("canvas-id=\"starfield-lines\""), 'should NOT use old canvas-id (replaced by id for type=2d)');
 });
 
 test('R95: form (mobile version) is removed', () => {

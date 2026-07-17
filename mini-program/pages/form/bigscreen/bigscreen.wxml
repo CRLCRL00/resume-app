@@ -11,8 +11,9 @@
         class="bg-star"
         style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
 
-  <!-- R103: 连线 canvas (filled 粒子之间) -->
-  <canvas canvas-id="starfield-lines"
+  <!-- R103+R104: 连线 canvas (filled 粒子之间, 用 type=2d) -->
+  <canvas type="2d"
+          id="starfield-lines"
           class="lines-canvas"
           style="width: {{width}}px; height: {{height}}px;"
           disable-scroll="true"></canvas>
