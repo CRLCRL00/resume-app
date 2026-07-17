@@ -239,10 +239,11 @@ PageImpl({
       },
     };
 
+    // 单次 showLoading + timer 仅 console 进度 (避免 showLoading 计数 race)
     const stages = loadingStages();
     wx.showLoading({ title: stages[0].text, mask: true });
-    const t1 = setTimeout(() => wx.showLoading({ title: stages[1].text, mask: true }), stages[1].at);
-    const t2 = setTimeout(() => wx.showLoading({ title: stages[2].text, mask: true }), stages[2].at);
+    const t1 = setTimeout(() => console.log('stage:', stages[1].text), stages[1].at);
+    const t2 = setTimeout(() => console.log('stage:', stages[2].text), stages[2].at);
 
     try {
       const saveRes = await request({ url: '/resume/save', method: 'POST', data: { source_form: form } });

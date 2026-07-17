@@ -1,24 +1,26 @@
 <!--
-  R94 大屏填简历 — 5 步分步 + 左输入右预览
-  入口: form.wxml 顶部 "🖥 大屏模式" 按钮
-  自适应: windowWidth ≥ 1024 → 大屏两栏; 否则单栏堆叠
+  R96 大屏填简历 — 精致版
+  Hero (绿渐变) + 步骤指示器 (浮在 hero 下方) + 左输入 + 右预览卡片
+  浮动 label 输入 (focus 时 label 浮起)
 -->
 <view class="bigscreen {{wide ? 'wide' : 'narrow'}}">
 
-  <!-- 顶部: 标题 + 关闭 -->
-  <view class="topbar">
-    <view class="topbar-title">简历助手 · 大屏模式</view>
-    <view class="topbar-close" bindtap="goBack">✕</view>
+  <!-- Hero 区: 品牌渐变 + 大标题 -->
+  <view class="hero">
+    <view class="hero-close" bindtap="goBack">✕</view>
+    <view class="hero-icon">✍️</view>
+    <view class="hero-title">智能简历助手</view>
+    <view class="hero-sub">5 步填完, 自动生成专业简历</view>
   </view>
 
-  <!-- 进度条 -->
-  <view class="progress">
-    <view class="step-dot {{step >= index ? 'active' : ''}}"
+  <!-- 步骤指示器 (浮在 hero 下方) -->
+  <view class="stepper">
+    <view class="stepper-item {{step > index ? 'done' : ''}} {{step === index ? 'active' : ''}}"
           wx:for="{{stepLabels}}" wx:key="index"
           data-index="{{index}}"
           bindtap="goStep">
-      <text class="step-num">{{index + 1}}</text>
-      <text class="step-name">{{item}}</text>
+      <view class="stepper-circle">{{step > index ? '✓' : (index + 1)}}</view>
+      <text class="stepper-name">{{item}}</text>
     </view>
   </view>
 
@@ -27,46 +29,44 @@
     <!-- 左侧: 当前步骤输入 -->
     <scroll-view class="left-pane" scroll-y enhanced show-scrollbar="{{false}}">
       <view class="step-header">
+        <view class="step-num-badge">第 {{step + 1}} / {{stepLabels.length}} 步</view>
         <text class="step-title">{{stepLabels[step]}}</text>
         <text class="step-hint">{{stepHints[step]}}</text>
       </view>
 
       <!-- Step 0: 基本信息 -->
       <block wx:if="{{step === 0}}">
-        <view class="field-big">
-          <text class="field-label">姓名</text>
-          <input class="field-input"
-                 placeholder="请输入姓名"
+        <view class="field-float {{form.name ? 'has-value' : ''}}">
+          <input class="field-float-input"
+                 placeholder=" "
                  value="{{form.name}}"
                  bindinput="setField"
-                 data-field="name"
-                 focus="{{step === 0 && focusIndex === 0}}" />
+                 data-field="name" />
+          <text class="field-float-label">姓名</text>
         </view>
-        <view class="field-big">
-          <text class="field-label">性别</text>
-          <view class="gender-row">
-            <view class="chip {{form.gender === 'male' ? 'chip-active' : ''}}"
-                  data-value="male" bindtap="setGender">男</view>
-            <view class="chip {{form.gender === 'female' ? 'chip-active' : ''}}"
-                  data-value="female" bindtap="setGender">女</view>
-            <view class="chip {{form.gender === 'other' ? 'chip-active' : ''}}"
-                  data-value="other" bindtap="setGender">其他</view>
-          </view>
+        <view class="field-float-label" style="position:static;font-size:28rpx;margin-bottom:16rpx;">性别</view>
+        <view class="chips">
+          <view class="chip {{form.gender === 'male' ? 'chip-active' : ''}}"
+                data-value="male" bindtap="setGender">男</view>
+          <view class="chip {{form.gender === 'female' ? 'chip-active' : ''}}"
+                data-value="female" bindtap="setGender">女</view>
+          <view class="chip {{form.gender === 'other' ? 'chip-active' : ''}}"
+                data-value="other" bindtap="setGender">其他</view>
         </view>
-        <view class="field-big">
-          <text class="field-label">学历</text>
+        <view class="field-float {{form.degree ? 'has-value' : ''}}">
           <picker mode="selector" range="{{degreeOptions}}" value="{{degreeIndex}}" bindchange="setDegree">
-            <view class="field-input picker">{{degreeOptions[degreeIndex] || '请选择学历'}}</view>
+            <view class="field-float-input picker">{{degreeOptions[degreeIndex] || ''}}</view>
           </picker>
+          <text class="field-float-label">学历</text>
         </view>
-        <view class="field-big">
-          <text class="field-label">手机（可选）</text>
-          <input class="field-input"
-                 placeholder="13800000000"
+        <view class="field-float {{form.phone ? 'has-value' : ''}}">
+          <input class="field-float-input"
+                 placeholder=" "
                  type="number"
                  value="{{form.phone}}"
                  bindinput="setField"
                  data-field="phone" />
+          <text class="field-float-label">手机（可选）</text>
         </view>
       </block>
 
@@ -77,33 +77,25 @@
             <text class="repeat-title">教育 {{eidx + 1}}</text>
             <view class="btn-link" bindtap="removeEdu" data-index="{{eidx}}" wx:if="{{form.educations.length > 1}}">删除</view>
           </view>
-          <view class="field-big">
-            <text class="field-label">学校</text>
-            <input class="field-input"
-                   placeholder="如: 清华大学"
-                   value="{{edu.school}}"
+          <view class="field-float {{edu.school ? 'has-value' : ''}}">
+            <input class="field-float-input" placeholder=" " value="{{edu.school}}"
                    bindinput="setEdu" data-index="{{eidx}}" data-field="school" />
+            <text class="field-float-label">学校</text>
           </view>
-          <view class="field-big">
-            <text class="field-label">专业</text>
-            <input class="field-input"
-                   placeholder="如: 计算机科学"
-                   value="{{edu.major}}"
+          <view class="field-float {{edu.major ? 'has-value' : ''}}">
+            <input class="field-float-input" placeholder=" " value="{{edu.major}}"
                    bindinput="setEdu" data-index="{{eidx}}" data-field="major" />
+            <text class="field-float-label">专业</text>
           </view>
-          <view class="field-big">
-            <text class="field-label">起止时间</text>
-            <view class="date-row">
-              <input class="field-input date-input"
-                     placeholder="2020-09"
-                     value="{{edu.start}}"
-                     bindinput="setEdu" data-index="{{eidx}}" data-field="start" />
-              <text class="date-sep">至</text>
-              <input class="field-input date-input"
-                     placeholder="2024-06 或 至今"
-                     value="{{edu.end}}"
-                     bindinput="setEdu" data-index="{{eidx}}" data-field="end" />
-            </view>
+          <view class="field-float" style="margin-bottom:0;">
+            <text class="field-float-label">起止时间</text>
+          </view>
+          <view class="date-row" style="margin-top:-16rpx;">
+            <input class="field-float-input date-input" placeholder="2020-09" value="{{edu.start}}"
+                   bindinput="setEdu" data-index="{{eidx}}" data-field="start" />
+            <text class="date-sep">至</text>
+            <input class="field-float-input date-input" placeholder="2024-06 或 至今" value="{{edu.end}}"
+                   bindinput="setEdu" data-index="{{eidx}}" data-field="end" />
           </view>
         </view>
         <view class="btn-add" bindtap="addEdu">+ 添加教育经历</view>
@@ -116,40 +108,30 @@
             <text class="repeat-title">工作 {{xidx + 1}}</text>
             <view class="btn-link" bindtap="removeExp" data-index="{{xidx}}" wx:if="{{form.experiences.length > 1}}">删除</view>
           </view>
-          <view class="field-big">
-            <text class="field-label">公司</text>
-            <input class="field-input"
-                   placeholder="如: 阿里巴巴"
-                   value="{{exp.company}}"
+          <view class="field-float {{exp.company ? 'has-value' : ''}}">
+            <input class="field-float-input" placeholder=" " value="{{exp.company}}"
                    bindinput="setExp" data-index="{{xidx}}" data-field="company" />
+            <text class="field-float-label">公司</text>
           </view>
-          <view class="field-big">
-            <text class="field-label">职位</text>
-            <input class="field-input"
-                   placeholder="如: 前端工程师"
-                   value="{{exp.title}}"
+          <view class="field-float {{exp.title ? 'has-value' : ''}}">
+            <input class="field-float-input" placeholder=" " value="{{exp.title}}"
                    bindinput="setExp" data-index="{{xidx}}" data-field="title" />
+            <text class="field-float-label">职位</text>
           </view>
-          <view class="field-big">
-            <text class="field-label">起止时间</text>
-            <view class="date-row">
-              <input class="field-input date-input"
-                     placeholder="2021-07"
-                     value="{{exp.start}}"
-                     bindinput="setExp" data-index="{{xidx}}" data-field="start" />
-              <text class="date-sep">至</text>
-              <input class="field-input date-input"
-                     placeholder="至今"
-                     value="{{exp.end}}"
-                     bindinput="setExp" data-index="{{xidx}}" data-field="end" />
-            </view>
+          <view class="field-float" style="margin-bottom:0;">
+            <text class="field-float-label">起止时间</text>
           </view>
-          <view class="field-big">
-            <text class="field-label">工作描述</text>
-            <textarea class="field-input textarea-big"
-                      placeholder="简述主要工作内容与成果..."
-                      value="{{exp.desc}}"
+          <view class="date-row" style="margin-top:-16rpx;">
+            <input class="field-float-input date-input" placeholder="2021-07" value="{{exp.start}}"
+                   bindinput="setExp" data-index="{{xidx}}" data-field="start" />
+            <text class="date-sep">至</text>
+            <input class="field-float-input date-input" placeholder="至今" value="{{exp.end}}"
+                   bindinput="setExp" data-index="{{xidx}}" data-field="end" />
+          </view>
+          <view class="field-float {{exp.desc ? 'has-value' : ''}}">
+            <textarea class="field-float-input textarea-big" placeholder=" " value="{{exp.desc}}"
                       bindinput="setExp" data-index="{{xidx}}" data-field="desc" />
+            <text class="field-float-label">工作描述</text>
           </view>
         </view>
         <view class="btn-add" bindtap="addExp">+ 添加工作经历</view>
@@ -157,48 +139,36 @@
 
       <!-- Step 3: 求职期望 -->
       <block wx:if="{{step === 3}}">
-        <view class="field-big">
-          <text class="field-label">期望城市</text>
-          <input class="field-input"
-                 placeholder="如: 深圳"
-                 value="{{form.expected.city}}"
+        <view class="field-float {{form.expected.city ? 'has-value' : ''}}">
+          <input class="field-float-input" placeholder=" " value="{{form.expected.city}}"
                  bindinput="setExpected" data-field="city" />
+          <text class="field-float-label">期望城市</text>
         </view>
-        <view class="field-big">
-          <text class="field-label">期望岗位</text>
-          <input class="field-input"
-                 placeholder="如: 全栈工程师"
-                 value="{{form.expected.position}}"
+        <view class="field-float {{form.expected.position ? 'has-value' : ''}}">
+          <input class="field-float-input" placeholder=" " value="{{form.expected.position}}"
                  bindinput="setExpected" data-field="position" />
+          <text class="field-float-label">期望岗位</text>
         </view>
-        <view class="field-big">
-          <text class="field-label">期望薪资（K）</text>
-          <view class="date-row">
-            <input class="field-input date-input"
-                   type="number"
-                   placeholder="下限"
-                   value="{{form.expected.salary_min}}"
-                   bindinput="setExpected" data-field="salary_min" />
-            <text class="date-sep">—</text>
-            <input class="field-input date-input"
-                   type="number"
-                   placeholder="上限"
-                   value="{{form.expected.salary_max}}"
-                   bindinput="setExpected" data-field="salary_max" />
-          </view>
+        <view class="field-float" style="margin-bottom:0;">
+          <text class="field-float-label">期望薪资（K）</text>
+        </view>
+        <view class="date-row" style="margin-top:-16rpx;">
+          <input class="field-float-input date-input" type="number" placeholder="下限" value="{{form.expected.salary_min}}"
+                 bindinput="setExpected" data-field="salary_min" />
+          <text class="date-sep">—</text>
+          <input class="field-float-input date-input" type="number" placeholder="上限" value="{{form.expected.salary_max}}"
+                 bindinput="setExpected" data-field="salary_max" />
         </view>
       </block>
 
       <!-- Step 4: 技能 -->
       <block wx:if="{{step === 4}}">
-        <view class="field-big">
-          <text class="field-label">技能</text>
-          <textarea class="field-input textarea-big"
-                    placeholder="用逗号分隔, 如: React, Vue, TypeScript, Node.js"
-                    value="{{skillsInput}}"
+        <view class="field-float {{skillsInput ? 'has-value' : ''}}">
+          <textarea class="field-float-input textarea-big" placeholder=" " value="{{skillsInput}}"
                     bindinput="setSkillsInput" />
-          <text class="field-hint">已识别 {{skillsCount}} 项技能</text>
+          <text class="field-float-label">技能 (逗号分隔)</text>
         </view>
+        <text class="field-hint">已识别 {{skillsCount}} 项技能</text>
       </block>
 
       <!-- 步骤切换 -->
@@ -221,12 +191,12 @@
         </view>
         <view class="preview-meta">
           <text wx:if="{{form.gender}}">{{form.gender === 'male' ? '男' : form.gender === 'female' ? '女' : '其他'}}</text>
-          <text wx:if="{{form.degree}}">· {{form.degree}}</text>
-          <text wx:if="{{form.phone}}">· {{form.phone}}</text>
+          <text wx:if="{{form.degree}}">{{form.degree}}</text>
+          <text wx:if="{{form.phone}}">{{form.phone}}</text>
         </view>
 
         <view class="preview-section" wx:if="{{form.expected.city || form.expected.position}}">
-          <text class="preview-section-title">求职期望</text>
+          <view class="preview-section-title">求职期望</view>
           <text class="preview-line">{{form.expected.position || '岗位待定'}} · {{form.expected.city || '城市待定'}}</text>
           <text class="preview-line" wx:if="{{form.expected.salary_min || form.expected.salary_max}}">
             薪资 {{form.expected.salary_min || '?'}}-{{form.expected.salary_max || '?'}}K
@@ -234,7 +204,7 @@
         </view>
 
         <view class="preview-section" wx:if="{{form.educations.length && form.educations[0].school}}">
-          <text class="preview-section-title">教育</text>
+          <view class="preview-section-title">教育</view>
           <view wx:for="{{form.educations}}" wx:key="eidx" wx:for-item="edu" wx:for-index="eidx" wx:if="{{edu.school}}">
             <text class="preview-line">{{edu.school}} · {{edu.major || '专业'}}</text>
             <text class="preview-line-mini">{{edu.start || '?'}} - {{edu.end || '?'}}</text>
@@ -242,7 +212,7 @@
         </view>
 
         <view class="preview-section" wx:if="{{form.experiences.length && form.experiences[0].company}}">
-          <text class="preview-section-title">工作</text>
+          <view class="preview-section-title">工作</view>
           <view wx:for="{{form.experiences}}" wx:key="xidx" wx:for-item="exp" wx:for-index="xidx" wx:if="{{exp.company}}">
             <text class="preview-line">{{exp.company}} · {{exp.title || '职位'}}</text>
             <text class="preview-line-mini">{{exp.start || '?'}} - {{exp.end || '?'}}</text>
@@ -251,7 +221,7 @@
         </view>
 
         <view class="preview-section" wx:if="{{skillsCount > 0}}">
-          <text class="preview-section-title">技能</text>
+          <view class="preview-section-title">技能</view>
           <text class="preview-line">{{form.skills.join(' · ')}}</text>
         </view>
       </view>
