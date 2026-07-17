@@ -1,186 +1,139 @@
 <!--
-  R96 大屏填简历 — 精致版
-  Hero (绿渐变) + 步骤指示器 (浮在 hero 下方) + 左输入 + 右预览卡片
-  浮动 label 输入 (focus 时 label 浮起)
+  R97 大屏填简历 — AI 对话式气泡 UI
+  推翻传统表单, 用 chat 推进 5 步
+  自适应: ≥1024 → 左 chat + 右 sticky preview; 否则 chat 顶满, preview 折叠到底
 -->
 <view class="bigscreen {{wide ? 'wide' : 'narrow'}}">
 
-  <!-- Hero 区: 品牌渐变 + 大标题 -->
-  <view class="hero">
-    <view class="hero-close" bindtap="goBack">✕</view>
-    <view class="hero-icon">✍️</view>
-    <view class="hero-title">智能简历助手</view>
-    <view class="hero-sub">5 步填完, 自动生成专业简历</view>
-  </view>
-
-  <!-- 步骤指示器 (浮在 hero 下方) -->
-  <view class="stepper">
-    <view class="stepper-item {{step > index ? 'done' : ''}} {{step === index ? 'active' : ''}}"
-          wx:for="{{stepLabels}}" wx:key="index"
-          data-index="{{index}}"
-          bindtap="goStep">
-      <view class="stepper-circle">{{step > index ? '✓' : (index + 1)}}</view>
-      <text class="stepper-name">{{item}}</text>
+  <!-- 顶部 header: 进度 + 关闭 -->
+  <view class="chat-header">
+    <view class="chat-header-left">
+      <text class="chat-header-icon">💬</text>
+      <view class="chat-header-info">
+        <text class="chat-header-title">智能简历助手</text>
+        <text class="chat-header-progress">对话 {{chatStep + 1}} / {{chatScript.length}} · {{stepLabels[step]}}</text>
+      </view>
     </view>
+    <view class="chat-header-close" bindtap="goBack">✕</view>
   </view>
 
-  <!-- 主区: 左输入 + 右预览 -->
-  <view class="main">
-    <!-- 左侧: 当前步骤输入 -->
-    <scroll-view class="left-pane" scroll-y enhanced show-scrollbar="{{false}}">
-      <view class="step-header">
-        <view class="step-num-badge">第 {{step + 1}} / {{stepLabels.length}} 步</view>
-        <text class="step-title">{{stepLabels[step]}}</text>
-        <text class="step-hint">{{stepHints[step]}}</text>
+  <!-- 主区 -->
+  <view class="chat-main">
+    <!-- 左侧: 聊天流 -->
+    <scroll-view class="chat-stream" scroll-y enhanced show-scrollbar="{{false}}" scroll-into-view="{{lastId}}">
+      <view class="chat-list">
+        <view wx:for="{{messages}}" wx:key="index" wx:for-item="msg" wx:for-index="mi"
+              id="msg-{{mi}}"
+              class="msg-row {{msg.role}}">
+          <view wx:if="{{msg.role === 'ai'}}" class="msg-avatar ai">✨</view>
+          <view class="msg-bubble {{msg.role}}">
+            <text class="msg-text">{{msg.text}}</text>
+          </view>
+          <view wx:if="{{msg.role === 'user'}}" class="msg-avatar user">我</view>
+        </view>
+
+        <!-- 当前 AI 问题 (等待回答) -->
+        <view wx:if="{{!done}}" class="msg-row ai" id="current-question">
+          <view class="msg-avatar ai">✨</view>
+          <view class="msg-bubble ai current">
+            <text class="msg-text">{{chatScript[chatStep].ai}}</text>
+          </view>
+        </view>
+
+        <!-- 滚动锚点 -->
+        <view class="chat-end" id="chat-end"></view>
       </view>
 
-      <!-- Step 0: 基本信息 -->
-      <block wx:if="{{step === 0}}">
-        <view class="field-float {{form.name ? 'has-value' : ''}}">
-          <input class="field-float-input"
-                 placeholder=" "
-                 value="{{form.name}}"
-                 bindinput="setField"
-                 data-field="name" />
-          <text class="field-float-label">姓名</text>
-        </view>
-        <view class="field-float-label" style="position:static;font-size:28rpx;margin-bottom:16rpx;">性别</view>
-        <view class="chips">
-          <view class="chip {{form.gender === 'male' ? 'chip-active' : ''}}"
-                data-value="male" bindtap="setGender">男</view>
-          <view class="chip {{form.gender === 'female' ? 'chip-active' : ''}}"
-                data-value="female" bindtap="setGender">女</view>
-          <view class="chip {{form.gender === 'other' ? 'chip-active' : ''}}"
-                data-value="other" bindtap="setGender">其他</view>
-        </view>
-        <view class="field-float {{form.degree ? 'has-value' : ''}}">
-          <picker mode="selector" range="{{degreeOptions}}" value="{{degreeIndex}}" bindchange="setDegree">
-            <view class="field-float-input picker">{{degreeOptions[degreeIndex] || ''}}</view>
+      <!-- 输入区 (固定底部) -->
+      <view class="chat-input-bar" wx:if="{{!done}}">
+        <!-- text input -->
+        <block wx:if="{{currentType === 'text'}}">
+          <input class="chat-input"
+                 placeholder="输入你的回答..."
+                 value="{{currentInput}}"
+                 bindinput="onInput"
+                 bindconfirm="onSend"
+                 confirm-type="send"
+                 focus="{{true}}" />
+          <view class="chat-send" bindtap="onSend">发送 →</view>
+          <view wx:if="{{chatScript[chatStep].optional}}" class="chat-skip" bindtap="onSkip">跳过</view>
+        </block>
+
+        <!-- textarea -->
+        <block wx:if="{{currentType === 'textarea'}}">
+          <textarea class="chat-input chat-textarea"
+                    placeholder="输入你的回答..."
+                    value="{{currentInput}}"
+                    bindinput="onInput" />
+          <view class="chat-send" bindtap="onSend">发送 →</view>
+        </block>
+
+        <!-- chips (性别) -->
+        <block wx:if="{{currentType === 'chips'}}">
+          <view class="chat-chips">
+            <view class="chat-chip"
+                  wx:for="{{currentOptions}}" wx:key="value" wx:for-item="opt"
+                  data-value="{{opt.value}}"
+                  bindtap="onChip">{{opt.label}}</view>
+          </view>
+        </block>
+
+        <!-- picker (学历) -->
+        <block wx:if="{{currentType === 'picker'}}">
+          <picker mode="selector" range="{{currentOptions}}" bindchange="onPicker">
+            <view class="chat-picker">点击选择学历 ▾</view>
           </picker>
-          <text class="field-float-label">学历</text>
-        </view>
-        <view class="field-float {{form.phone ? 'has-value' : ''}}">
-          <input class="field-float-input"
-                 placeholder=" "
-                 type="number"
-                 value="{{form.phone}}"
-                 bindinput="setField"
-                 data-field="phone" />
-          <text class="field-float-label">手机（可选）</text>
-        </view>
-      </block>
+        </block>
 
-      <!-- Step 1: 教育经历 -->
-      <block wx:if="{{step === 1}}">
-        <view class="repeat-card" wx:for="{{form.educations}}" wx:key="eidx" wx:for-item="edu" wx:for-index="eidx">
-          <view class="repeat-header">
-            <text class="repeat-title">教育 {{eidx + 1}}</text>
-            <view class="btn-link" bindtap="removeEdu" data-index="{{eidx}}" wx:if="{{form.educations.length > 1}}">删除</view>
+        <!-- dateRange (教育/工作 起止) -->
+        <block wx:if="{{currentType === 'dateRange'}}">
+          <view class="chat-date-row">
+            <input class="chat-date-input" placeholder="2020-09" value="{{currentDateStart}}" bindinput="onDateStart" />
+            <text class="chat-date-sep">至</text>
+            <input class="chat-date-input" placeholder="至今" value="{{currentDateEnd}}" bindinput="onDateEnd" />
           </view>
-          <view class="field-float {{edu.school ? 'has-value' : ''}}">
-            <input class="field-float-input" placeholder=" " value="{{edu.school}}"
-                   bindinput="setEdu" data-index="{{eidx}}" data-field="school" />
-            <text class="field-float-label">学校</text>
-          </view>
-          <view class="field-float {{edu.major ? 'has-value' : ''}}">
-            <input class="field-float-input" placeholder=" " value="{{edu.major}}"
-                   bindinput="setEdu" data-index="{{eidx}}" data-field="major" />
-            <text class="field-float-label">专业</text>
-          </view>
-          <view class="field-float" style="margin-bottom:0;">
-            <text class="field-float-label">起止时间</text>
-          </view>
-          <view class="date-row" style="margin-top:-16rpx;">
-            <input class="field-float-input date-input" placeholder="2020-09" value="{{edu.start}}"
-                   bindinput="setEdu" data-index="{{eidx}}" data-field="start" />
-            <text class="date-sep">至</text>
-            <input class="field-float-input date-input" placeholder="2024-06 或 至今" value="{{edu.end}}"
-                   bindinput="setEdu" data-index="{{eidx}}" data-field="end" />
-          </view>
-        </view>
-        <view class="btn-add" bindtap="addEdu">+ 添加教育经历</view>
-      </block>
+          <view class="chat-send" bindtap="onSend">下一步 →</view>
+        </block>
 
-      <!-- Step 2: 工作经历 -->
-      <block wx:if="{{step === 2}}">
-        <view class="repeat-card" wx:for="{{form.experiences}}" wx:key="xidx" wx:for-item="exp" wx:for-index="xidx">
-          <view class="repeat-header">
-            <text class="repeat-title">工作 {{xidx + 1}}</text>
-            <view class="btn-link" bindtap="removeExp" data-index="{{xidx}}" wx:if="{{form.experiences.length > 1}}">删除</view>
-          </view>
-          <view class="field-float {{exp.company ? 'has-value' : ''}}">
-            <input class="field-float-input" placeholder=" " value="{{exp.company}}"
-                   bindinput="setExp" data-index="{{xidx}}" data-field="company" />
-            <text class="field-float-label">公司</text>
-          </view>
-          <view class="field-float {{exp.title ? 'has-value' : ''}}">
-            <input class="field-float-input" placeholder=" " value="{{exp.title}}"
-                   bindinput="setExp" data-index="{{xidx}}" data-field="title" />
-            <text class="field-float-label">职位</text>
-          </view>
-          <view class="field-float" style="margin-bottom:0;">
-            <text class="field-float-label">起止时间</text>
-          </view>
-          <view class="date-row" style="margin-top:-16rpx;">
-            <input class="field-float-input date-input" placeholder="2021-07" value="{{exp.start}}"
-                   bindinput="setExp" data-index="{{xidx}}" data-field="start" />
-            <text class="date-sep">至</text>
-            <input class="field-float-input date-input" placeholder="至今" value="{{exp.end}}"
-                   bindinput="setExp" data-index="{{xidx}}" data-field="end" />
-          </view>
-          <view class="field-float {{exp.desc ? 'has-value' : ''}}">
-            <textarea class="field-float-input textarea-big" placeholder=" " value="{{exp.desc}}"
-                      bindinput="setExp" data-index="{{xidx}}" data-field="desc" />
-            <text class="field-float-label">工作描述</text>
-          </view>
-        </view>
-        <view class="btn-add" bindtap="addExp">+ 添加工作经历</view>
-      </block>
+        <!-- work (公司+职位 一行输入) -->
+        <block wx:if="{{currentType === 'work'}}">
+          <input class="chat-input"
+                 placeholder="例: 阿里巴巴 · 前端工程师"
+                 value="{{currentInput}}"
+                 bindinput="onInput"
+                 bindconfirm="onSend"
+                 confirm-type="send" />
+          <view class="chat-send" bindtap="onSend">发送 →</view>
+        </block>
 
-      <!-- Step 3: 求职期望 -->
-      <block wx:if="{{step === 3}}">
-        <view class="field-float {{form.expected.city ? 'has-value' : ''}}">
-          <input class="field-float-input" placeholder=" " value="{{form.expected.city}}"
-                 bindinput="setExpected" data-field="city" />
-          <text class="field-float-label">期望城市</text>
-        </view>
-        <view class="field-float {{form.expected.position ? 'has-value' : ''}}">
-          <input class="field-float-input" placeholder=" " value="{{form.expected.position}}"
-                 bindinput="setExpected" data-field="position" />
-          <text class="field-float-label">期望岗位</text>
-        </view>
-        <view class="field-float" style="margin-bottom:0;">
-          <text class="field-float-label">期望薪资（K）</text>
-        </view>
-        <view class="date-row" style="margin-top:-16rpx;">
-          <input class="field-float-input date-input" type="number" placeholder="下限" value="{{form.expected.salary_min}}"
-                 bindinput="setExpected" data-field="salary_min" />
-          <text class="date-sep">—</text>
-          <input class="field-float-input date-input" type="number" placeholder="上限" value="{{form.expected.salary_max}}"
-                 bindinput="setExpected" data-field="salary_max" />
-        </view>
-      </block>
+        <!-- salaryRange (薪资) -->
+        <block wx:if="{{currentType === 'salaryRange'}}">
+          <view class="chat-date-row">
+            <input class="chat-date-input" type="number" placeholder="下限 K" value="{{currentSalaryMin}}" bindinput="onSalaryMin" />
+            <text class="chat-date-sep">—</text>
+            <input class="chat-date-input" type="number" placeholder="上限 K" value="{{currentSalaryMax}}" bindinput="onSalaryMax" />
+          </view>
+          <view class="chat-send" bindtap="onSend">下一步 →</view>
+        </block>
 
-      <!-- Step 4: 技能 -->
-      <block wx:if="{{step === 4}}">
-        <view class="field-float {{skillsInput ? 'has-value' : ''}}">
-          <textarea class="field-float-input textarea-big" placeholder=" " value="{{skillsInput}}"
-                    bindinput="setSkillsInput" />
-          <text class="field-float-label">技能 (逗号分隔)</text>
-        </view>
-        <text class="field-hint">已识别 {{skillsCount}} 项技能</text>
-      </block>
+        <!-- addMore (教育/工作) -->
+        <block wx:if="{{currentType === 'addMore'}}">
+          <view class="chat-addmore">
+            <view class="chat-addmore-btn yes" bindtap="onAddMore">+ 再加一条</view>
+            <view class="chat-addmore-btn no" bindtap="onNoMore">✓ 没有了</view>
+          </view>
+        </block>
+      </view>
 
-      <!-- 步骤切换 -->
-      <view class="step-nav">
-        <view class="btn-secondary" bindtap="prevStep" wx:if="{{step > 0}}">← 上一步</view>
-        <view class="btn-primary" bindtap="nextStep" wx:if="{{step < stepLabels.length - 1}}">下一步 →</view>
-        <view class="btn-primary submit" bindtap="submit" wx:if="{{step === stepLabels.length - 1}}">生成简历 ✨</view>
+      <!-- 完成: 显示提交按钮 -->
+      <view class="chat-complete" wx:if="{{done}}">
+        <view class="chat-complete-text">🎉 信息收集完成</view>
+        <view class="chat-submit" bindtap="onSubmit">生成简历 ✨</view>
       </view>
     </scroll-view>
 
-    <!-- 右侧: 简历预览卡片 -->
-    <view class="right-pane" wx:if="{{wide}}">
+    <!-- 右侧: 浮动预览卡片 (≥1024 显示) -->
+    <view class="chat-preview" wx:if="{{wide && !narrow}}">
       <view class="preview-card">
         <view class="preview-header">
           <text class="preview-name">{{form.name || '未填姓名'}}</text>
@@ -198,9 +151,7 @@
         <view class="preview-section" wx:if="{{form.expected.city || form.expected.position}}">
           <view class="preview-section-title">求职期望</view>
           <text class="preview-line">{{form.expected.position || '岗位待定'}} · {{form.expected.city || '城市待定'}}</text>
-          <text class="preview-line" wx:if="{{form.expected.salary_min || form.expected.salary_max}}">
-            薪资 {{form.expected.salary_min || '?'}}-{{form.expected.salary_max || '?'}}K
-          </text>
+          <text class="preview-line" wx:if="{{form.expected.salary_min || form.expected.salary_max}}">薪资 {{form.expected.salary_min || '?'}}-{{form.expected.salary_max || '?'}}K</text>
         </view>
 
         <view class="preview-section" wx:if="{{form.educations.length && form.educations[0].school}}">

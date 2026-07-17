@@ -77,7 +77,6 @@ test('R94: calcCompletion cap at 100', () => {
   const { emptyForm, calcCompletion } = require('../pages/form/bigscreen/bigscreen')._test;
   const f = emptyForm();
   f.name = 'X'; f.skills = ['a', 'b', 'c'];
-  // 10 + 10 = 20 (extra skills bonus not in spec, but skills weight is 10)
   const r = calcCompletion(f, 3);
   assert.ok(r <= 100, `should cap at 100, got ${r}`);
 });
@@ -88,9 +87,65 @@ test('R94: STEP_LABELS has 5 steps', () => {
   assert.deepStrictEqual(STEP_LABELS, ['基本信息', '教育经历', '工作经历', '求职期望', '技能']);
 });
 
-test('R94: STEP_HINTS aligned with labels', () => {
-  const { STEP_LABELS, STEP_HINTS } = require('../pages/form/bigscreen/bigscreen')._test;
-  assert.strictEqual(STEP_HINTS.length, STEP_LABELS.length);
+test('R97: CHAT_SCRIPT has 5 steps with all required fields', () => {
+  const { CHAT_SCRIPT } = require('../pages/form/bigscreen/bigscreen')._test;
+  // 至少 13 个对话节点 (5 步)
+  assert.ok(CHAT_SCRIPT.length >= 13, `expected ≥13 chat nodes, got ${CHAT_SCRIPT.length}`);
+  // 5 个不同 step
+  const steps = new Set(CHAT_SCRIPT.map(s => s.step));
+  assert.strictEqual(steps.size, 5, 'should cover all 5 form steps');
+  // 每节点有 ai + field + type
+  for (const s of CHAT_SCRIPT) {
+    assert.ok(s.ai && s.ai.length > 0, `script[${CHAT_SCRIPT.indexOf(s)}].ai empty`);
+    assert.ok(s.field, `script[${CHAT_SCRIPT.indexOf(s)}].field empty`);
+    assert.ok(s.type, `script[${CHAT_SCRIPT.indexOf(s)}].type empty`);
+  }
+});
+
+test('R97: CHAT_SCRIPT contains key question types', () => {
+  const { CHAT_SCRIPT } = require('../pages/form/bigscreen/bigscreen')._test;
+  const types = new Set(CHAT_SCRIPT.map(s => s.type));
+  for (const required of ['text', 'chips', 'picker', 'dateRange', 'textarea', 'addMore']) {
+    assert.ok(types.has(required), `missing question type: ${required}`);
+  }
+});
+
+test('R97: CHAT_SCRIPT step 0 covers basic info (name + gender + degree + phone)', () => {
+  const { CHAT_SCRIPT } = require('../pages/form/bigscreen/bigscreen')._test;
+  const step0 = CHAT_SCRIPT.filter(s => s.step === 0);
+  const fields = step0.map(s => s.field);
+  assert.ok(fields.includes('name'));
+  assert.ok(fields.includes('gender'));
+  assert.ok(fields.includes('degree'));
+  assert.ok(fields.includes('phone'));
+});
+
+test('R97: wxml has chat-style markup (msg-bubble class)', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  assert.ok(src.includes('msg-bubble'), 'wxml missing msg-bubble class');
+  assert.ok(src.includes('msg-row'), 'wxml missing msg-row class');
+  assert.ok(src.includes('chat-stream'), 'wxml missing chat-stream container');
+  assert.ok(src.includes('chat-input-bar'), 'wxml missing chat-input-bar');
+});
+
+test('R97: wxss has bubble styles (no traditional form-card class)', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(src.includes('.msg-bubble'), 'wxss missing msg-bubble style');
+  assert.ok(src.includes('.msg-row.ai'), 'wxss missing ai message alignment');
+  assert.ok(src.includes('.msg-row.user'), 'wxss missing user message alignment');
+  assert.ok(!src.includes('.field-big'), 'wxss should not have traditional .field-big (chat-only mode)');
+});
+
+test('R97: js has chatScript + chatStep + messages state', () => {
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
+  assert.ok(src.includes('chatScript'), 'js missing chatScript');
+  assert.ok(src.includes('chatStep'), 'js missing chatStep');
+  assert.ok(src.includes('messages:'), 'js missing messages array');
+  assert.ok(src.includes('_pushAI'), 'js missing _pushAI');
+  assert.ok(src.includes('_submitAnswer'), 'js missing _submitAnswer');
 });
 
 test('R95: form (mobile version) is removed', () => {
