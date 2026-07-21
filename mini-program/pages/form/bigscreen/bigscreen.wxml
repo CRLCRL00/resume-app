@@ -16,11 +16,8 @@
         style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
 
   <!-- R107 T3: 背景流星雨 (5 颗拖尾, 顶左 → 底右) -->
-  <view wx:for="{{meteors}}" wx:key="delay"
-        class="meteor"
-        style="left: {{item.x}}px; top: {{item.y}}px;
-               animation-delay: {{item.delay}}ms;
-               animation-duration: {{item.duration}}ms;"></view>
+  <!-- R109 fix: WXML 属性值不能含换行 — 改单行 style 避免 IDE 真机编译报 `unexpected character \n` -->
+  <view wx:for="{{meteors}}" wx:key="delay" class="meteor" style="left: {{item.x}}px; top: {{item.y}}px; animation-delay: {{item.delay}}ms; animation-duration: {{item.duration}}ms;"></view>
 
   <!-- R103+R104: 连线 canvas (filled 粒子之间, 用 type=2d) -->
   <canvas type="2d"
@@ -58,13 +55,7 @@
             style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; border-color: {{con.color}}; box-shadow: 0 0 60rpx {{con.color}}88, 0 0 120rpx {{con.color}}44;"></view>
 
       <!-- 粒子 (字段) -->
-      <view wx:for="{{con.particles}}" wx:key="id" wx:for-item="particle"
-            class="particle {{particle.filled ? 'filled' : ''}}"
-            style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{con.color}}; --pcrgb: {{con.colorRgb}};
-                   transform: translate({{particle.dx || 0}}px, {{particle.dy || 0}}px);"
-            data-field="{{particle.id}}"
-            data-const-id="{{con.id}}"
-            bindtap="onParticleTap">
+      <view wx:for="{{con.particles}}" wx:key="id" wx:for-item="particle" class="particle {{particle.filled ? 'filled' : ''}}" style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{con.color}}; --pcrgb: {{con.colorRgb}}; transform: translate({{particle.dx || 0}}px, {{particle.dy || 0}}px);" data-field="{{particle.id}}" data-const-id="{{con.id}}" bindtap="onParticleTap">
         <view class="particle-glow"></view>
         <view class="particle-core"></view>
         <text class="particle-label">{{particle.label}}</text>

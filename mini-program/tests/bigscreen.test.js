@@ -147,6 +147,21 @@ test('R98: wxml has starfield + particle + modal markup', () => {
   assert.ok(!src.includes('msg-bubble'), 'wxml should NOT have chat bubbles');
 });
 
+test('R109: wxml style attributes never span multiple lines (XML spec)', () => {
+  // R109: 修复 R107 T3 implementer 写的 multi-line style="..." 属性
+  // — WXML 严格模式报 `unexpected character \n` 在 style 跨行处
+  // 此测试扫所有 wxml `style="..."` 属性, 断言 value 不含换行
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  // Match all `style="..."` attributes (greedy until closing quote)
+  const styleMatches = src.match(/style="[^"]*"/g) || [];
+  assert.ok(styleMatches.length > 0, 'R109: wxml 应该至少 1 个 style 属性');
+  for (const m of styleMatches) {
+    assert.ok(!m.includes('\n'),
+      `R109: wxml style 属性不能跨行 — 发现: ${m.slice(0, 60)}... (WXML 不支持属性内换行)`);
+  }
+});
+
 test('R98: wxss has dark space + glowing particles', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
