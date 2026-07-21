@@ -335,3 +335,41 @@ test('R95: bigscreen.json title = 填简历', () => {
   const cfg = JSON.parse(fs.readFileSync('./pages/form/bigscreen/bigscreen.json', 'utf8'));
   assert.strictEqual(cfg.navigationBarTitleText, '填简历');
 });
+
+// ─── R107 T1: 配色升级 (星云背景 + conic-gradient 双色) ─────────────
+test('R107 T1: wxss has --theme-bg CSS variable using radial-gradient for starfield', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxss = path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss');
+  const src = fs.readFileSync(wxss, 'utf8');
+  assert.ok(src.includes('--theme-bg'),
+    'R107 T1: wxss 必须定义 --theme-bg CSS 变量 (星云背景)');
+  assert.ok(src.includes('var(--theme-bg'),
+    'R107 T1: wxss 必须通过 var(--theme-bg) 引用 (保证可逆)');
+  assert.ok(src.includes('radial-gradient'),
+    'R107 T1: --theme-bg 必须用 radial-gradient (星云)');
+});
+
+test('R107 T1: wxss defines --c1/--c2 + conic-gradient on .constellation', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxss = path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss');
+  const src = fs.readFileSync(wxss, 'utf8');
+  assert.ok(src.includes('--c1'),
+    'R107 T1: 必须定义 --c1 CSS 变量 (conic-gradient 颜色 1)');
+  assert.ok(src.includes('--c2'),
+    'R107 T1: 必须定义 --c2 CSS 变量 (conic-gradient 颜色 2)');
+  assert.ok(src.includes('conic-gradient'),
+    'R107 T1: .constellation 必须用 conic-gradient 双色填充');
+  assert.ok(src.includes('var(--c1)') && src.includes('var(--c2)'),
+    'R107 T1: conic-gradient 必须用 var(--c1)/var(--c2) 而非硬编码颜色');
+});
+
+test('R107 T1: wxml applies constellation--{{con.id}} modifier on outer view', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  // 外层 wx:for="{{constellations}}" 块必须有 modifier class
+  assert.ok(wxml.includes('constellation--{{con.id}}'),
+    'R107 T1: wxml 必须在 wx:for-item="con" 内的外层 view 上加 constellation--{{con.id}} modifier class');
+});

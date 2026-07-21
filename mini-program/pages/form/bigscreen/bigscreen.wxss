@@ -1,10 +1,20 @@
 /* R98 粒子星图 — 深空背景 + 发光粒子 */
 
 .starfield {
-  background: radial-gradient(ellipse at center, #0a0e1a 0%, #050810 70%, #020308 100%);
+  /* R107 T1: 配色升级 — 主题背景 + 星座双色都改为 CSS 变量, 保证可逆 */
+  --theme-bg: radial-gradient(ellipse at center, #0a0e1a 0%, #050810 70%, #020308 100%);
+  --c1: #6366f1;
+  --c2: #8b5cf6;
+  background: var(--theme-bg);
   position: relative;
   overflow: hidden;
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+}
+
+/* R107 T1: 5 星座外层 conic-gradient 双色 (modifier class 预留 per-id 覆盖) */
+.constellation {
+  background: conic-gradient(from 0deg, var(--c1), var(--c2));
+  border-radius: 16rpx;
 }
 
 /* ─── 背景小星点 (装饰) ───────────────────────── */

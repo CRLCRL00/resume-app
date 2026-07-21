@@ -30,8 +30,9 @@
     <text class="center-label">{{completion >= 100 ? '点我生成' : '完成度'}}</text>
   </view>
 
-  <!-- 5 星座 -->
-  <view wx:for="{{constellations}}" wx:key="id" wx:for-item="con">
+  <!-- 5 星座 (R107 T1: 外层加 constellation modifier class, 接 conic-gradient) -->
+  <view wx:for="{{constellations}}" wx:key="id" wx:for-item="con"
+        class="constellation constellation--{{con.id}}">
 
     <!-- 星座标签 (中心) -->
     <view class="const-label"
