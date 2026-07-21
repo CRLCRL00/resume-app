@@ -634,3 +634,42 @@ test('R112 T1.5: layoutParticles(375, 667) 每个粒子离画面中心 ≥ 60px 
     }
   }
 });
+
+// ─── R112 T2: 中心节点缩小 25% (WXML inline + WXSS 5 处 rpx) ─────────────
+test('R112 T2: wxml center-node inline offset = width/2 - 60 (was 80)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(/left:\s*\{\{width\s*\/\s*2\s*-\s*60\}\}px/.test(src),
+    'R112 T2: wxml center-node left 偏移必须 -60px (从 -80 缩)');
+  assert.ok(/top:\s*\{\{height\s*\/\s*2\s*-\s*60\}\}px/.test(src),
+    'R112 T2: wxml center-node top 偏移必须 -60px');
+  assert.ok(!/left:\s*\{\{width\s*\/\s*2\s*-\s*80\}\}px/.test(src),
+    'R112 T2: 不应再用 -80 偏移');
+});
+
+test('R112 T2: wxss 中心节点尺寸按比例缩小 (5 处 rpx)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss'), 'utf8');
+  // .center-node 容器 160 → 120rpx
+  const cn = src.match(/\.center-node\s*\{[^}]*\}/);
+  assert.ok(cn && /width:\s*120rpx/.test(cn[0]) && /height:\s*120rpx/.test(cn[0]),
+    'R112 T2: .center-node 容器必须 120×120rpx (从 160×160)');
+  // .center-pulse 200 → 150rpx
+  const cp = src.match(/\.center-pulse\s*\{[^}]*\}/);
+  assert.ok(cp && /width:\s*150rpx/.test(cp[0]) && /height:\s*150rpx/.test(cp[0]),
+    'R112 T2: .center-pulse 光晕必须 150×150rpx (从 200×200)');
+  // .center-circle 140 → 100rpx
+  const cc = src.match(/\.center-circle\s*\{[^}]*\}/);
+  assert.ok(cc && /width:\s*100rpx/.test(cc[0]) && /height:\s*100rpx/.test(cc[0]),
+    'R112 T2: .center-circle 实圆必须 100×100rpx (从 140×140)');
+  // .center-num 56 → 44rpx
+  const num = src.match(/\.center-num\s*\{[^}]*\}/);
+  assert.ok(num && /font-size:\s*44rpx/.test(num[0]),
+    'R112 T2: .center-num 字号必须 44rpx (从 56rpx)');
+  // .center-label margin-top 12 → 8rpx
+  const lbl = src.match(/\.center-label\s*\{[^}]*\}/);
+  assert.ok(lbl && /margin-top:\s*8rpx/.test(lbl[0]),
+    'R112 T2: .center-label margin-top 必须 8rpx (从 12rpx)');
+});

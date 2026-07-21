@@ -28,7 +28,7 @@
 
   <!-- 中心 "完成度" 节点 -->
   <view class="center-node"
-        style="left: {{width/2 - 80}}px; top: {{height/2 - 80}}px;"
+        style="left: {{width/2 - 60}}px; top: {{height/2 - 60}}px;"
         bindtap="onSubmit">
     <view class="center-pulse"></view>
     <view class="center-circle {{completion >= 100 ? 'complete' : ''}}">
