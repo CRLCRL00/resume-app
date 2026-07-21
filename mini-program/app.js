@@ -16,6 +16,14 @@ App({
     reportClientError('app_onerror', err);
   },
 
+  onShow() {
+    // R93: 每次切前台重跑 admin check (token 可能新签, isAdmin 可能变)
+    const token = wx.getStorageSync('token');
+    if (token) {
+      this.checkAdmin();
+    }
+  },
+
   onLaunch() {
     const accepted = wx.getStorageSync('privacy_accepted');
     this.globalData.privacyAccepted = !!accepted;
@@ -117,17 +125,19 @@ App({
   },
 
   /**
-   * R50: 一行 dev-bypass login — IDE 沙箱 wx.login 永远 timeout 的 workaround
-   * 用法 (IDE console): getApp().devQuickLogin('dev-admin')
-   * 要求: server .env NODE_ENV !== 'production' 且 admins 表有 'dev-admin' openid
+   * R108: 一行 dev-bypass login — IDE 沙箱 wx.login 永远 timeout 的 workaround
+   * 用法 (IDE console): getApp().devQuickLogin('oemfzxT1ND_EukOcGdzN3rOWGBaY')
+   * (或任意 openid 字符串, server 自动创建 user)
+   * 要求: server .env ENABLE_DEV_ENDPOINTS=1
    */
   devQuickLogin(openid) {
     openid = openid || 'dev-admin';
     return new Promise((resolve) => {
       wx.request({
-        url: `${apiBaseUrl}/api/auth/login`,
+        url: `${apiBaseUrl}/api/test/dev-issue`,
         method: 'POST',
-        data: { code: 'dev-bypass', openid },
+        header: { 'Content-Type': 'application/json' },
+        data: { openid },
         success: (res) => {
           if (res.data && res.data.code === 0) {
             wx.setStorageSync('token', res.data.data.token);
@@ -135,7 +145,7 @@ App({
             this.checkAdmin();
             resolve(res.data.data);
           } else {
-            resolve({ error: res.data && res.data.message || 'dev-bypass failed' });
+            resolve({ error: res.data && res.data.message || 'dev-issue failed' });
           }
         },
         fail: (err) => resolve({ error: (err && err.errMsg) || 'network' }),
