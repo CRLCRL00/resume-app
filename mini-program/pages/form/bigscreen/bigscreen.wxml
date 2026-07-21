@@ -24,7 +24,7 @@
         bindtap="onSubmit">
     <view class="center-pulse"></view>
     <view class="center-circle {{completion >= 100 ? 'complete' : ''}}">
-      <text class="center-num">{{completion}}</text>
+      <text class="center-num {{numTier ? 'tier-' + numTier : ''}}">{{completion}}</text>
       <text class="center-pct">%</text>
     </view>
     <text class="center-label">{{completion >= 100 ? '点我生成' : '完成度'}}</text>

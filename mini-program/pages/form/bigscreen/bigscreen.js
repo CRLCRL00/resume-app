@@ -198,6 +198,9 @@ PageImpl({
     modalValue: '',
     modalOptions: null,
     modalPlaceholder: '',
+    // R107 T2: 完成度数字脉冲 + 阈值变色
+    numTier: 'low',
+    bumpTick: 0,
   },
 
   onLoad() {
@@ -358,6 +361,8 @@ PageImpl({
     const { modalField } = this.data;
     const form = JSON.parse(JSON.stringify(this.data.form));
     let skillsCount = this.data.skillsCount;
+    // R107 T2: 记录完成度变化前值, 供 setData callback 触发 _applyCompletionBump
+    const prevCompletion = this.data.completion;
     switch (modalField) {
       case 'name': form.name = value; break;
       case 'gender': form.gender = value; break;
@@ -400,7 +405,19 @@ PageImpl({
       // R106b: 重算每个粒子的 filled 视觉态 (避免 WXML inline _isFieldFilled 整段 view 不渲染)
       this._refreshParticleFilled();
       this._drawLines(this.data.width, this.data.height);
+      // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色
+      this._applyCompletionBump(prevCompletion, completion);
     });
+  },
+
+  // R107 T2: 完成度数字脉冲 + 阈值变色 (每次 setData bumpTick++ 触发 CSS animation 重新运行)
+  // tier: gold (100) / high (>=60) / mid (>=30) / low (else)
+  _applyCompletionBump(prev, next) {
+    let tier = 'low';
+    if (next >= 100) tier = 'gold';
+    else if (next >= 60) tier = 'high';
+    else if (next >= 30) tier = 'mid';
+    this.setData({ numTier: tier, bumpTick: this.data.bumpTick + 1 });
   },
 
   _getFieldValue(field) {

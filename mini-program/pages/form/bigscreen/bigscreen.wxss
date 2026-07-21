@@ -130,6 +130,20 @@
 .center-num {
   font-size: 56rpx;
   line-height: 1;
+  /* R107 T2: 完成度变化触发脉冲动画 (每次 setData bumpTick++ 重新触发) */
+  animation: num-pulse 600ms ease-out;
+}
+@keyframes num-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+/* R107 T2: 完成度阈值变色 (gold 100 / high 60 / mid 30 / low <30) */
+.center-num.tier-low { color: #f59e0b; }
+.center-num.tier-mid { color: #fbbf24; }
+.center-num.tier-high { color: #10b981; }
+.center-num.tier-gold {
+  color: #fde047;
+  text-shadow: 0 0 20rpx #fbbf24;
 }
 .center-pct {
   font-size: 28rpx;

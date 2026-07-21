@@ -373,3 +373,68 @@ test('R107 T1: wxml applies constellation--{{con.id}} modifier on outer view', (
   assert.ok(wxml.includes('constellation--{{con.id}}'),
     'R107 T1: wxml 必须在 wx:for-item="con" 内的外层 view 上加 constellation--{{con.id}} modifier class');
 });
+
+// ─── R107 T2: 中心完成度数字脉冲 + 阈值变色 ─────────────
+test('R107 T2: wxss has @keyframes num-pulse + center-num animation', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxss = path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss');
+  const src = fs.readFileSync(wxss, 'utf8');
+  assert.ok(src.includes('@keyframes num-pulse'),
+    'R107 T2: 中心数字脉冲 keyframe (@keyframes num-pulse)');
+  assert.ok(/animation\s*:\s*num-pulse/.test(src),
+    'R107 T2: .center-num 必须引用 num-pulse 动画');
+});
+
+test('R107 T2: wxss has tier-low / tier-mid / tier-high / tier-gold color classes', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxss = path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss');
+  const src = fs.readFileSync(wxss, 'utf8');
+  assert.ok(/\.center-num\.tier-low\b/.test(src) || /\.tier-low\b/.test(src),
+    'R107 T2: 必须定义 .tier-low (完成度 < 30) 颜色');
+  assert.ok(/\.tier-mid\b/.test(src),
+    'R107 T2: 必须定义 .tier-mid (30 ≤ 完成度 < 60) 颜色');
+  assert.ok(/\.tier-high\b/.test(src),
+    'R107 T2: 必须定义 .tier-high (60 ≤ 完成度 < 100) 颜色');
+  assert.ok(/\.tier-gold\b/.test(src),
+    'R107 T2: 必须定义 .tier-gold (完成度 = 100) 颜色 + 光晕');
+});
+
+test('R107 T2: js has _applyCompletionBump helper with tier logic + bumpTick increment', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const js = path.join(__dirname, '../pages/form/bigscreen/bigscreen.js');
+  const src = fs.readFileSync(js, 'utf8');
+  assert.ok(src.includes('_applyCompletionBump'),
+    'R107 T2: 必须实现 _applyCompletionBump() helper');
+  // Tier thresholds: 100 → gold, 60 → high, 30 → mid, else low
+  assert.ok(src.includes('>= 100') || src.includes('=== 100'),
+    'R107 T2: 必须判断 100% 阈值 (gold)');
+  assert.ok(src.includes('>= 60'),
+    'R107 T2: 必须判断 60% 阈值 (high)');
+  assert.ok(src.includes('>= 30'),
+    'R107 T2: 必须判断 30% 阈值 (mid)');
+  assert.ok(src.includes('bumpTick'),
+    'R107 T2: 必须维护 bumpTick (触发 CSS animation 重新运行)');
+});
+
+test('R107 T2: js data initializer has numTier + bumpTick fields', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const js = path.join(__dirname, '../pages/form/bigscreen/bigscreen.js');
+  const src = fs.readFileSync(js, 'utf8');
+  assert.ok(/numTier\s*:\s*['"]\w+['"]/.test(src),
+    'R107 T2: data() 必须初始化 numTier (字符串, 默认 low)');
+  assert.ok(/bumpTick\s*:\s*\d+/.test(src),
+    'R107 T2: data() 必须初始化 bumpTick (数字, 默认 0)');
+});
+
+test('R107 T2 fix: wxml center-num binds tier class via numTier', () => {
+  const fs = require('node:fs');
+  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  assert.ok(wxml.includes('center-num') && wxml.includes('numTier'),
+    'R107 T2 fix: wxml 必须把 numTier 绑定到 center-num 的 class');
+  assert.ok(/center-num[^"]*numTier/.test(wxml) || wxml.includes("'tier-' + numTier"),
+    'R107 T2 fix: wxml 必须用 tier-{{numTier}} 或类似表达式');
+});
