@@ -25,6 +25,22 @@
   box-shadow: 0 0 4rpx #fff;
 }
 
+/* R107 T3: 背景流星雨 (顶左 → 底右 拖尾, linear infinite) */
+.meteor {
+  position: absolute;
+  width: 4rpx;
+  height: 80rpx;
+  background: linear-gradient(180deg, transparent 0%, #fff 50%, transparent 100%);
+  animation: meteor-fall linear infinite;
+  pointer-events: none; /* 不挡粒子点击 */
+}
+@keyframes meteor-fall {
+  0% { transform: translate(0, 0); opacity: 0; }
+  10% { opacity: 1; }
+  90% { opacity: 0.6; }
+  100% { transform: translate(400rpx, 800rpx); opacity: 0; }
+}
+
 /* R103: 连线 canvas (覆盖全屏) */
 .lines-canvas {
   position: absolute;

@@ -162,10 +162,21 @@ function genBackgroundStars(n, w, h, seed = 42) {
   return stars;
 }
 
+// R107 T3: 背景流星雨 (顶左 → 底右 拖尾, 随机 delay/duration)
+function genMeteors(n, w, h, seed = 123) {
+  const r = mulberry32(seed);
+  return Array.from({ length: n }, () => ({
+    x: r() * w * 0.8,
+    y: 0,
+    delay: Math.floor(r() * 8000),
+    duration: 800 + Math.floor(r() * 1200),
+  }));
+}
+
 module.exports = {
   _test: {
     emptyForm, calcCompletion, CONSTELLATIONS, STEP_LABELS, STEP_HINTS,
-    layoutParticles, genBackgroundStars, mulberry32,
+    layoutParticles, genBackgroundStars, genMeteors, mulberry32,
   },
 };
 
@@ -183,6 +194,8 @@ PageImpl({
     height: 1200,
     constellations: [],
     backgroundStars: [],
+    // R107 T3: 背景流星雨
+    meteors: [],
     stepLabels: STEP_LABELS,
     stepHints: STEP_HINTS,
     form: emptyForm(),
@@ -224,7 +237,8 @@ PageImpl({
   _initLayout(width, height, wide, dpr = 2) {
     const constellations = layoutParticles(width, height);
     const backgroundStars = genBackgroundStars(80, width, height);
-    this.setData({ width, height, wide, constellations, backgroundStars });
+    const meteors = genMeteors(5, width, height);
+    this.setData({ width, height, wide, constellations, backgroundStars, meteors });
     // R106b: 初次 layout 全 false; form 加载完后重算 filled 视觉
     this._refreshParticleFilled();
     // R103: 划线 (需 dpr 适配 retina)

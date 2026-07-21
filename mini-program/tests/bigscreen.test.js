@@ -438,3 +438,29 @@ test('R107 T2 fix: wxml center-num binds tier class via numTier', () => {
   assert.ok(/center-num[^"]*numTier/.test(wxml) || wxml.includes("'tier-' + numTier"),
     'R107 T2 fix: wxml 必须用 tier-{{numTier}} 或类似表达式');
 });
+
+// ─── R107 T3: 背景流星雨 (5 颗拖尾) ─────────────
+test('R107 T3: js exports genMeteors producing 5 meteors with delay/duration', () => {
+  const { genMeteors } = require('../pages/form/bigscreen/bigscreen')._test;
+  const meteors = genMeteors(5, 750, 1200);
+  assert.strictEqual(meteors.length, 5);
+  for (const m of meteors) {
+    assert.ok('delay' in m, 'R107 T3: 流星必须有 delay');
+    assert.ok('duration' in m, 'R107 T3: 流星必须有 duration');
+    assert.ok(m.duration >= 800 && m.duration <= 2000, 'R107 T3: 流星持续时间合理');
+  }
+});
+
+test('R107 T3: wxml has meteor node template', () => {
+  const fs = require('node:fs');
+  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  assert.ok(wxml.includes('wx:for="{{meteors}}"'), 'R107 T3: WXML 必须循环 meteors');
+  assert.ok(wxml.includes('class="meteor"'), 'R107 T3: 必须用 class="meteor"');
+});
+
+test('R107 T3: wxss has meteor-fall keyframe with translate', () => {
+  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(wxss.includes('@keyframes meteor-fall'), 'R107 T3: 流星坠落 keyframe');
+  assert.ok(wxss.includes('translate'), 'R107 T3: 流星必须 transform 平移');
+});

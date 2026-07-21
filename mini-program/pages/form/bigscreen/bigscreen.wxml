@@ -11,6 +11,13 @@
         class="bg-star"
         style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
 
+  <!-- R107 T3: 背景流星雨 (5 颗拖尾, 顶左 → 底右) -->
+  <view wx:for="{{meteors}}" wx:key="delay"
+        class="meteor"
+        style="left: {{item.x}}px; top: {{item.y}}px;
+               animation-delay: {{item.delay}}ms;
+               animation-duration: {{item.duration}}ms;"></view>
+
   <!-- R103+R104: 连线 canvas (filled 粒子之间, 用 type=2d) -->
   <canvas type="2d"
           id="starfield-lines"
