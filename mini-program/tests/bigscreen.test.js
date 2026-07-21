@@ -290,6 +290,46 @@ test('R95: app.json no longer references form/form', () => {
   );
 });
 
+test('R106b: wxml outer for-item ref uses renamed con.* not fallback item.*', () => {
+  // R106b: 真机截图证明 5 个星座完全不渲染 — 根因是 wx:for-item="con"
+  // 重命名后, 内部仍用 item.* 触发小程序解析歧义. 修法: 改用 con.*
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  // 外层 for-item="con" 出现的 view 块内, 不能再出现 {{item.
+  // 取出两段 wx:for 之间的内容
+  const startIdx = wxml.indexOf('wx:for="{{constellations}}"');
+  const endIdx = wxml.indexOf('</view>', wxml.indexOf('</view>', startIdx) + 1);
+  const block = wxml.slice(startIdx, endIdx);
+  // 找这段里所有的 {{item.xxx}} 引用（应当为空）
+  const itemRefs = block.match(/\{\{item\.[a-zA-Z_]+\}\}/g) || [];
+  assert.strictEqual(itemRefs.length, 0,
+    `R106b: 外层 wx:for-item="con" 内仍有 {{item.*}} 引用: ${itemRefs.join(',')}. 必须用 {{con.*}}`);
+});
+
+test('R106b: wxml particle loop does not call _isFieldFilled inline (WXML 函数调用会断渲染)', () => {
+  // R106b: 真机截图所有粒子也不显示 — 推测是 WXML inline function 触发异常
+  // 修复: 用 particle.filled 替代 (js _refreshParticleFilled 提前算好)
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(!wxml.includes('_isFieldFilled'),
+    'R106b: WXML 不应再有 inline 函数调用 `_isFieldFilled()` — 实测在 IDE 触发整个星座 view 不渲染');
+  assert.ok(wxml.includes('particle.filled'),
+    'R106b: WXML 应该改用 {{particle.filled ? \'filled\' : \'\'}} 替代 inline 函数');
+});
+
+test('R106b: js layoutParticles output 每个粒子带 filled 字段 (false)', () => {
+  // R106b: 兜底 — 数据层就应当预填 filled 字段 (避免 WXML inline 调用)
+  const { layoutParticles } = require('../pages/form/bigscreen/bigscreen')._test;
+  const result = layoutParticles(375, 667);
+  const firstParticle = result[0].particles[0];
+  assert.ok('filled' in firstParticle,
+    'R106b: layoutParticles 输出的粒子必须有 filled 字段');
+  assert.strictEqual(firstParticle.filled, false,
+    'R106b: 初次 layoutParticle 时 filled 默认 false (form 没数据)');
+});
+
 test('R95: bigscreen.json title = 填简历', () => {
   const fs = require('node:fs');
   const cfg = JSON.parse(fs.readFileSync('./pages/form/bigscreen/bigscreen.json', 'utf8'));

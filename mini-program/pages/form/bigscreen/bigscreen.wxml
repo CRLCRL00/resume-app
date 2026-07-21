@@ -35,20 +35,20 @@
 
     <!-- 星座标签 (中心) -->
     <view class="const-label"
-          style="left: {{item.cx - 50}}px; top: {{item.cy - 50}}px; color: {{item.color}};">
-      <text class="const-name">{{item.name}}</text>
+          style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; color: {{con.color}};">
+      <text class="const-name">{{con.name}}</text>
     </view>
 
     <!-- 星座晕圈 (中心) -->
     <view class="const-halo"
-          style="left: {{item.cx - 50}}px; top: {{item.cy - 50}}px; border-color: {{item.color}}; box-shadow: 0 0 60rpx {{item.color}}88, 0 0 120rpx {{item.color}}44;"></view>
+          style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; border-color: {{con.color}}; box-shadow: 0 0 60rpx {{con.color}}88, 0 0 120rpx {{con.color}}44;"></view>
 
     <!-- 粒子 (字段) -->
-    <view wx:for="{{item.particles}}" wx:key="id" wx:for-item="particle"
-          class="particle {{_isFieldFilled(item.id) ? 'filled' : ''}}"
-          style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{item.color}}; --pcrgb: {{item.colorRgb}};"
+    <view wx:for="{{con.particles}}" wx:key="id" wx:for-item="particle"
+          class="particle {{particle.filled ? 'filled' : ''}}"
+          style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{con.color}}; --pcrgb: {{con.colorRgb}};"
           data-field="{{particle.id}}"
-          data-const-id="{{item.id}}"
+          data-const-id="{{con.id}}"
           bindtap="onParticleTap">
       <view class="particle-glow"></view>
       <view class="particle-core"></view>

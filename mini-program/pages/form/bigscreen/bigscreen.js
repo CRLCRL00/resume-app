@@ -123,6 +123,7 @@ function layoutParticles(width, height) {
     const ccx = cx + Math.cos(angle) * orbitR;
     const ccy = cy + Math.sin(angle) * orbitR;
     // 粒子在该星座周围小半径
+    // R106b: filled 字段提前算好 (避开 WXML inline 函数调用, 那会让 view 整段不渲染)
     const partR = 90;
     const particles = c.fields.map((f, j) => {
       const partAngle = (j * 360 / c.fields.length) * Math.PI / 180;
@@ -130,6 +131,7 @@ function layoutParticles(width, height) {
         ...f,
         x: ccx + Math.cos(partAngle) * partR,
         y: ccy + Math.sin(partAngle) * partR,
+        filled: false, // 初次 layout 全 false; _initLayout 后由 _refreshParticleFilled 重算
       };
     });
     return { ...c, cx: ccx, cy: ccy, particles };
@@ -220,8 +222,23 @@ PageImpl({
     const constellations = layoutParticles(width, height);
     const backgroundStars = genBackgroundStars(80, width, height);
     this.setData({ width, height, wide, constellations, backgroundStars });
+    // R106b: 初次 layout 全 false; form 加载完后重算 filled 视觉
+    this._refreshParticleFilled();
     // R103: 划线 (需 dpr 适配 retina)
     setTimeout(() => this._drawLines(width, height, dpr), 50);
+  },
+
+  // R106b: 用 form 数据重算每个粒子的 filled 视觉态
+  // (避免 WXML inline 调用 _isFieldFilled() — 实测会断整个 view 渲染)
+  _refreshParticleFilled() {
+    const constellations = (this.data.constellations || []).map((c) => ({
+      ...c,
+      particles: (c.particles || []).map((p) => ({
+        ...p,
+        filled: this._isFieldFilled(p.id),
+      })),
+    }));
+    this.setData({ constellations });
   },
 
   // R103+R104: 在 type=2d Canvas 画 filled 粒子之间连线
@@ -379,7 +396,11 @@ PageImpl({
       modalValue: '',
       modalOptions: null,
       modalPlaceholder: '',
-    }, () => this._drawLines(this.data.width, this.data.height));
+    }, () => {
+      // R106b: 重算每个粒子的 filled 视觉态 (避免 WXML inline _isFieldFilled 整段 view 不渲染)
+      this._refreshParticleFilled();
+      this._drawLines(this.data.width, this.data.height);
+    });
   },
 
   _getFieldValue(field) {
