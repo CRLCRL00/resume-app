@@ -116,7 +116,7 @@ function calcCompletion(form, skillsCount) {
 function layoutParticles(width, height) {
   const cx = width / 2;
   const cy = height / 2;
-  const orbitR = Math.min(width, height) * 0.32;
+  const orbitR = Math.min(width, height) * 0.40;
   return CONSTELLATIONS.map((c, i) => {
     // 5 个星座均分 360°, 从顶部开始
     const angle = (i * 72 - 90) * Math.PI / 180;

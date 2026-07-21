@@ -604,3 +604,33 @@ test('R108 T2 fix v2: wxml starfield uses catchtouchmove (not bind + empty catch
   assert.ok(!wxml.includes('bindtouchmove'),
     'R108 T2 fix v2: 不应再有 bindtouchmove (会与 catchtouchmove 冲突)');
 });
+
+// ─── R112 T1: 星座轨道外移 (orbitR 0.32→0.40) ─────────────
+test('R112 T1: layoutParticles orbitR coefficient = 0.40 (was 0.32, mobile overlap fix)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  // 必须用 0.40 系数 (手机 0 重叠 = 150-90)
+  assert.ok(/orbitR\s*=\s*Math\.min\([^)]+\)\s*\*\s*0\.40/.test(src),
+    'R112 T1: layoutParticles 必须用 0.40 系数 (避免手机 5 星座压中心)');
+  // 必须不再用旧的 0.32 或中间值 0.38 (后者经 T1.5 验证仍有 7.5px 重叠)
+  assert.ok(!/orbitR\s*=\s*Math\.min\([^)]+\)\s*\*\s*0\.32/.test(src),
+    'R112 T1: 不应再用 0.32 (手机 50px 重叠)');
+  assert.ok(!/orbitR\s*=\s*Math\.min\([^)]+\)\s*\*\s*0\.38/.test(src),
+    'R112 T1: 不应再用 0.38 (T1.5 验证仍有 7.5px 重叠)');
+});
+
+// ─── R112 T1.5: 行为测试 — 5 星座粒子不撞中心圆 (手机 375×667) ─────────────
+test('R112 T1.5: layoutParticles(375, 667) 每个粒子离画面中心 ≥ 60px (中心圆半径)', () => {
+  const { layoutParticles } = require('../pages/form/bigscreen/bigscreen')._test;
+  const cs = layoutParticles(375, 667);
+  const cx = 375 / 2, cy = 667 / 2;
+  const CENTER_R = 60;
+  for (const c of cs) {
+    for (const p of c.particles) {
+      const dist = Math.hypot(p.x - cx, p.y - cy);
+      assert.ok(dist >= CENTER_R,
+        `R112 T1.5: 粒子 ${c.id}/${p.id} 离画面中心 ${dist.toFixed(1)}px < ${CENTER_R}px — 撞中心圆!`);
+    }
+  }
+});
