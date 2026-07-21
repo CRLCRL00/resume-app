@@ -209,6 +209,8 @@
   height: 60rpx;
   cursor: pointer;
   z-index: 4;
+  /* R108 T2: 粒子拖尾 — touch 平滑过渡 (200ms ease-out) */
+  transition: transform 200ms ease-out;
   /* R103: 漂浮 (sin 模拟, 6 个粒子错位延迟看起来独立) */
   animation: float 4s ease-in-out infinite;
 }
@@ -528,4 +530,9 @@
 /* R108 T1: 改 R107 T4 选择器到内层 (避免与外层 scale 冲突) */
 .starfield.ready .constellation-rotate {
   animation: spin-slow 60s linear infinite;
+}
+
+/* R108 T2 fix v2: touch 时彻底移除粒子 float 动画, 让 inline transform: translate(dx, dy) 生效 */
+.starfield.touching .particle {
+  animation: none;
 }

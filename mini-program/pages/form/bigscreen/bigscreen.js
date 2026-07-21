@@ -217,6 +217,10 @@ PageImpl({
     // R107 T4: 完成度阈值 → 触发星座旋转 + 中心庆祝
     starfieldReady: false,
     starfieldCelebrate: false,
+    // R108 T2 fix: touching 状态 — 触摸时暂停粒子 float 动画
+    starfieldTouching: false,
+    // R108 T2: 粒子拖尾 — 手指位置 (x/y=-1 表示未触摸)
+    fingerPos: { x: -1, y: -1 },
   },
 
   onLoad() {
@@ -448,6 +452,67 @@ PageImpl({
     const ready = c >= 80;
     const celebrate = c >= 100;
     this.setData({ starfieldReady: ready, starfieldCelebrate: celebrate });
+  },
+
+  /**
+   * R108 T2: 粒子拖尾 — 触摸事件
+   * 手指按下/移动时, 重算每个粒子 dx/dy 让它们朝手指方向轻微偏移.
+   * 偏移距离 = min(20px, 200/dist) 朝手指方向, 距离 > 400px 不偏移.
+   */
+  onTouchStart(e) {
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    this.setData({
+      fingerPos: { x: t.x, y: t.y },
+      starfieldTouching: true, // R108 T2 fix: pause float
+    });
+    this._updateParticlesOffset(t.x, t.y);
+  },
+
+  onTouchMove(e) {
+    const t = e.touches && e.touches[0];
+    if (!t) return;
+    // 节流: 每 50ms 更新一次 (高频 touchmove 会卡)
+    const now = Date.now();
+    if (this._lastTouchUpdate && now - this._lastTouchUpdate < 50) return;
+    this._lastTouchUpdate = now;
+    this.setData({ fingerPos: { x: t.x, y: t.y } });
+    this._updateParticlesOffset(t.x, t.y);
+  },
+
+  onTouchEnd() {
+    this.setData({
+      fingerPos: { x: -1, y: -1 },
+      starfieldTouching: false, // R108 T2 fix: resume float
+    });
+    // 复位所有粒子 (dx/dy = 0), CSS transition 会让粒子平滑回弹
+    const constellations = (this.data.constellations || []).map((c) => ({
+      ...c,
+      particles: (c.particles || []).map((p) => ({ ...p, dx: 0, dy: 0 })),
+    }));
+    this.setData({ constellations });
+  },
+
+  /**
+   * R108 T2: 重算每个粒子相对手指的偏移
+   * 调用频繁, 必须 minimal cost — 用 map + 1 次 setData.
+   */
+  _updateParticlesOffset(fx, fy) {
+    const constellations = (this.data.constellations || []).map((c) => ({
+      ...c,
+      particles: (c.particles || []).map((p) => {
+        const dx = fx - p.x;
+        const dy = fy - p.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist === 0 || dist > 400) return { ...p, dx: 0, dy: 0 };
+        // 偏移距离 = min(20, 200/dist) 朝手指方向
+        const mag = Math.min(20, 200 / dist);
+        const ux = dx / dist;
+        const uy = dy / dist;
+        return { ...p, dx: ux * mag, dy: uy * mag };
+      }),
+    }));
+    this.setData({ constellations });
   },
 
   _getFieldValue(field) {

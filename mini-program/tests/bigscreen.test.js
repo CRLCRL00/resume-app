@@ -523,3 +523,69 @@ test('R108 T1: wxss 改 R107 T4 rotate 选择器到 constellation-rotate (避免
   assert.ok(!wxss.includes('.starfield.ready .constellation {'),
     'R108 T1: R107 T4 不应再单独作用于 .constellation (会与 scale 冲突)');
 });
+
+// ─── R108 T2: 粒子拖尾 (touchmove + setData dx/dy) ─────────────
+test('R108 T2: wxss has particle transform transition', () => {
+  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(wxss.includes('.particle') && wxss.includes('transition'),
+    'R108 T2: 粒子必须有 transition');
+});
+
+test('R108 T2: wxml starfield has touch event handlers', () => {
+  const fs = require('node:fs');
+  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  // R108 T2 fix v2: 用 catchtouchmove (不是 bindtouchmove) 避免 bind+catch 冲突
+  assert.ok(wxml.includes('catchtouchmove'), 'R108 T2: starfield 必须监听 touchmove (用 catchtouchmove)');
+  assert.ok(wxml.includes('bindtouchend'), 'R108 T2: starfield 必须监听 touchend');
+});
+
+test('R108 T2: js has _onTouchMove handler + fingerPos data field', () => {
+  const fs = require('node:fs');
+  const js = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
+  assert.ok(js.includes('_onTouchMove') || js.includes('onTouchMove'),
+    'R108 T2: 必须实现 touchmove handler');
+  assert.ok(js.includes('fingerPos'), 'R108 T2: data() 必须有 fingerPos');
+});
+
+test('R108 T2 fix: wxml starfield has starfieldTouching class binding', () => {
+  const fs = require('node:fs');
+  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  assert.ok(wxml.includes('starfieldTouching'),
+    'R108 T2 fix: wxml 必须用 starfieldTouching class 触发 .touching 状态');
+});
+
+test('R108 T2 fix v2: wxss .starfield.touching .particle REMOVES float animation (animation: none)', () => {
+  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  // Use regex to find the .starfield.touching .particle { ... } block specifically
+  const match = wxss.match(/\.starfield\.touching\s+\.particle\s*\{[^}]*\}/);
+  assert.ok(match, 'R108 T2 fix v2: 必须有 .starfield.touching .particle { ... } 规则块');
+  const block = match[0];
+  // CRITICAL: must use `animation: none` (NOT animation-play-state: paused, which doesn't release transform per CSS spec)
+  assert.ok(block.includes('animation: none'),
+    'R108 T2 fix v2: 必须用 animation: none (paused 不行, 动画仍冻结 transform)');
+  assert.ok(!block.includes('animation-play-state'),
+    'R108 T2 fix v2: 不应该用 animation-play-state (CSS spec 不释放 transform)');
+});
+
+test('R108 T2 fix: .particle transition is on .particle block (not .particle-glow)', () => {
+  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  // Use regex to find .particle { ... transition: transform ... } block
+  const particleBlock = wxss.match(/\.particle\s*\{[^}]*\}/);
+  assert.ok(particleBlock, 'R108 T2 fix: 必须有 .particle { ... } 规则块');
+  assert.ok(particleBlock[0].includes('transition: transform'),
+    'R108 T2 fix: .particle { } 块必须包含 `transition: transform` (不是 all)');
+});
+
+test('R108 T2 fix v2: wxml starfield uses catchtouchmove (not bind + empty catch)', () => {
+  const fs = require('node:fs');
+  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  // Should have catchtouchmove="onTouchMove" (single binding)
+  assert.ok(wxml.includes('catchtouchmove="onTouchMove"'),
+    'R108 T2 fix v2: 必须用 catchtouchmove="onTouchMove" (不是 bind + 空 catch)');
+  // Should NOT have bindtouchmove (avoids bind+catch conflict)
+  assert.ok(!wxml.includes('bindtouchmove'),
+    'R108 T2 fix v2: 不应再有 bindtouchmove (会与 catchtouchmove 冲突)');
+});
