@@ -464,3 +464,28 @@ test('R107 T3: wxss has meteor-fall keyframe with translate', () => {
   assert.ok(wxss.includes('@keyframes meteor-fall'), 'R107 T3: 流星坠落 keyframe');
   assert.ok(wxss.includes('translate'), 'R107 T3: 流星必须 transform 平移');
 });
+
+// ─── R107 T4: ≥80% 自动旋转 + 100% 庆祝 ─────────────
+test('R107 T4: wxss has spin-slow + explode keyframes', () => {
+  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(wxss.includes('@keyframes spin-slow'), 'R107 T4: 旋转 keyframe');
+  assert.ok(wxss.includes('@keyframes explode'), 'R107 T4: 爆炸 keyframe');
+});
+
+test('R107 T4: js _watchCompletionTier handles 80/100 thresholds', () => {
+  const fs = require('node:fs');
+  const js = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
+  assert.ok(js.includes('_watchCompletionTier'), 'R107 T4: 必须实现 _watchCompletionTier');
+  assert.ok(js.includes('>= 80'), 'R107 T4: 必须判断 80% 阈值');
+  assert.ok(js.includes('>= 100') || js.includes('=== 100'),
+    'R107 T4: 必须判断 100% 阈值');
+});
+
+test('R107 T4: wxml starfield has ready/celebrate class bindings', () => {
+  const fs = require('node:fs');
+  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  // Find the starfield opening tag (line 6-7)
+  assert.ok(wxml.includes('starfieldReady'), 'R107 T4: wxml 必须用 starfieldReady');
+  assert.ok(wxml.includes('starfieldCelebrate'), 'R107 T4: wxml 必须用 starfieldCelebrate');
+});

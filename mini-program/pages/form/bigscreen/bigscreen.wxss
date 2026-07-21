@@ -481,3 +481,16 @@
   color: #fff;
   box-shadow: 0 4rpx 12rpx rgba(7,193,96,0.3);
 }
+
+/* R107 T4: ≥80% 自动旋转 + 100% 庆祝 */
+@keyframes spin-slow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+@keyframes explode {
+  0% { transform: scale(1); box-shadow: 0 0 0 #fde047; }
+  50% { transform: scale(1.5); box-shadow: 0 0 60rpx #fbbf24; }
+  100% { transform: scale(1); box-shadow: 0 0 0 #fde047; }
+}
+.starfield.ready .constellation { animation: spin-slow 60s linear infinite; }
+.starfield.celebrate .center-circle { animation: explode 1.5s ease-out; }

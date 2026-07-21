@@ -3,7 +3,7 @@
   点击粒子 → 弹窗填字段
   实时预览在右下浮动
 -->
-<view class="starfield"
+<view class="starfield {{starfieldReady ? 'ready' : ''}} {{starfieldCelebrate ? 'celebrate' : ''}}"
       style="width: {{width}}px; height: {{height}}px;">
 
   <!-- 背景小星点 -->

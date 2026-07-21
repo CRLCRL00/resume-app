@@ -214,6 +214,9 @@ PageImpl({
     // R107 T2: 完成度数字脉冲 + 阈值变色
     numTier: 'low',
     bumpTick: 0,
+    // R107 T4: 完成度阈值 → 触发星座旋转 + 中心庆祝
+    starfieldReady: false,
+    starfieldCelebrate: false,
   },
 
   onLoad() {
@@ -421,6 +424,8 @@ PageImpl({
       this._drawLines(this.data.width, this.data.height);
       // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色
       this._applyCompletionBump(prevCompletion, completion);
+      // R107 T4: 完成度阈值 → 星座旋转 + 中心庆祝
+      this._watchCompletionTier(completion);
     });
   },
 
@@ -432,6 +437,17 @@ PageImpl({
     else if (next >= 60) tier = 'high';
     else if (next >= 30) tier = 'mid';
     this.setData({ numTier: tier, bumpTick: this.data.bumpTick + 1 });
+  },
+
+  /**
+   * R107 T4: 监听完成度阈值切换
+   * ≥80% → starfieldReady (5 星座缓慢旋转)
+   * ≥100% → starfieldCelebrate (中心爆炸)
+   */
+  _watchCompletionTier(c) {
+    const ready = c >= 80;
+    const celebrate = c >= 100;
+    this.setData({ starfieldReady: ready, starfieldCelebrate: celebrate });
   },
 
   _getFieldValue(field) {
