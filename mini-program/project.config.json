@@ -6,8 +6,8 @@
   "setting": {
     "urlCheck": false,
     "es6": true,
-    "postcss": false,
-    "compileWorklet": false,
+    "postcss": true,
+    "compileWorklet": true,
     "minified": true,
     "uglifyFileName": true,
     "uploadWithSourceMap": true,
@@ -26,9 +26,9 @@
     "localPlugins": false,
     "disableUseStrict": false,
     "useCompilerPlugins": false,
-    "condition": false,
-    "swc": false,
-    "disableSWC": true,
+    "condition": true,
+    "swc": true,
+    "disableSWC": false,
     "babelSetting": {
       "ignore": [],
       "disablePlugins": [],

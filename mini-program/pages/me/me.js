@@ -2,6 +2,10 @@ const app = getApp();
 
 Page({
   data: { isAdmin: false },
+  onLoad() {
+    const isAdmin = !!wx.getStorageSync('is_admin');
+    this.setData({ isAdmin });
+  },
   onShow() {
     const isAdmin = !!wx.getStorageSync('is_admin');
     this.setData({ isAdmin });
