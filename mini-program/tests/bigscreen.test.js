@@ -673,3 +673,34 @@ test('R112 T2: wxss 中心节点尺寸按比例缩小 (5 处 rpx)', () => {
   assert.ok(lbl && /margin-top:\s*8rpx/.test(lbl[0]),
     'R112 T2: .center-label margin-top 必须 8rpx (从 12rpx)');
 });
+
+// ─── R113: WXML opening tag 不跨多行 attribute (IDE 真机严格模式) ─────────────
+test('R113: wxml opening tags never span multiple lines (attribute 跨行 IDE 报 unexpected character \\n)', () => {
+  // R113 教训: R109 只抓 style 内 \n, 但 IDE 严格模式连 `<tag attr1="\n attr2="...">` 都会报
+  // (line 22:0 unexpected character `\n` 是 <canvas> 5 行 attribute 块触发)
+  // 修法: 任何 `<tag` 开头到 `>` 闭合之间的 attribute 必须全在同一物理行
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  const lines = src.split('\n');
+  // 跟踪 "开放的 tag" (已遇到 `<tag` 但还没遇到 `>`)
+  let openTag = null;
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const hasOpen = /<[a-zA-Z][\w-]*\s/.test(line) || /<[a-zA-Z][\w-]*\s*$/.test(line);
+    const hasClose = />/.test(line);
+    if (openTag && /^\s+[a-zA-Z][\w-]*=/.test(line)) {
+      // 上一个 tag 还开着, 这一行又出现 attribute — 跨行 attribute 块!
+      assert.fail(`R113: wxml line ${i + 1} 有 attribute 跨行 (上一个 tag 来自 line ${openTag.line}): "${line.trim()}"`);
+    }
+    if (hasOpen && !hasClose) {
+      // 新 tag 跨行
+      openTag = { line: i + 1, text: line.trim() };
+    } else if (hasClose) {
+      openTag = null;
+    }
+  }
+  // 测试通过 = 上面 assert.fail 没触发
+  assert.ok(true, 'R113: 所有 wxml opening tag 都是单行');
+});
+

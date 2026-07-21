@@ -3,33 +3,20 @@
   点击粒子 → 弹窗填字段
   实时预览在右下浮动
 -->
-<view class="starfield {{starfieldReady ? 'ready' : ''}} {{starfieldCelebrate ? 'celebrate' : ''}} {{starfieldTouching ? 'touching' : ''}}"
-      style="width: {{width}}px; height: {{height}}px;"
-      bindtouchstart="onTouchStart"
-      catchtouchmove="onTouchMove"
-      bindtouchend="onTouchEnd"
-      bindtouchcancel="onTouchEnd">
+<view class="starfield {{starfieldReady ? 'ready' : ''}} {{starfieldCelebrate ? 'celebrate' : ''}} {{starfieldTouching ? 'touching' : ''}}" style="width: {{width}}px; height: {{height}}px;" bindtouchstart="onTouchStart" catchtouchmove="onTouchMove" bindtouchend="onTouchEnd" bindtouchcancel="onTouchEnd">
 
   <!-- 背景小星点 -->
-  <view wx:for="{{backgroundStars}}" wx:key="x"
-        class="bg-star"
-        style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
+  <view wx:for="{{backgroundStars}}" wx:key="x" class="bg-star" style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
 
   <!-- R107 T3: 背景流星雨 (5 颗拖尾, 顶左 → 底右) -->
   <!-- R109 fix: WXML 属性值不能含换行 — 改单行 style 避免 IDE 真机编译报 `unexpected character \n` -->
   <view wx:for="{{meteors}}" wx:key="delay" class="meteor" style="left: {{item.x}}px; top: {{item.y}}px; animation-delay: {{item.delay}}ms; animation-duration: {{item.duration}}ms;"></view>
 
   <!-- R103+R104: 连线 canvas (filled 粒子之间, 用 type=2d) -->
-  <canvas type="2d"
-          id="starfield-lines"
-          class="lines-canvas"
-          style="width: {{width}}px; height: {{height}}px;"
-          disable-scroll="true"></canvas>
+  <canvas type="2d" id="starfield-lines" class="lines-canvas" style="width: {{width}}px; height: {{height}}px;" disable-scroll="true"></canvas>
 
   <!-- 中心 "完成度" 节点 -->
-  <view class="center-node"
-        style="left: {{width/2 - 60}}px; top: {{height/2 - 60}}px;"
-        bindtap="onSubmit">
+  <view class="center-node" style="left: {{width/2 - 60}}px; top: {{height/2 - 60}}px;" bindtap="onSubmit">
     <view class="center-pulse"></view>
     <view class="center-circle {{completion >= 100 ? 'complete' : ''}}">
       <text class="center-num {{numTier ? 'tier-' + numTier : ''}}">{{completion}}</text>
@@ -39,20 +26,17 @@
   </view>
 
   <!-- 5 星座 (R107 T1: 外层加 constellation modifier class, 接 conic-gradient) -->
-  <view wx:for="{{constellations}}" wx:key="id" wx:for-item="con"
-        class="constellation constellation--{{con.id}}">
+  <view wx:for="{{constellations}}" wx:key="id" wx:for-item="con" class="constellation constellation--{{con.id}}">
     <!-- R108 T1: 嵌套 wrapper, 外层 scale (呼吸), 内层 rotate (R107 T4 spin) -->
     <view class="constellation-rotate">
 
       <!-- 星座标签 (中心) -->
-      <view class="const-label"
-            style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; color: {{con.color}};">
+      <view class="const-label" style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; color: {{con.color}};">
         <text class="const-name">{{con.name}}</text>
       </view>
 
       <!-- 星座晕圈 (中心) -->
-      <view class="const-halo"
-            style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; border-color: {{con.color}}; box-shadow: 0 0 60rpx {{con.color}}88, 0 0 120rpx {{con.color}}44;"></view>
+      <view class="const-halo" style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; border-color: {{con.color}}; box-shadow: 0 0 60rpx {{con.color}}88, 0 0 120rpx {{con.color}}44;"></view>
 
       <!-- 粒子 (字段) -->
       <view wx:for="{{con.particles}}" wx:key="id" wx:for-item="particle" class="particle {{particle.filled ? 'filled' : ''}}" style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{con.color}}; --pcrgb: {{con.colorRgb}}; transform: translate({{particle.dx || 0}}px, {{particle.dy || 0}}px);" data-field="{{particle.id}}" data-const-id="{{con.id}}" bindtap="onParticleTap">
@@ -107,21 +91,13 @@
 
       <!-- text input -->
       <block wx:if="{{!modalOptions}}">
-        <input class="modal-input"
-               placeholder="{{modalPlaceholder}}"
-               value="{{modalValue}}"
-               bindinput="onModalInput"
-               focus="{{true}}"
-               bindconfirm="onModalSave" />
+        <input class="modal-input" placeholder="{{modalPlaceholder}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{true}}" bindconfirm="onModalSave" />
       </block>
 
       <!-- chips -->
       <block wx:if="{{modalOptions && modalOptions[0].label}}">
         <view class="modal-chips">
-          <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}"
-                wx:for="{{modalOptions}}" wx:key="value"
-                data-value="{{item.value}}"
-                bindtap="onModalChip">{{item.label}}</view>
+          <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}" wx:for="{{modalOptions}}" wx:key="value" data-value="{{item.value}}" bindtap="onModalChip">{{item.label}}</view>
         </view>
       </block>
 
