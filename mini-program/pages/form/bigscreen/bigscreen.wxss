@@ -494,3 +494,18 @@
 }
 .starfield.ready .constellation { animation: spin-slow 60s linear infinite; }
 .starfield.celebrate .center-circle { animation: explode 1.5s ease-out; }
+
+/* R107 T5: 背景星云 (CSS-only, ::before 伪元素 + 模糊滤镜) */
+.starfield::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 20% 30%, #1e1b4b 0%, transparent 40%),
+    radial-gradient(circle at 80% 70%, #312e81 0%, transparent 40%),
+    radial-gradient(circle at 50% 50%, #4c1d95 0%, transparent 60%);
+  filter: blur(60px);
+  opacity: 0.7;
+  z-index: -1;
+  pointer-events: none;
+}

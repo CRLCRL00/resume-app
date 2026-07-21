@@ -489,3 +489,11 @@ test('R107 T4: wxml starfield has ready/celebrate class bindings', () => {
   assert.ok(wxml.includes('starfieldReady'), 'R107 T4: wxml 必须用 starfieldReady');
   assert.ok(wxml.includes('starfieldCelebrate'), 'R107 T4: wxml 必须用 starfieldCelebrate');
 });
+
+// ─── R107 T5: 背景星云 (CSS-only ::before + blur) ─────────────
+test('R107 T5: wxss has starfield::before + nebula-blur background', () => {
+  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(wxss.includes('.starfield::before'), 'R107 T5: 必须用 pseudoelement ::before');
+  assert.ok(wxss.includes('filter: blur'), 'R107 T5: 必须用模糊滤镜');
+});
