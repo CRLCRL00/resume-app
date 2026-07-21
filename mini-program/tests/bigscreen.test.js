@@ -497,3 +497,29 @@ test('R107 T5: wxss has starfield::before + nebula-blur background', () => {
   assert.ok(wxss.includes('.starfield::before'), 'R107 T5: 必须用 pseudoelement ::before');
   assert.ok(wxss.includes('filter: blur'), 'R107 T5: 必须用模糊滤镜');
 });
+
+// ─── R108 T1: 星座呼吸 (CSS only + 嵌套 wrapper 解决 transform 冲突) ─────────────
+test('R108 T1: wxss has constellation-breathe keyframe + applied to .constellation', () => {
+  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(wxss.includes('@keyframes constellation-breathe'), 'R108 T1: 呼吸 keyframe');
+  assert.ok(wxss.includes('constellation-breathe'), 'R108 T1: 应用到 .constellation');
+});
+
+test('R108 T1: wxml wraps constellation content in constellation-rotate div', () => {
+  const fs = require('node:fs');
+  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
+  assert.ok(wxml.includes('constellation-rotate'), 'R108 T1: 必须用嵌套 wrapper 解决 transform 冲突');
+  const cIdx = wxml.indexOf('constellation constellation--');
+  const rIdx = wxml.indexOf('constellation-rotate');
+  assert.ok(rIdx > cIdx, 'R108 T1: constellation-rotate 必须在 .constellation 内');
+});
+
+test('R108 T1: wxss 改 R107 T4 rotate 选择器到 constellation-rotate (避免冲突)', () => {
+  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
+  assert.ok(wxss.includes('.starfield.ready .constellation-rotate'),
+    'R108 T1: R107 T4 spin-slow 必须改用内层 constellation-rotate, 不与外层 scale 冲突');
+  assert.ok(!wxss.includes('.starfield.ready .constellation {'),
+    'R108 T1: R107 T4 不应再单独作用于 .constellation (会与 scale 冲突)');
+});

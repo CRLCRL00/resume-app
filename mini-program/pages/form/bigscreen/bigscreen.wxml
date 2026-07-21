@@ -40,27 +40,30 @@
   <!-- 5 星座 (R107 T1: 外层加 constellation modifier class, 接 conic-gradient) -->
   <view wx:for="{{constellations}}" wx:key="id" wx:for-item="con"
         class="constellation constellation--{{con.id}}">
+    <!-- R108 T1: 嵌套 wrapper, 外层 scale (呼吸), 内层 rotate (R107 T4 spin) -->
+    <view class="constellation-rotate">
 
-    <!-- 星座标签 (中心) -->
-    <view class="const-label"
-          style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; color: {{con.color}};">
-      <text class="const-name">{{con.name}}</text>
-    </view>
+      <!-- 星座标签 (中心) -->
+      <view class="const-label"
+            style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; color: {{con.color}};">
+        <text class="const-name">{{con.name}}</text>
+      </view>
 
-    <!-- 星座晕圈 (中心) -->
-    <view class="const-halo"
-          style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; border-color: {{con.color}}; box-shadow: 0 0 60rpx {{con.color}}88, 0 0 120rpx {{con.color}}44;"></view>
+      <!-- 星座晕圈 (中心) -->
+      <view class="const-halo"
+            style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; border-color: {{con.color}}; box-shadow: 0 0 60rpx {{con.color}}88, 0 0 120rpx {{con.color}}44;"></view>
 
-    <!-- 粒子 (字段) -->
-    <view wx:for="{{con.particles}}" wx:key="id" wx:for-item="particle"
-          class="particle {{particle.filled ? 'filled' : ''}}"
-          style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{con.color}}; --pcrgb: {{con.colorRgb}};"
-          data-field="{{particle.id}}"
-          data-const-id="{{con.id}}"
-          bindtap="onParticleTap">
-      <view class="particle-glow"></view>
-      <view class="particle-core"></view>
-      <text class="particle-label">{{particle.label}}</text>
+      <!-- 粒子 (字段) -->
+      <view wx:for="{{con.particles}}" wx:key="id" wx:for-item="particle"
+            class="particle {{particle.filled ? 'filled' : ''}}"
+            style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{con.color}}; --pcrgb: {{con.colorRgb}};"
+            data-field="{{particle.id}}"
+            data-const-id="{{con.id}}"
+            bindtap="onParticleTap">
+        <view class="particle-glow"></view>
+        <view class="particle-core"></view>
+        <text class="particle-label">{{particle.label}}</text>
+      </view>
     </view>
   </view>
 

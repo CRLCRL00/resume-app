@@ -492,7 +492,6 @@
   50% { transform: scale(1.5); box-shadow: 0 0 60rpx #fbbf24; }
   100% { transform: scale(1); box-shadow: 0 0 0 #fde047; }
 }
-.starfield.ready .constellation { animation: spin-slow 60s linear infinite; }
 .starfield.celebrate .center-circle { animation: explode 1.5s ease-out; }
 
 /* R107 T5: 背景星云 (CSS-only, ::before 伪元素 + 模糊滤镜) */
@@ -508,4 +507,25 @@
   opacity: 0.7;
   z-index: -1;
   pointer-events: none;
+}
+
+/* R108 T1: 星座呼吸 (CSS only, 外层 scale, 错开 5 星座 delay) */
+@keyframes constellation-breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+}
+.constellation {
+  animation: constellation-breathe 4s ease-in-out infinite;
+  transform-origin: 50% 50%;
+}
+/* 错开 5 星座延迟 (避免同步呼吸) */
+.constellation--basic     { animation-delay: 0s; }
+.constellation--education { animation-delay: 0.8s; }
+.constellation--work      { animation-delay: 1.6s; }
+.constellation--expected  { animation-delay: 2.4s; }
+.constellation--skills    { animation-delay: 3.2s; }
+
+/* R108 T1: 改 R107 T4 选择器到内层 (避免与外层 scale 冲突) */
+.starfield.ready .constellation-rotate {
+  animation: spin-slow 60s linear infinite;
 }
