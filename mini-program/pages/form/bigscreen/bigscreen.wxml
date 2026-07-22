@@ -78,8 +78,33 @@
   <!-- 弹窗: 填字段 (R99 加 AI 提示气泡) -->
   <view class="modal-mask" wx:if="{{modalVisible}}" bindtap="onModalCancel">
     <view class="modal-card" catchtap="">
-      <!-- AI 提示气泡 (R99 新增) -->
-      <view class="modal-ai-bubble" wx:if="{{modalFieldAi}}" style="border-left-color: {{modalConstColor}};">
+      <!-- R114 T2: AI 多轮对话历史 (scroll-view) -->
+      <scroll-view class="ai-chat-history" scroll-y="true" scroll-top="{{aiScrollTop}}" wx:if="{{aiHistory.length > 0}}">
+        <view wx:for="{{aiHistory}}" wx:key="id" wx:for-item="msg" class="ai-msg ai-msg--{{msg.role}}">
+          <view wx:if="{{msg.role === 'assistant'}}" class="ai-msg-avatar" style="background: {{modalConstColor}};">✨</view>
+          <view class="ai-msg-text">{{msg.content}}</view>
+        </view>
+      </scroll-view>
+
+      <!-- R114 T2: AI 追问气泡 -->
+      <view class="ai-followup" wx:if="{{aiFollowup}}" style="border-left-color: {{modalConstColor}};">
+        <text class="ai-followup-text">{{aiFollowup}}</text>
+      </view>
+
+      <!-- R114 T2 fix (Important #1): AI 错误提示 + 重试 -->
+      <view class="ai-error" wx:if="{{aiError}}">
+        <text class="ai-error-text">⚠️ {{aiError}}</text>
+        <view class="ai-error-retry" bindtap="onAIErrorRetry">重试</view>
+      </view>
+
+      <!-- R114 T2: AI 建议 chip -->
+      <view class="ai-suggestion-chip" wx:if="{{aiSuggestion}}" bindtap="onAISuggestionTap">
+        <text class="ai-suggestion-icon">💡</text>
+        <text class="ai-suggestion-text">{{aiSuggestion}}</text>
+      </view>
+
+      <!-- AI 提示气泡 (R99 新增; R114 T2 Nit #2: 仅历史为空时显示, 避免与 aiHistory 首条重复) -->
+      <view class="modal-ai-bubble" wx:if="{{modalFieldAi && aiHistory.length === 0}}" style="border-left-color: {{modalConstColor}};">
         <view class="modal-ai-avatar" style="background: {{modalConstColor}};">✨</view>
         <view class="modal-ai-content">
           <text class="modal-ai-name">简历助手</text>

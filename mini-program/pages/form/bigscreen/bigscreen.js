@@ -211,6 +211,15 @@ PageImpl({
     modalValue: '',
     modalOptions: null,
     modalPlaceholder: '',
+    // R114 T2: AI 多轮对话状态
+    aiHistory: [],
+    aiFollowup: '',
+    aiSuggestion: '',
+    aiBusy: false,
+    // R114 T2 fix: 错误兜底 + 异步竞态防护 + 自动滚底
+    aiError: '',
+    aiRequestSeq: 0, // generation token, 每次请求 ++, 过期响应丢弃
+    aiScrollTop: 0,
     // R107 T2: 完成度数字脉冲 + 阈值变色
     numTier: 'low',
     bumpTick: 0,
@@ -238,6 +247,12 @@ PageImpl({
   },
 
   onUnload() {
+    // R114 T2 fix (Important #2): 页面卸载清 debounce timer + 作废在飞请求
+    if (this._aiDebounceTimer) {
+      clearTimeout(this._aiDebounceTimer);
+      this._aiDebounceTimer = null;
+    }
+    this._aiRequestSeq = (this._aiRequestSeq || 0) + 1;
     try { wx.offWindowResize && wx.offWindowResize(); } catch (_) {}
   },
 
@@ -331,21 +346,157 @@ PageImpl({
     const constDef = CONSTELLATIONS.find(c => c.id === constId);
     const fieldDef = constDef?.fields.find(f => f.id === field);
     const value = this._getFieldValue(field);
+    const modalFieldAi = fieldDef?.ai || '';
+    // R114 T2 fix: 切换字段前清理 debounce timer + 作废在飞请求 (防串话)
+    if (this._aiDebounceTimer) {
+      clearTimeout(this._aiDebounceTimer);
+      this._aiDebounceTimer = null;
+    }
+    this._aiRequestSeq = (this._aiRequestSeq || 0) + 1;
+    // R114 T2: 初始化 AI 对话历史 (首条 = R99 静态提示)
+    const initAi = modalFieldAi
+      ? [{ role: 'assistant', content: modalFieldAi, id: this._nextAiMsgId('init') }]
+      : [];
     this.setData({
       modalVisible: true,
       modalField: field,
       modalFieldLabel: fieldDef?.label || field,
-      modalFieldAi: fieldDef?.ai || '',
+      modalFieldAi,
       modalConstId: constId,
       modalConstColor: constDef?.color || '#6366f1',
       modalValue: value || '',
       modalOptions: fieldDef?.options || null,
       modalPlaceholder: fieldDef?.placeholder || `请输入${fieldDef?.label || ''}`,
+      // R114 T2: 重置 AI 对话状态
+      aiHistory: initAi,
+      aiFollowup: '',
+      aiSuggestion: '',
+      aiBusy: false,
+      aiError: '',
+      aiRequestSeq: this._aiRequestSeq,
+      aiScrollTop: 0,
     });
   },
 
+  // R114 T2 fix (Nit #1): 单调递增 msg id — 避免 Date.now 同毫秒重复
+  _nextAiMsgId(prefix) {
+    this._aiMsgCounter = (this._aiMsgCounter || 0) + 1;
+    return prefix + '-' + this._aiMsgCounter;
+  },
+
   onModalInput(e) {
-    this.setData({ modalValue: e.detail.value });
+    this.setData({ modalValue: e.detail.value, aiError: '' });
+    // R114 T2: debounce 800ms 触发 AI 追问 (防 LLM 风暴 + 防 input 卡顿)
+    if (this._aiDebounceTimer) clearTimeout(this._aiDebounceTimer);
+    this._aiDebounceTimer = setTimeout(() => this._aiSuggest(), 800);
+  },
+
+  /**
+   * R114 T2: AI 多轮对话 — 调 /api/ai/assist-field, 把 AI 回应写入 aiHistory/aiFollowup/aiSuggestion
+   * 必须 debounce 防 LLM 风暴 (前端 onModalInput 已 setTimeout 800ms 调度)
+   * 注: request() 直接 resolve 响应体 {code, data:{...}} (见 utils/request.js line 44)
+   *
+   * R114 T2 fix:
+   *   - overrideValue: 可选, 直接传当前值 (绕过 setData 异步读旧 modalValue 问题)
+   *   - seq 防竞态: 每次请求领一个 generation token, 响应回来发现 token 过期则丢弃 (防串话)
+   *   - 失败兜底: LLM 返回异常 / 网络异常 → 设 aiError + 清过期 followup/suggestion
+   */
+  _aiSuggest(overrideValue) {
+    if (this.data.aiBusy) return;
+    const { modalField, modalFieldLabel, modalValue } = this.data;
+    if (!modalField) return;
+    // 领一个 generation token (同步, 不走 setData 异步)
+    this._aiRequestSeq = (this._aiRequestSeq || 0) + 1;
+    const mySeq = this._aiRequestSeq;
+    this.setData({ aiBusy: true, aiError: '', aiRequestSeq: mySeq });
+
+    const valueToSend = overrideValue !== undefined ? overrideValue : modalValue;
+
+    // 截断 history 到最近 4 条 (避免 token 爆炸)
+    const recentHistory = (this.data.aiHistory || []).slice(-4).map((m) => ({
+      role: m.role,
+      content: String(m.content).slice(0, 2000),
+    }));
+
+    const { request } = require('../../../utils/request');
+    request({
+      url: '/ai/assist-field',
+      method: 'POST',
+      data: {
+        fieldId: modalField,
+        fieldLabel: modalFieldLabel,
+        currentValue: valueToSend || '',
+        history: recentHistory,
+      },
+    }).then((res) => {
+      // R114 T2 fix: 防竞态 — 过期响应 (字段已切 / modal 已关) 直接丢弃, 不写状态
+      if (mySeq !== this._aiRequestSeq) return;
+      // request() 直接 resolve body = {code, data:{opening, followups, suggestion}}
+      const body = res || {};
+      if (body.code === 0 && body.data) {
+        const { opening, followups, suggestion } = body.data;
+        const newAiHistory = (this.data.aiHistory || []).slice();
+        // 追加 user 消息 (如果当前值还没作为 user 消息存在)
+        if (valueToSend && !newAiHistory.some((m) => m.role === 'user' && m.content === valueToSend)) {
+          newAiHistory.push({ role: 'user', content: valueToSend, id: this._nextAiMsgId('u') });
+        }
+        // 追加 AI 回应
+        if (opening) {
+          newAiHistory.push({ role: 'assistant', content: opening, id: this._nextAiMsgId('a') });
+        }
+        this.setData({
+          aiHistory: newAiHistory,
+          aiFollowup: (followups && followups[0]) || '',
+          aiSuggestion: suggestion || '',
+          aiBusy: false,
+          aiError: '',
+          // R114 T2 fix (Nit #3): 自动滚到底 (累加确保每轮触发 scroll-view 更新)
+          aiScrollTop: (this.data.aiScrollTop || 0) + 10000,
+        });
+      } else {
+        // LLM 返回失败 — 给用户错误提示, 清过期建议
+        this.setData({
+          aiBusy: false,
+          aiError: 'AI 助手返回异常, 请稍后重试',
+          aiFollowup: '',
+          aiSuggestion: '',
+        });
+      }
+    }).catch((err) => {
+      if (mySeq !== this._aiRequestSeq) return;
+      console.error('_aiSuggest failed:', err);
+      this.setData({
+        aiBusy: false,
+        aiError: 'AI 助手暂时不可用, 请稍后重试',
+        aiFollowup: '',
+        aiSuggestion: '',
+      });
+    });
+  },
+
+  /**
+   * R114 T2 fix (Important #1): AI 失败重试 — 清 error 后重触发 _aiSuggest
+   */
+  onAIErrorRetry() {
+    this.setData({ aiError: '' });
+    this._aiSuggest();
+  },
+
+  /**
+   * R114 T2: AI 建议 chip 点击 — 把 AI 建议填入 input, 然后触发新一轮 AI 追问
+   * R114 T2 fix (Important #3): setData 异步 — 用 callback 保证 modalValue 已更新后再
+   * 触发追问, 并直接把新值传给 _aiSuggest 避免读旧值; 先清旧 debounce timer 防重复触发.
+   */
+  onAISuggestionTap() {
+    if (!this.data.aiSuggestion) return;
+    if (this._aiDebounceTimer) {
+      clearTimeout(this._aiDebounceTimer);
+      this._aiDebounceTimer = null;
+    }
+    const newVal = this.data.aiSuggestion;
+    this.setData({ modalValue: newVal, aiSuggestion: '', aiError: '' }, () => {
+      this._aiSuggest(newVal);
+    });
   },
 
   onModalChip(e) {
@@ -365,6 +516,12 @@ PageImpl({
   },
 
   onModalCancel() {
+    // R114 T2 fix (Important #2): modal 关闭时清 debounce timer + 作废在飞请求 (防串话)
+    if (this._aiDebounceTimer) {
+      clearTimeout(this._aiDebounceTimer);
+      this._aiDebounceTimer = null;
+    }
+    this._aiRequestSeq = (this._aiRequestSeq || 0) + 1;
     this.setData({
       modalVisible: false,
       modalField: null,
@@ -375,6 +532,14 @@ PageImpl({
       modalValue: '',
       modalOptions: null,
       modalPlaceholder: '',
+      // R114 T2 fix: 彻底重置 AI 对话状态 (避免下次开弹窗残留)
+      aiHistory: [],
+      aiFollowup: '',
+      aiSuggestion: '',
+      aiBusy: false,
+      aiError: '',
+      aiRequestSeq: this._aiRequestSeq,
+      aiScrollTop: 0,
     });
   },
 

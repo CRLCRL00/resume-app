@@ -704,3 +704,25 @@ test('R113: wxml opening tags never span multiple lines (attribute 跨行 IDE �
   assert.ok(true, 'R113: 所有 wxml opening tag 都是单行');
 });
 
+// ─── R114 T2: modal 多轮 AI 对话改造 ─────────────
+test('R114 T2: wxml modal has ai-chat-history + ai-followup + ai-suggestion-chip elements', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(src.includes('ai-chat-history'), 'R114 T2: wxml modal 必有 ai-chat-history 多轮对话区');
+  assert.ok(src.includes('ai-followup'), 'R114 T2: wxml modal 必有 ai-followup 追问气泡');
+  assert.ok(src.includes('ai-suggestion-chip'), 'R114 T2: wxml modal 必有 ai-suggestion-chip AI 建议 chip');
+});
+
+test('R114 T2: js has _aiSuggest + debounced onModalInput + aiBusy state', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(src.includes('_aiSuggest'),
+    'R114 T2: js 必有 _aiSuggest() 调用 /api/ai/assist-field');
+  assert.ok(src.includes('aiBusy'),
+    'R114 T2: js data 必有 aiBusy 状态 (防重入)');
+  assert.ok(/setTimeout|debounce/.test(src),
+    'R114 T2: js 必有 setTimeout / debounce 防 LLM 风暴');
+});
+
