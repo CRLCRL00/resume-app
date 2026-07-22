@@ -748,3 +748,27 @@ test('R116: js data 加 currentSection + sections + _wizardStart 触发; 删 R98
     'R116: _initLayout 不应再 setData constellations: layoutParticles (改 sections 派生)');
 });
 
+// ─── R116 fix: WXML 不再有 inline function (R106b 教训) ─────────────
+test('R116 fix: wxml 不再有 inline _isFieldFilled / _getFieldValue 调用 (R106b 教训)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  // R106b 教训: WXML inline function 会断整个 view 渲染
+  assert.ok(!/{{_isFieldFilled/.test(src),
+    'R116 fix: wxml 必须无 inline _isFieldFilled 调用 (R106b 教训)');
+  assert.ok(!/{{_getFieldValue/.test(src),
+    'R116 fix: wxml 必须无 inline _getFieldValue 调用');
+  assert.ok(!/{{_getFieldIndex/.test(src),
+    'R116 fix: wxml 必须无 inline _getFieldIndex 调用');
+});
+
+test('R116 fix: js 有 _buildFieldStates helper + sections 派生 fieldState', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(src.includes('_buildFieldStates'),
+    'R116 fix: js 必有 _buildFieldStates helper (预计算 fieldState)');
+  assert.ok(src.includes('fieldState'),
+    'R116 fix: js 必有 fieldState 字段 (预计算结果)');
+});
+

@@ -23,10 +23,10 @@
       <text class="feed-section-name">{{section.name}}</text>
       <!-- 字段卡片 (横滑) -->
       <scroll-view class="feed-fields" scroll-x="true">
-        <view wx:for="{{section.fields}}" wx:key="id" wx:for-item="field" wx:for-index="fIdx" class="feed-field-card {{_isFieldFilled(field.id) ? 'filled' : ''}} {{currentFieldId === field.id ? 'current' : ''}} {{_getFieldIndex(field.id) < currentFieldIndex ? 'done' : ''}}" data-field-id="{{field.id}}" data-section-idx="{{idx}}" bindtap="onFieldCardTap">
+        <view wx:for="{{section.fields}}" wx:key="id" wx:for-item="field" wx:for-index="fIdx" class="feed-field-card {{field.fieldState.filled ? 'filled' : ''}} {{field.fieldState.current ? 'current' : ''}} {{field.fieldState.done ? 'done' : ''}}" data-field-id="{{field.id}}" data-section-idx="{{idx}}" bindtap="onFieldCardTap">
           <text class="feed-field-label">{{field.label}}</text>
-          <text wx:if="{{_isFieldFilled(field.id)}}" class="feed-field-value">{{_getFieldValue(field.id)}}</text>
-          <text wx:elif="{{currentFieldId === field.id}}" class="feed-field-prompt">?</text>
+          <text wx:if="{{field.fieldState.filled}}" class="feed-field-value">{{field.fieldState.value}}</text>
+          <text wx:elif="{{field.fieldState.current}}" class="feed-field-prompt">?</text>
         </view>
       </scroll-view>
     </view>

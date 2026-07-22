@@ -207,14 +207,39 @@ PageImpl({
   _initLayout(width, height, wide, dpr = 2) {
     this.setData({
       wide,
-      sections: CONSTELLATIONS.map((c) => ({ id: c.id, name: c.name, fields: c.fields })),
       currentSection: 0,
       currentFieldIndex: 0,
       currentFieldId: FIELD_ORDER[0],
       currentFieldPrompt: '点击下方输入开始填简历',
+    }, () => {
+      this.setData({ sections: this._buildFieldStates() });
     });
     // R116: 大屏不靠粒子交互, 立即启动 wizard (AI 主动提问)
     this._wizardStart();
+  },
+
+  /**
+   * R116 fix: 预计算每个 field 的 state (filled / current / done / value)
+   * 避免 WXML inline function (R106b 教训: 会断整个 view 渲染).
+   * 调用时机: _initLayout / onFieldCardTap / _writeFormAndSideEffects (form 变更后).
+   */
+  _buildFieldStates() {
+    return CONSTELLATIONS.map((c) => ({
+      id: c.id,
+      name: c.name,
+      color: c.color,
+      fields: c.fields.map((f) => {
+        const filled = this._isFieldFilled(f.id);
+        const value = this._getFieldValue(f.id) || '';
+        const current = this.data.currentFieldId === f.id;
+        const idx = FIELD_ORDER.indexOf(f.id);
+        const done = idx < this.data.currentFieldIndex;
+        return {
+          ...f,
+          fieldState: { filled, current, done, value },
+        };
+      }),
+    }));
   },
 
   // R116: no-op (无粒子, 保留函数体兼容 R107 测试引用)
@@ -276,6 +301,7 @@ PageImpl({
       wizardIsComplete: false,
       wizardIsLoading: true,
     }, () => {
+      this.setData({ sections: this._buildFieldStates() });
       this._wizardStart();
     });
   },
@@ -709,6 +735,8 @@ PageImpl({
       completion,
       // 不动 modal 状态 — 由调用方决定
     }, () => {
+      // R116 fix: form 变更后重新派生 sections (fieldState filled 更新)
+      this.setData({ sections: this._buildFieldStates() });
       // R116: 删 _refreshParticleFilled + _drawLines (无粒子无 canvas)
       // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色 (保留 dead state update)
       this._applyCompletionBump(prevCompletion, completion);
