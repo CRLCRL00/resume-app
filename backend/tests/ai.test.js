@@ -87,3 +87,71 @@ test('POST /api/ai/assist-field returns 502 when LLM upstream fails', async () =
     restoreAll();
   }
 });
+
+// ─── R115 T1: Wizard 模式 (AI 主动提问) ─────────────
+test('POST /api/ai/assist-field mode=wizard returns nextQuestion + hint + isComplete for valid input', async () => {
+  const token = sign({ userId: 2, openid: 'o-ai-test' });
+  stubChatJson(async () => ({
+    parsed: {
+      nextQuestion: '嗨, 怎么称呼你?',
+      hint: '中英文都行',
+      isComplete: false,
+    },
+  }));
+  try {
+    const res = await request(createApp())
+      .post('/api/ai/assist-field')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        mode: 'wizard',
+        fieldId: 'name',
+        fieldLabel: '姓名',
+        currentValue: '',
+        answeredFields: [],
+      });
+    assert.equal(res.status, 200);
+    assert.equal(res.body.code, 0);
+    assert.ok(res.body.data.nextQuestion);
+    assert.ok(res.body.data.hint);
+    assert.equal(res.body.data.isComplete, false);
+  } finally {
+    restoreAll();
+  }
+});
+
+test('POST /api/ai/assist-field mode=wizard returns 502 when LLM upstream fails', async () => {
+  const token = sign({ userId: 2, openid: 'o-ai-test' });
+  stubChatJson(async () => {
+    throw new AppError(1100, 'llm upstream unavailable', 502);
+  });
+  try {
+    const res = await request(createApp())
+      .post('/api/ai/assist-field')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        mode: 'wizard',
+        fieldId: 'name',
+        fieldLabel: '姓名',
+        currentValue: '',
+        answeredFields: [],
+      });
+    assert.equal(res.status, 502);
+  } finally {
+    restoreAll();
+  }
+});
+
+test('POST /api/ai/assist-field mode=wizard returns 400 when answeredFields malformed', async () => {
+  const token = sign({ userId: 2, openid: 'o-ai-test' });
+  const res = await request(createApp())
+    .post('/api/ai/assist-field')
+    .set('Authorization', `Bearer ${token}`)
+    .send({
+      mode: 'wizard',
+      fieldId: 'name',
+      fieldLabel: '姓名',
+      currentValue: '',
+      answeredFields: 'not-an-array',
+    });
+  assert.equal(res.status, 400);
+});

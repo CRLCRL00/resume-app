@@ -19,16 +19,50 @@ function sanitizeInput(s, max = 2000) {
 
 router.post('/assist-field', userAuth, validateBody(assistFieldSchema), async (req, res, next) => {
   try {
-    const { fieldId, fieldLabel, currentValue, history } = req.body;
+    const {
+      mode,
+      fieldId,
+      fieldLabel,
+      currentValue,
+      history,
+      answeredFields,
+    } = req.body;
 
     const safeLabel = sanitizeInput(fieldLabel, 64);
     const safeValue = sanitizeInput(currentValue, 2000);
 
-    const systemPrompt = `你是简历助手。<user_input>用户正在填写"${safeLabel}"字段。当前值: "${safeValue}"。</user_input>任务:
+    let systemPrompt;
+    let userMessage;
+    let maxTokens;
+    if (mode === 'wizard') {
+      const answeredSummary = answeredFields
+        .map((f) => `${sanitizeInput(f.fieldLabel, 64)}: ${sanitizeInput(f.value, 2000)}`)
+        .join('\n');
+      systemPrompt = `你是简历面试官。候选人正在按顺序填简历。
+
+候选人已答字段:
+${answeredSummary || '(无, 刚开始)'}
+
+当前字段: <user_input>${safeLabel}</user_input>
+当前值: <user_input>${safeValue || '(空)'}</user_input>
+
+任务: 像面试官一样主动问 1 个具体问题, 帮候选人把这字段填好。
+- nextQuestion: 1 个具体问题 (亲切自然, 不超过 30 字)
+- hint: 1 个简短提示 (≤20 字), 让候选人知道怎么答
+- isComplete: 当前字段是否已完成 (当前值足够好就 true, 还差就 false)
+
+输出 JSON: {"nextQuestion": "...", "hint": "...", "isComplete": false}`;
+      userMessage = `请对"${safeLabel}"字段提一个问题`;
+      maxTokens = 200;
+    } else {
+      systemPrompt = `你是简历助手。<user_input>用户正在填写"${safeLabel}"字段。当前值: "${safeValue}"。</user_input>任务:
 1. 给一句开场白 (亲切自然, 不超过 20 字)
 2. 给出 1-3 个追问 (帮用户补充更多信息)
 3. 给一个具体建议 (如何让这条信息更有吸引力)
 输出 JSON: {"opening": "...", "followups": ["...", "..."], "suggestion": "..."}`;
+      userMessage = `我的 ${safeLabel}: ${safeValue || '(空)'}`;
+      maxTokens = 400;
+    }
 
     // history 也包裹 boundary token + 清洗，防止历史消息里夹带注入
     const safeHistory = history.map(m => ({
@@ -39,16 +73,16 @@ router.post('/assist-field', userAuth, validateBody(assistFieldSchema), async (r
     const messages = [
       { role: 'system', content: systemPrompt },
       ...safeHistory,
-      { role: 'user', content: `<user_input>我的 ${safeLabel}: ${safeValue || '(空)'}</user_input>` },
+      { role: 'user', content: `<user_input>${userMessage}</user_input>` },
     ];
 
     const { parsed, usage } = await llm.chatJson(messages, {
-      operation: 'ai.assistField',
-      maxTokens: 400,
+      operation: mode === 'wizard' ? 'ai.wizard' : 'ai.assistField',
+      maxTokens,
       temperature: 0.7,
     });
 
-    logger.info({ fieldId, usage }, 'ai assist-field ok');
+    logger.info({ mode, fieldId, usage }, 'ai assist-field ok');
     res.json({ code: 0, data: parsed, message: 'success' });
   } catch (err) {
     next(err);

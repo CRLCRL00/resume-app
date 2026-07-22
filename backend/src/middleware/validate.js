@@ -58,6 +58,7 @@ const promptUpdateSchema = Joi.object({
 
 // R114 T1: AI assist-field 入参校验（含长度上限，防止超长输入打爆 LLM / 注入）
 const assistFieldSchema = Joi.object({
+  mode: Joi.string().valid('assist', 'wizard').default('assist'),
   fieldId: Joi.string().max(64).required(),
   fieldLabel: Joi.string().max(64).required(),
   currentValue: Joi.string().allow('').max(2000).required(),
@@ -65,6 +66,11 @@ const assistFieldSchema = Joi.object({
     role: Joi.string().valid('user', 'assistant').required(),
     content: Joi.string().max(2000).required(),
   })).max(20).default([]),
+  answeredFields: Joi.array().items(Joi.object({
+    fieldId: Joi.string().max(64).required(),
+    fieldLabel: Joi.string().max(64).required(),
+    value: Joi.string().max(2000).required(),
+  })).max(14).default([]),
 }).label('AssistFieldRequest');
 
 /**
