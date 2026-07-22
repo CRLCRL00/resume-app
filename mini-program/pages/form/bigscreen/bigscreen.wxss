@@ -25,21 +25,7 @@
   box-shadow: 0 0 4rpx #fff;
 }
 
-/* R107 T3: 背景流星雨 (顶左 → 底右 拖尾, linear infinite) */
-.meteor {
-  position: absolute;
-  width: 4rpx;
-  height: 80rpx;
-  background: linear-gradient(180deg, transparent 0%, #fff 50%, transparent 100%);
-  animation: meteor-fall linear infinite;
-  pointer-events: none; /* 不挡粒子点击 */
-}
-@keyframes meteor-fall {
-  0% { transform: translate(0, 0); opacity: 0; }
-  10% { opacity: 1; }
-  90% { opacity: 0.6; }
-  100% { transform: translate(400rpx, 800rpx); opacity: 0; }
-}
+/* R114 T3: 删 R107 T3 流星 + meteor-fall keyframe — 让 AI 弹窗成为主角 */
 
 /* R103: 连线 canvas (覆盖全屏) */
 .lines-canvas {
@@ -146,12 +132,6 @@
 .center-num {
   font-size: 44rpx;
   line-height: 1;
-  /* R107 T2: 完成度变化触发脉冲动画 (每次 setData bumpTick++ 重新触发) */
-  animation: num-pulse 600ms ease-out;
-}
-@keyframes num-pulse {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
 }
 /* R107 T2: 完成度阈值变色 (gold 100 / high 60 / mid 30 / low <30) */
 .center-num.tier-low { color: #f59e0b; }
@@ -484,32 +464,8 @@
   box-shadow: 0 4rpx 12rpx rgba(7,193,96,0.3);
 }
 
-/* R107 T4: ≥80% 自动旋转 + 100% 庆祝 */
-@keyframes spin-slow {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-@keyframes explode {
-  0% { transform: scale(1); box-shadow: 0 0 0 #fde047; }
-  50% { transform: scale(1.5); box-shadow: 0 0 60rpx #fbbf24; }
-  100% { transform: scale(1); box-shadow: 0 0 0 #fde047; }
-}
-.starfield.celebrate .center-circle { animation: explode 1.5s ease-out; }
-
-/* R107 T5: 背景星云 (CSS-only, ::before 伪元素 + 模糊滤镜) */
-.starfield::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    radial-gradient(circle at 20% 30%, #1e1b4b 0%, transparent 40%),
-    radial-gradient(circle at 80% 70%, #312e81 0%, transparent 40%),
-    radial-gradient(circle at 50% 50%, #4c1d95 0%, transparent 60%);
-  filter: blur(60px);
-  opacity: 0.7;
-  z-index: -1;
-  pointer-events: none;
-}
+/* R114 T3: 删 R107 T4 旋转/庆祝 keyframes + R107 T5 ::before 星云.
+   AI 弹窗成为主角, 星图更克制. */
 
 /* R108 T1: 星座呼吸 (CSS only, 外层 scale, 错开 5 星座 delay) */
 @keyframes constellation-breathe {
@@ -526,11 +482,6 @@
 .constellation--work      { animation-delay: 1.6s; }
 .constellation--expected  { animation-delay: 2.4s; }
 .constellation--skills    { animation-delay: 3.2s; }
-
-/* R108 T1: 改 R107 T4 选择器到内层 (避免与外层 scale 冲突) */
-.starfield.ready .constellation-rotate {
-  animation: spin-slow 60s linear infinite;
-}
 
 /* R108 T2 fix v2: touch 时彻底移除粒子 float 动画, 让 inline transform: translate(dx, dy) 生效 */
 .starfield.touching .particle {

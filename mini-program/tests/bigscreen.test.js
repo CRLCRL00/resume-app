@@ -390,15 +390,15 @@ test('R107 T1: wxml applies constellation--{{con.id}} modifier on outer view', (
 });
 
 // ─── R107 T2: 中心完成度数字脉冲 + 阈值变色 ─────────────
-test('R107 T2: wxss has @keyframes num-pulse + center-num animation', () => {
+test('R107 T2 → R114 T3: wxss 已移除 num-pulse keyframe + .center-num animation', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const wxss = path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss');
   const src = fs.readFileSync(wxss, 'utf8');
-  assert.ok(src.includes('@keyframes num-pulse'),
-    'R107 T2: 中心数字脉冲 keyframe (@keyframes num-pulse)');
-  assert.ok(/animation\s*:\s*num-pulse/.test(src),
-    'R107 T2: .center-num 必须引用 num-pulse 动画');
+  assert.ok(!src.includes('@keyframes num-pulse'),
+    'R114 T3: 中心数字脉冲 keyframe 已移除');
+  assert.ok(!/animation\s*:\s*num-pulse/.test(src),
+    'R114 T3: .center-num 不再引用 num-pulse 动画');
 });
 
 test('R107 T2: wxss has tier-low / tier-mid / tier-high / tier-gold color classes', () => {
@@ -466,26 +466,26 @@ test('R107 T3: js exports genMeteors producing 5 meteors with delay/duration', (
   }
 });
 
-test('R107 T3: wxml has meteor node template', () => {
+test('R107 T3 → R114 T3: wxml 已移除 meteor node template', () => {
   const fs = require('node:fs');
   const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(wxml.includes('wx:for="{{meteors}}"'), 'R107 T3: WXML 必须循环 meteors');
-  assert.ok(wxml.includes('class="meteor"'), 'R107 T3: 必须用 class="meteor"');
+  assert.ok(!wxml.includes('wx:for="{{meteors}}"'), 'R114 T3: WXML 不再循环 meteors');
+  assert.ok(!wxml.includes('class="meteor"'), 'R114 T3: WXML 不再用 class="meteor"');
 });
 
-test('R107 T3: wxss has meteor-fall keyframe with translate', () => {
+test('R107 T3 → R114 T3: wxss 已移除 meteor-fall keyframe + .meteor block', () => {
   const fs = require('node:fs');
   const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(wxss.includes('@keyframes meteor-fall'), 'R107 T3: 流星坠落 keyframe');
-  assert.ok(wxss.includes('translate'), 'R107 T3: 流星必须 transform 平移');
+  assert.ok(!wxss.includes('@keyframes meteor-fall'), 'R114 T3: 流星坠落 keyframe 已移除');
+  assert.ok(!/\.meteor\s*\{/.test(wxss), 'R114 T3: .meteor block 已移除');
 });
 
 // ─── R107 T4: ≥80% 自动旋转 + 100% 庆祝 ─────────────
-test('R107 T4: wxss has spin-slow + explode keyframes', () => {
+test('R107 T4 → R114 T3: wxss 已移除 spin-slow + explode keyframes', () => {
   const fs = require('node:fs');
   const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(wxss.includes('@keyframes spin-slow'), 'R107 T4: 旋转 keyframe');
-  assert.ok(wxss.includes('@keyframes explode'), 'R107 T4: 爆炸 keyframe');
+  assert.ok(!wxss.includes('@keyframes spin-slow'), 'R114 T3: 旋转 keyframe 已移除');
+  assert.ok(!wxss.includes('@keyframes explode'), 'R114 T3: 庆祝/爆炸 keyframe 已移除');
 });
 
 test('R107 T4: js _watchCompletionTier handles 80/100 thresholds', () => {
@@ -497,20 +497,23 @@ test('R107 T4: js _watchCompletionTier handles 80/100 thresholds', () => {
     'R107 T4: 必须判断 100% 阈值');
 });
 
-test('R107 T4: wxml starfield has ready/celebrate class bindings', () => {
+test('R107 T4 → R114 T3: wxml starfield 保留 ready binding, 已移除 celebrate binding', () => {
   const fs = require('node:fs');
   const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  // Find the starfield opening tag (line 6-7)
-  assert.ok(wxml.includes('starfieldReady'), 'R107 T4: wxml 必须用 starfieldReady');
-  assert.ok(wxml.includes('starfieldCelebrate'), 'R107 T4: wxml 必须用 starfieldCelebrate');
+  // 保留: ready (粒子已 fade in 后)
+  assert.ok(wxml.includes('starfieldReady'), 'R107 T4: wxml 必须保留 starfieldReady binding');
+  // R114 T3 移除: celebrate (庆祝动画 keyframe 已删)
+  assert.ok(!wxml.includes('starfieldCelebrate'),
+    'R114 T3: starfieldCelebrate binding 已移除 (庆祝动画无 keyframe 可驱动)');
 });
 
 // ─── R107 T5: 背景星云 (CSS-only ::before + blur) ─────────────
-test('R107 T5: wxss has starfield::before + nebula-blur background', () => {
+test('R107 T5 → R114 T3: wxss 已移除 .starfield::before 星云 pseudoelement', () => {
   const fs = require('node:fs');
   const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(wxss.includes('.starfield::before'), 'R107 T5: 必须用 pseudoelement ::before');
-  assert.ok(wxss.includes('filter: blur'), 'R107 T5: 必须用模糊滤镜');
+  assert.ok(!wxss.includes('.starfield::before'),
+    'R114 T3: .starfield::before 星云 pseudoelement 已移除');
+  // filter: blur 可能还在其它选择器使用 (例如 backdrop-filter blur), 只断言无 ::before 即可
 });
 
 // ─── R108 T1: 星座呼吸 (CSS only + 嵌套 wrapper 解决 transform 冲突) ─────────────
@@ -530,13 +533,14 @@ test('R108 T1: wxml wraps constellation content in constellation-rotate div', ()
   assert.ok(rIdx > cIdx, 'R108 T1: constellation-rotate 必须在 .constellation 内');
 });
 
-test('R108 T1: wxss 改 R107 T4 rotate 选择器到 constellation-rotate (避免冲突)', () => {
+test('R108 T1 → R114 T3: wxss 已移除 .starfield.ready .constellation-rotate (spin-slow 选择器)', () => {
+  // R107 T4 spin-slow 整体已删, 所以这个避免 transform 冲突的 selector 也无意义了
   const fs = require('node:fs');
   const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(wxss.includes('.starfield.ready .constellation-rotate'),
-    'R108 T1: R107 T4 spin-slow 必须改用内层 constellation-rotate, 不与外层 scale 冲突');
-  assert.ok(!wxss.includes('.starfield.ready .constellation {'),
-    'R108 T1: R107 T4 不应再单独作用于 .constellation (会与 scale 冲突)');
+  assert.ok(!wxss.includes('.starfield.ready .constellation-rotate'),
+    'R114 T3: .starfield.ready .constellation-rotate selector 已移除 (spin-slow 已删, 无需再避冲突)');
+  assert.ok(!wxss.includes('spin-slow'),
+    'R114 T3: spin-slow 关键字不再出现于 wxss');
 });
 
 // ─── R108 T2: 粒子拖尾 (touchmove + setData dx/dy) ─────────────
@@ -724,5 +728,30 @@ test('R114 T2: js has _aiSuggest + debounced onModalInput + aiBusy state', () =>
     'R114 T2: js data 必有 aiBusy 状态 (防重入)');
   assert.ok(/setTimeout|debounce/.test(src),
     'R114 T2: js 必有 setTimeout / debounce 防 LLM 风暴');
+});
+
+// ─── R114 T3: 简化星图 (去装饰) ─────────────
+test('R114 T3: wxss no longer has 流星 / 旋转 / 庆祝 / 脉冲 keyframes', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxss = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss'), 'utf8');
+  assert.ok(!wxss.includes('@keyframes meteor-fall'), 'R114 T3: meteor-fall 已移除');
+  assert.ok(!wxss.includes('@keyframes spin-slow'), 'R114 T3: spin-slow (旋转) 已移除');
+  assert.ok(!wxss.includes('@keyframes explode'), 'R114 T3: explode (庆祝) 已移除');
+  assert.ok(!wxss.includes('@keyframes num-pulse'), 'R114 T3: num-pulse (脉冲) 已移除');
+  // 保留核心 keyframes
+  assert.ok(wxss.includes('@keyframes constellation-breathe'), 'R114 T3: 保留星座呼吸');
+  assert.ok(wxss.includes('@keyframes pulse'), 'R114 T3: 保留中心光晕 pulse');
+  assert.ok(wxss.includes('@keyframes float'), 'R114 T3: 保留粒子 float');
+  assert.ok(wxss.includes('@keyframes twinkle'), 'R114 T3: 保留粒子 twinkle');
+});
+
+test('R114 T3: wxml 移除流星节点 + starfieldCelebrate class', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(!wxml.includes('wx:for="{{meteors}}"'), 'R114 T3: 流星 wx:for 已移除');
+  assert.ok(!wxml.includes('class="meteor"'), 'R114 T3: 流星 view 已移除');
+  assert.ok(!wxml.includes('starfieldCelebrate'), 'R114 T3: celebrate class 已移除');
 });
 
