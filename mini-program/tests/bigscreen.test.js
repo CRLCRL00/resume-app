@@ -440,11 +440,14 @@ test('R107 T3 → R114 T3: wxss 已移除 meteor-fall keyframe + .meteor block',
 });
 
 // ─── R107 T4: ≥80% 自动旋转 + 100% 庆祝 ─────────────
-test('R107 T4 → R114 T3: wxss 已移除 spin-slow + explode keyframes', () => {
+test('R107 T4 → R114 T3: wxss 已移除 spin-slow + explode (旧 R107 庆祝) keyframes (R119 explode-particle 仍可保留)', () => {
   const fs = require('node:fs');
   const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
   assert.ok(!wxss.includes('@keyframes spin-slow'), 'R114 T3: 旋转 keyframe 已移除');
-  assert.ok(!wxss.includes('@keyframes explode'), 'R114 T3: 庆祝/爆炸 keyframe 已移除');
+  // R119 加了 @keyframes explode-particle (粒子爆花), 旧 @keyframes explode 已删
+  // 用 regex 精确匹配: @keyframes explode 后必须跟非字母 (排除 explode-particle)
+  assert.ok(!/@keyframes explode[^-\w]/.test(wxss) && !/@keyframes explode\s*\{/.test(wxss),
+    'R114 T3: 旧 explode 庆祝 keyframe 已移除 (R119 explode-particle 是新加的, 仍可保留)');
 });
 
 test('R107 T4 → R116: _watchCompletionTier 已删 (R116 无中心节点完成度旋转触发)', () => {
@@ -596,12 +599,16 @@ test('R114 T2: js has _aiSuggest + debounced onModalInput + aiBusy state', () =>
 test('R114 T3 + R116: wxss 全部星图 keyframes 已清 (流星/旋转/庆祝/脉冲/呼吸/浮动/闪烁)', () => {
   // R116 翻转: R114 T3 保留的核心 keyframes (constellation-breathe/pulse/float/twinkle/shake) 也被 R116 全删
   // (无粒子无中心节点, 整星图删除)
+  // R119 加了 avatar-breathe / avatar-celebrate / explode-particle (新动效, 仍可保留)
+  // R119 explode-particle 是 R119 A5 粒子爆花, 不是 R107 旧 celebrate (R107 已删)
   const fs = require('node:fs');
   const path = require('node:path');
   const wxss = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss'), 'utf8');
   assert.ok(!wxss.includes('@keyframes meteor-fall'), 'R114 T3: meteor-fall 已移除');
   assert.ok(!wxss.includes('@keyframes spin-slow'), 'R114 T3: spin-slow (旋转) 已移除');
-  assert.ok(!wxss.includes('@keyframes explode'), 'R114 T3: explode (庆祝) 已移除');
+  // R119 explode-particle (新加, A5 粒子爆花) vs R107 explode (已删) — 用 regex 区分
+  assert.ok(!/@keyframes explode[^-\w]/.test(wxss) && !/@keyframes explode\s*\{/.test(wxss),
+    'R114 T3: 旧 explode keyframe 已移除 (R119 explode-particle 是新加, 不冲突)');
   assert.ok(!wxss.includes('@keyframes num-pulse'), 'R114 T3: num-pulse (脉冲) 已移除');
   assert.ok(!wxss.includes('@keyframes constellation-breathe'), 'R116: 星座呼吸 keyframe 也删 (无 .constellation)');
   assert.ok(!wxss.includes('@keyframes pulse'), 'R116: 中心光晕 pulse 也删 (无 .center-pulse)');
@@ -960,5 +967,27 @@ test('R118 T2: _calcRadarScores 输出 5 维 (basic/education/work/expected/skil
   assert.strictEqual(scores.work, 20);
   assert.strictEqual(scores.expected, 100);
   assert.strictEqual(scores.skills, 100);
+});
+
+// ─── R119: 加吸引力 (动效 + 文案) ─────────────
+test('R119: wxml 有 explode-overlay + progress-prompt + complete-mask + avatar-breathe class', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  const wxss = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss'), 'utf8');
+  assert.ok(wxml.includes('explode-overlay'), 'R119: wxml 必有 explode-overlay (A5 爆花)');
+  assert.ok(wxml.includes('progress-prompt'), 'R119: wxml 必有 progress-prompt (B2 进度提示)');
+  assert.ok(wxml.includes('complete-mask'), 'R119: wxml 必有 complete-mask (B4 完成感)');
+  assert.ok(wxss.includes('avatar-breathe'), 'R119: wxss 必有 avatar-breathe keyframes (A1 脉动)');
+});
+
+test('R119: js 有 _triggerExplode / _triggerComplete / _updateProgressPrompt / onDismissComplete handler', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(src.includes('_triggerExplode'), 'R119: js 必有 _triggerExplode (A5)');
+  assert.ok(src.includes('_triggerComplete'), 'R119: js 必有 _triggerComplete (B4)');
+  assert.ok(src.includes('_updateProgressPrompt'), 'R119: js 必有 _updateProgressPrompt (B2)');
+  assert.ok(src.includes('onDismissComplete'), 'R119: js 必有 onDismissComplete (B4)');
 });
 

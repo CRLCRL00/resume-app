@@ -246,6 +246,13 @@ PageImpl({
       { id: 'expected', name: '期望' },
       { id: 'skills', name: '技能' },
     ],
+    // R119: 加吸引力 (动效 + 文案)
+    showComplete: false,           // B4 完成感弹窗
+    showExplode: false,            // A5 完成爆花
+    explodeParticles: [],          // 100 颗粒子 [{id, dx, dy, color}]
+    progressPromptText: '',        // B2 进度提示文案
+    progressPromptHint: '',        // B2 进度提示子文案
+    _lastCompletionBucket: -1,     // R119 B2: 记录上次档位避免重复触发
   },
 
   onLoad() {
@@ -942,6 +949,67 @@ PageImpl({
     };
   },
 
+  /**
+   * R119 B2: 进度提示文案 (按完成度档位给不同鼓励话)
+   * 档位: 0% / 25% / 50% / 75% / 100% (避免每次填都改文案, 只在跨档时改)
+   */
+  _updateProgressPrompt(completion) {
+    let bucket = -1;
+    let text = '';
+    let hint = '';
+    if (completion >= 100) { bucket = 4; text = '🎉 全部完成！'; hint = '可以一键投递了'; }
+    else if (completion >= 75) { bucket = 3; text = '💪 只差一点点！'; hint = '再加把劲就完成'; }
+    else if (completion >= 50) { bucket = 2; text = '🚀 完成一半啦！'; hint = '再填几个字段就过 50%'; }
+    else if (completion >= 25) { bucket = 1; text = '✨ 不错的开始！'; hint = 'AI 正在帮你梳理'; }
+    else if (completion > 0) { bucket = 0; text = '🎯 开始你的简历之旅'; hint = '跟随 AI 助手一步步来'; }
+    if (bucket !== this.data._lastCompletionBucket) {
+      this.setData({ progressPromptText: text, progressPromptHint: hint, _lastCompletionBucket: bucket });
+    }
+  },
+
+  /**
+   * R119 A5: 完成度爆花 (100 颗粒子从中心向四面八方炸开)
+   * wx 环境守卫: 无 wx 跳过
+   */
+  _triggerExplode() {
+    if (typeof wx === 'undefined') return;
+    const particles = [];
+    const colors = ['#fbbf24', '#6366f1', '#8b5cf6', '#07c193', '#ec4899'];
+    for (let i = 0; i < 60; i++) {
+      const angle = (Math.PI * 2 * i) / 60 + Math.random() * 0.3;
+      const dist = 200 + Math.random() * 300;
+      particles.push({
+        id: i,
+        dx: Math.cos(angle) * dist,
+        dy: Math.sin(angle) * dist,
+        color: colors[i % colors.length],
+      });
+    }
+    this.setData({ showExplode: true, explodeParticles: particles });
+    // 1.5s 后自动隐藏
+    if (typeof setTimeout !== 'undefined') {
+      setTimeout(() => this.setData({ showExplode: false, explodeParticles: [] }), 1500);
+    }
+    // wx 振动反馈
+    if (wx.vibrateShort) {
+      try { wx.vibrateShort({ type: 'medium' }); } catch (_) {}
+    }
+  },
+
+  /**
+   * R119 B4: 完成感弹窗 (100% 时弹)
+   */
+  _triggerComplete() {
+    this.setData({ showComplete: true });
+  },
+
+  /**
+   * R119 B4: 关闭完成感弹窗 (点 mask 或按钮)
+   */
+  onDismissComplete() {
+    this.setData({ showComplete: false });
+  },
+
 
   onModalChip(e) {
     const value = e.currentTarget.dataset.value;
@@ -1053,6 +1121,16 @@ PageImpl({
       // R118 T2: 重画雷达图 (setTimeout 100ms 等 canvas ready)
       if (typeof setTimeout !== 'undefined') {
         setTimeout(() => this._drawRadarChart(), 100);
+      }
+      // R119 B2: 进度提示 (跨档时改文案)
+      this._updateProgressPrompt(completion);
+      // R119 A5: 100% 时触发爆花 + B4 完成感弹窗
+      if (completion >= 100 && prevCompletion < 100) {
+        this._triggerExplode();
+        // 爆花后 800ms 弹完成感
+        if (typeof setTimeout !== 'undefined') {
+          setTimeout(() => this._triggerComplete(), 800);
+        }
       }
       // R116: 删 _refreshParticleFilled + _drawLines (无粒子无 canvas)
       // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色 (保留 dead state update)
