@@ -109,9 +109,75 @@ function calcCompletion(form, skillsCount) {
   return Math.min(100, total);
 }
 
+// R118 T1: 拼接简历 markdown
+function _buildResumeMarkdown(form, skills) {
+  if (!form) return '';
+  const lines = [];
+  const name = form.name || '未命名';
+  const gender = form.gender === 'male' ? '男' : form.gender === 'female' ? '女' : form.gender || '';
+  const degree = form.degree || '';
+  const phone = form.phone || '';
+  lines.push(`# ${name}`);
+  if (gender || degree) lines.push(`${gender}${degree ? ' · ' + degree : ''}`);
+  if (phone) lines.push(`📱 ${phone}`);
+  lines.push('');
+  const e0 = (form.educations && form.educations[0]) || {};
+  if (e0.school) {
+    lines.push('## 🎓 教育');
+    lines.push(`**${e0.school}** · ${e0.major || ''}${e0.degree ? ' · ' + e0.degree : ''}`);
+    if (e0.start || e0.end) lines.push(`${e0.start || ''} - ${e0.end || ''}`);
+    lines.push('');
+  }
+  const x0 = (form.experiences && form.experiences[0]) || {};
+  if (x0.company) {
+    lines.push('## 💼 工作');
+    lines.push(`**${x0.title || ''}** @ ${x0.company}`);
+    if (x0.start || x0.end) lines.push(`${x0.start || ''} - ${x0.end || ''}`);
+    if (x0.desc) lines.push(`> ${x0.desc}`);
+    lines.push('');
+  }
+  const exp = form.expected || {};
+  if (exp.city || exp.position) {
+    lines.push('## 🎯 期望');
+    const sal = (exp.salary_min && exp.salary_max) ? `${exp.salary_min}-${exp.salary_max}K` : '';
+    lines.push(`${exp.position || ''} · ${exp.city || ''}${sal ? ' · ' + sal : ''}`);
+    lines.push('');
+  }
+  if (skills && skills.length) {
+    lines.push('## ✨ 技能');
+    lines.push(skills.join(' · '));
+  }
+  return lines.join('\n');
+}
+
+// R118 T2: 计算 5 维度能力分数 (0-100)
+function _calcRadarScores(form, skillsCount) {
+  const score = (obj, fields) => {
+    let filled = 0;
+    for (const f of fields) {
+      const v = obj && obj[f];
+      if (v && String(v).trim()) filled++;
+    }
+    return Math.round((filled / fields.length) * 100);
+  };
+  const f = form || {};
+  const e0 = (f.educations && f.educations[0]) || {};
+  const x0 = (f.experiences && f.experiences[0]) || {};
+  const exp = f.expected || {};
+  return {
+    basic: score({ name: f.name, gender: f.gender, degree: f.degree, phone: f.phone },
+                 ['name', 'gender', 'degree', 'phone']),
+    education: score(e0, ['school', 'major', 'start', 'end']),
+    work: score(x0, ['company', 'title', 'start', 'end', 'desc']),
+    expected: score(exp, ['city', 'position', 'salary_min', 'salary_max']),
+    skills: skillsCount >= 3 ? 100 : skillsCount >= 1 ? 60 : 0,
+  };
+}
+
 module.exports = {
   _test: {
     emptyForm, calcCompletion, CONSTELLATIONS, FIELD_ORDER, FIELD_COUNT,
+    _buildResumeMarkdown, _calcRadarScores, // R118 导出
   },
 };
 
@@ -169,6 +235,17 @@ PageImpl({
     recommendations: [],             // [{value, reason}, ...] AI 给的 3 个推荐
     currentRecommendationIdx: 0,    // 当前显示的推荐 index
     currentRecommendation: null,     // 预计算的当前推荐对象 (避免 wxml inline array index, R106b 教训)
+    // R118 T1: 简历实时预览
+    resumeMarkdown: '',              // 每填字段实时拼接的 markdown 简历
+    // R118 T2: 技能雷达图
+    radarScores: { basic: 0, education: 0, work: 0, expected: 0, skills: 0 },  // 5 维 0-100 分
+    radarLabels: [
+      { id: 'basic', name: '基础' },
+      { id: 'education', name: '教育' },
+      { id: 'work', name: '工作' },
+      { id: 'expected', name: '期望' },
+      { id: 'skills', name: '技能' },
+    ],
   },
 
   onLoad() {
@@ -217,6 +294,14 @@ PageImpl({
       currentFieldPrompt: '点击下方输入开始填简历',
     }, () => {
       this.setData({ sections: this._buildFieldStates() });
+      // R118 T1: 初始化简历预览 (空 form)
+      const md = _buildResumeMarkdown(this.data.form || {}, this.data.form ? this.data.form.skills : []);
+      // R118 T2: 初始化雷达分数 + 重画
+      const radar = _calcRadarScores(this.data.form || {}, 0);
+      this.setData({ resumeMarkdown: md, radarScores: radar });
+      if (typeof setTimeout !== 'undefined') {
+        setTimeout(() => this._drawRadarChart(), 200);
+      }
     });
     // R116: 大屏不靠粒子交互, 立即启动 wizard (AI 主动提问)
     this._wizardStart();
@@ -747,6 +832,102 @@ PageImpl({
   },
 
   /**
+   * R118 T1: 复制简历 markdown 到剪贴板
+   */
+  onCopyMarkdown() {
+    if (!this.data.resumeMarkdown) return;
+    if (typeof wx !== 'undefined' && wx.setClipboardData) {
+      wx.setClipboardData({
+        data: this.data.resumeMarkdown,
+        success: () => {
+          if (wx.showToast) wx.showToast({ title: '已复制', icon: 'success', duration: 1500 });
+        },
+      });
+    }
+  },
+
+  /**
+   * R118 T2: Canvas 2D 画 5 维雷达图 (类似脉脉个人画像)
+   */
+  _drawRadarChart() {
+    if (typeof wx === 'undefined' || !wx.createSelectorQuery) return;
+    const query = wx.createSelectorQuery().in(this);
+    query.select('#radar-canvas')
+      .fields({ node: true, size: true })
+      .exec((res) => {
+        const canvas = res && res[0] && res[0].node;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+        const dpr = (wx.getWindowInfo && wx.getWindowInfo().pixelRatio) || 2;
+        const w = res[0].width;
+        const h = res[0].height;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.scale(dpr, dpr);
+        const cx = w / 2, cy = h / 2;
+        const r = Math.min(w, h) * 0.35;
+        const keys = ['basic', 'education', 'work', 'expected', 'skills'];
+        const scores = this.data.radarScores || {};
+        // 画 5 圈背景网格
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+        ctx.lineWidth = 1;
+        for (let i = 1; i <= 5; i++) {
+          ctx.beginPath();
+          for (let j = 0; j < 5; j++) {
+            const angle = (Math.PI * 2 / 5) * j - Math.PI / 2;
+            const radius = (r / 5) * i;
+            const x = cx + Math.cos(angle) * radius;
+            const y = cy + Math.sin(angle) * radius;
+            if (j === 0) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+          }
+          ctx.closePath();
+          ctx.stroke();
+        }
+        // 画 5 条轴
+        for (let j = 0; j < 5; j++) {
+          const angle = (Math.PI * 2 / 5) * j - Math.PI / 2;
+          const x = cx + Math.cos(angle) * r;
+          const y = cy + Math.sin(angle) * r;
+          ctx.beginPath();
+          ctx.moveTo(cx, cy);
+          ctx.lineTo(x, y);
+          ctx.stroke();
+        }
+        // 画数据多边形
+        ctx.fillStyle = 'rgba(99,102,241,0.3)';
+        ctx.strokeStyle = '#6366f1';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        for (let j = 0; j < 5; j++) {
+          const score = scores[keys[j]] || 0;
+          const radius = (r * score) / 100;
+          const angle = (Math.PI * 2 / 5) * j - Math.PI / 2;
+          const x = cx + Math.cos(angle) * radius;
+          const y = cy + Math.sin(angle) * radius;
+          if (j === 0) ctx.moveTo(x, y);
+          else ctx.lineTo(x, y);
+        }
+        ctx.closePath();
+        ctx.fill();
+        ctx.stroke();
+        // 画数据点
+        ctx.fillStyle = '#6366f1';
+        for (let j = 0; j < 5; j++) {
+          const score = scores[keys[j]] || 0;
+          const radius = (r * score) / 100;
+          const angle = (Math.PI * 2 / 5) * j - Math.PI / 2;
+          const x = cx + Math.cos(angle) * radius;
+          const y = cy + Math.sin(angle) * radius;
+          ctx.beginPath();
+          ctx.arc(x, y, 4, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+  },
+
+  /**
    * R117: 构造 Tinder 状态对象 (含 currentRecommendation, 避免 wxml inline array index)
    * 调用方: 任何 setData 改 recommendations / currentRecommendationIdx 都应同时算 currentRecommendation
    */
@@ -864,6 +1045,15 @@ PageImpl({
     }, () => {
       // R116 fix: form 变更后重新派生 sections (fieldState filled 更新)
       this.setData({ sections: this._buildFieldStates() });
+      // R118 T1: 实时更新简历 markdown 预览
+      const md = _buildResumeMarkdown(form, form.skills || []);
+      // R118 T2: 实时更新雷达分数
+      const radar = _calcRadarScores(form, skillsCount);
+      this.setData({ resumeMarkdown: md, radarScores: radar });
+      // R118 T2: 重画雷达图 (setTimeout 100ms 等 canvas ready)
+      if (typeof setTimeout !== 'undefined') {
+        setTimeout(() => this._drawRadarChart(), 100);
+      }
       // R116: 删 _refreshParticleFilled + _drawLines (无粒子无 canvas)
       // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色 (保留 dead state update)
       this._applyCompletionBump(prevCompletion, completion);

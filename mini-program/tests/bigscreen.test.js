@@ -250,14 +250,13 @@ test('R103 → R116: js _drawLines 改 no-op + _snapToSection 用 createSelector
     'R103 → R116: _drawLines 函数体内不应有 getContext 2d');
 });
 
-test('R104 → R116: wxml no longer has type="2d" canvas', () => {
-  // R116 翻转
+test('R118 T2: wxml 有 type="2d" canvas (雷达图用, R104 type=2d 标准)', () => {
+  // R118 翻转 R116: 大屏雷达图复用 type=2d canvas (R104 教训, canvas-id 已废弃)
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(!src.includes('type="2d"'),
-    'R104 → R116: wxml 不应再有 type="2d" canvas');
+  assert.ok(src.includes('type="2d"'), 'R118 T2: 雷达图必须用 type=2d canvas');
   assert.ok(!src.includes('id="starfield-lines"'),
-    'R104 → R116: wxml 不应再有 starfield-lines canvas id');
+    'R118 T2: 不应再有 starfield-lines canvas id (R116 已删)');
 });
 
 test('R106: onSubmit shows modal when token is missing', () => {
@@ -887,5 +886,79 @@ test('R117: js 有 onSwipeLeft / onSwipeRight / onSwipeUp handler + _buildTinder
     'R117: js 必有 _buildTinderState (算 currentRecommendation 避免 wxml inline array index)');
   assert.ok(src.includes('currentRecommendation'),
     'R117: js 必有 currentRecommendation data 字段 (预计算)');
+});
+
+// ─── R118 T1: 简历实时预览卡 ─────────────
+test('R118 T1: wxml 有 feed-preview-card + preview-md + copy-md-btn', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(src.includes('feed-preview-card'), 'R118 T1: wxml 必有 feed-preview-card 预览卡');
+  assert.ok(src.includes('preview-md'), 'R118 T1: wxml 必有 preview-md (markdown 渲染区)');
+  assert.ok(src.includes('copy-md-btn'), 'R118 T1: wxml 必有 copy-md-btn (复制 markdown 按钮)');
+});
+
+test('R118 T1: js 有 _buildResumeMarkdown helper + resumeMarkdown data 字段', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(src.includes('_buildResumeMarkdown'),
+    'R118 T1: js 必有 _buildResumeMarkdown (form → markdown)');
+  assert.ok(src.includes('resumeMarkdown'),
+    'R118 T1: js 必有 resumeMarkdown data 字段 (存拼接结果)');
+});
+
+test('R118 T1: _buildResumeMarkdown 输出含 5 段 (基础/教育/工作/期望/技能)', () => {
+  const { _buildResumeMarkdown } = require('../pages/form/bigscreen/bigscreen')._test;
+  const form = {
+    name: '张三', gender: 'male', degree: '本科', phone: '13800000000',
+    educations: [{ school: '清华', major: 'CS', degree: '本科', start: '2020-09', end: '2024-06' }],
+    experiences: [{ company: '阿里', title: '前端工程师', start: '2021-07', end: '至今', desc: '负责 xxx' }],
+    expected: { city: '深圳', position: '全栈', salary_min: '15', salary_max: '25' },
+  };
+  const md = _buildResumeMarkdown(form, ['React', 'Node.js']);
+  assert.ok(md.includes('张三'), 'R118 T1: 必有姓名');
+  assert.ok(md.includes('清华'), 'R118 T1: 必有学校');
+  assert.ok(md.includes('阿里'), 'R118 T1: 必有公司');
+  assert.ok(md.includes('前端工程师'), 'R118 T1: 必有职位');
+  assert.ok(md.includes('深圳'), 'R118 T1: 必有城市');
+  assert.ok(md.includes('React'), 'R118 T1: 必有技能');
+});
+
+// ─── R118 T2: 技能雷达图 ─────────────
+test('R118 T2: wxml 有 canvas id=radar-canvas + radar-axis-label', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(src.includes('id="radar-canvas"'),
+    'R118 T2: wxml 必有 canvas id=radar-canvas');
+  assert.ok(src.includes('radar-axis-label'),
+    'R118 T2: wxml 必有 radar-axis-label (5 个维度标签)');
+});
+
+test('R118 T2: js 有 _drawRadarChart helper + radarScores data', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(src.includes('_drawRadarChart'),
+    'R118 T2: js 必有 _drawRadarChart (Canvas 2D 画雷达)');
+  assert.ok(src.includes('radarScores'),
+    'R118 T2: js 必有 radarScores data 字段 (5 维度分)');
+});
+
+test('R118 T2: _calcRadarScores 输出 5 维 (basic/education/work/expected/skills)', () => {
+  const { _calcRadarScores } = require('../pages/form/bigscreen/bigscreen')._test;
+  const form = {
+    name: '张三', gender: 'male', degree: '本科', phone: '138',
+    educations: [{school: '清华'}],
+    experiences: [{company: '阿里'}],
+    expected: {city: '深圳', position: '全栈', salary_min: '15', salary_max: '25'},
+  };
+  const scores = _calcRadarScores(form, 3);
+  assert.strictEqual(scores.basic, 100);
+  assert.strictEqual(scores.education, 25);
+  assert.strictEqual(scores.work, 20);
+  assert.strictEqual(scores.expected, 100);
+  assert.strictEqual(scores.skills, 100);
 });
 

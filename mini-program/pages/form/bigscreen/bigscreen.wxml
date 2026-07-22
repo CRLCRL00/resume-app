@@ -7,6 +7,27 @@
 -->
 <view class="feed-page">
 
+  <!-- R118 T2: 技能雷达图 (左下角 fixed 320rpx) -->
+  <view class="feed-radar">
+    <text class="radar-title">📊 能力画像</text>
+    <canvas type="2d" id="radar-canvas" class="radar-canvas"></canvas>
+    <view class="radar-labels">
+      <text wx:for="{{radarLabels}}" wx:key="id" wx:for-item="lbl" class="radar-axis-label">{{lbl.name}} {{radarScores[lbl.id]}}</text>
+    </view>
+  </view>
+
+  <!-- R118 T1: 简历实时预览卡 (右下角 fixed 480rpx) -->
+  <view class="feed-preview-card" wx:if="{{resumeMarkdown}}">
+    <view class="preview-header">
+      <text class="preview-title">📄 简历预览</text>
+      <view class="copy-md-btn" bindtap="onCopyMarkdown">复制</view>
+    </view>
+    <scroll-view class="preview-md-scroll" scroll-y="true">
+      <text class="preview-md">{{resumeMarkdown}}</text>
+    </scroll-view>
+  </view>
+
+
   <scroll-view class="feed-scroll" scroll-y="true" bindscroll="onFeedScroll" bindscrolltolower="onFeedScrollLower">
 
     <!-- 顶部进度点 (5 星座 × 进度数字) -->
