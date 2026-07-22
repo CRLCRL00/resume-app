@@ -454,16 +454,18 @@ test('R107 T2 fix: wxml center-num binds tier class via numTier', () => {
     'R107 T2 fix: wxml 必须用 tier-{{numTier}} 或类似表达式');
 });
 
-// ─── R107 T3: 背景流星雨 (5 颗拖尾) ─────────────
-test('R107 T3: js exports genMeteors producing 5 meteors with delay/duration', () => {
-  const { genMeteors } = require('../pages/form/bigscreen/bigscreen')._test;
-  const meteors = genMeteors(5, 750, 1200);
-  assert.strictEqual(meteors.length, 5);
-  for (const m of meteors) {
-    assert.ok('delay' in m, 'R107 T3: 流星必须有 delay');
-    assert.ok('duration' in m, 'R107 T3: 流星必须有 duration');
-    assert.ok(m.duration >= 800 && m.duration <= 2000, 'R107 T3: 流星持续时间合理');
-  }
+// ─── R107 T3: 背景流星雨 (5 颗拖尾) — R114 T3 翻转 ─────────────
+test('R107 T3 → R114 T3: js 已移除 genMeteors (流星 view 已删, 函数死码已清)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(!src.includes('function genMeteors'),
+    'R114 T3: bigscreen.js 必须已删除 genMeteors 函数定义');
+  assert.ok(!src.includes('genMeteors(5'),
+    'R114 T3: _initLayout 必须不再调用 genMeteors');
+  // _test exports 也不再有 genMeteors
+  assert.ok(!src.includes('genBackgroundStars, genMeteors'),
+    'R114 T3: module.exports._test 不再导出 genMeteors');
 });
 
 test('R107 T3 → R114 T3: wxml 已移除 meteor node template', () => {
@@ -488,13 +490,14 @@ test('R107 T4 → R114 T3: wxss 已移除 spin-slow + explode keyframes', () => 
   assert.ok(!wxss.includes('@keyframes explode'), 'R114 T3: 庆祝/爆炸 keyframe 已移除');
 });
 
-test('R107 T4: js _watchCompletionTier handles 80/100 thresholds', () => {
+test('R107 T4 → R114 T3: _watchCompletionTier 只处理 80% (celebrate 100% 已删)', () => {
   const fs = require('node:fs');
   const js = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
-  assert.ok(js.includes('_watchCompletionTier'), 'R107 T4: 必须实现 _watchCompletionTier');
-  assert.ok(js.includes('>= 80'), 'R107 T4: 必须判断 80% 阈值');
-  assert.ok(js.includes('>= 100') || js.includes('=== 100'),
-    'R107 T4: 必须判断 100% 阈值');
+  assert.ok(js.includes('_watchCompletionTier'), 'R114 T3: 必须保留 _watchCompletionTier (≥80%)');
+  assert.ok(js.includes('>= 80'), 'R114 T3: 必须判断 80% 阈值');
+  // 100% celebrate 已删, 不再断言; starfieldCelebrate 死码也清
+  assert.ok(!js.includes('starfieldCelebrate'),
+    'R114 T3: starfieldCelebrate 数据字段已删');
 });
 
 test('R107 T4 → R114 T3: wxml starfield 保留 ready binding, 已移除 celebrate binding', () => {
@@ -744,6 +747,7 @@ test('R114 T3: wxss no longer has 流星 / 旋转 / 庆祝 / 脉冲 keyframes', 
   assert.ok(wxss.includes('@keyframes pulse'), 'R114 T3: 保留中心光晕 pulse');
   assert.ok(wxss.includes('@keyframes float'), 'R114 T3: 保留粒子 float');
   assert.ok(wxss.includes('@keyframes twinkle'), 'R114 T3: 保留粒子 twinkle');
+  assert.ok(wxss.includes('@keyframes shake'), 'R114 T3: 保留中心圆 shake (100% complete)');
 });
 
 test('R114 T3: wxml 移除流星节点 + starfieldCelebrate class', () => {
