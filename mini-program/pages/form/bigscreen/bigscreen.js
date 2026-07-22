@@ -78,6 +78,10 @@ const CONSTELLATIONS = [
 const STEP_LABELS = CONSTELLATIONS.map(c => c.name);
 const STEP_HINTS = ['点击粒子填字段', '教育背景', '工作经验', '求职方向', '技能列表'];
 
+// R115 fix: 派生字段顺序 + 总数, 避免硬编码 14 (实际 18 字段: 4+4+5+4+1)
+const FIELD_ORDER = CONSTELLATIONS.flatMap((c) => c.fields.map((f) => f.id));
+const FIELD_COUNT = FIELD_ORDER.length;
+
 function emptyForm() {
   return {
     name: '', gender: '', degree: '', phone: '',
@@ -224,8 +228,8 @@ PageImpl({
     wizardCurrentField: '',         // 当前正在问的字段 id
     wizardNextQuestion: '',         // AI 给的提问
     wizardHint: '',                 // AI 给的提示
-    wizardProgress: 0,              // 已答字段数 (0-14)
-    wizardTotal: 14,                // 总字段数
+    wizardProgress: 0,              // 已答字段数 (0-FIELD_COUNT)
+    wizardTotal: FIELD_COUNT,       // 总字段数 (R115 fix: 从 CONSTELLATIONS 派生, 非硬编码 14)
     wizardAnswered: [],             // [{fieldId, value}, ...]
     wizardIsComplete: false,        // AI 判当前字段是否完成
     wizardIsLoading: false,         // AI 调用 in-flight
@@ -404,6 +408,12 @@ PageImpl({
   },
 
   onModalInput(e) {
+    // R115 fix: wizard 模式不需要 AI 追问 (AI 是主动提问方), 跳过 debounce + _aiSuggest
+    // 否则会浪费 LLM + 污染 aiHistory + aiBusy 锁死 _wizardNext
+    if (this.data.wizardMode) {
+      this.setData({ modalValue: e.detail.value });
+      return;
+    }
     this.setData({ modalValue: e.detail.value, aiError: '' });
     // R114 T2: debounce 800ms 触发 AI 追问 (防 LLM 风暴 + 防 input 卡顿)
     if (this._aiDebounceTimer) clearTimeout(this._aiDebounceTimer);
@@ -539,17 +549,16 @@ PageImpl({
     if (!modalValue || !modalValue.trim()) return;
     if (this.data.aiBusy) return;
 
-    // 1. 写 form (复用 _saveModal)
-    this._saveModal(modalValue.trim());
+    // 1. 写 form (R115 fix: 调 _writeFormAndSideEffects 而不是 _saveModal, 避免 modalVisible:false)
+    this._writeFormAndSideEffects(modalValue.trim());
 
     // 2. 累加 answeredFields
     const newAnswered = (wizardAnswered || []).slice();
     newAnswered.push({ fieldId: modalField, fieldLabel: modalFieldLabel, value: modalValue.trim() });
 
-    // 3. 计算下一字段 (按 R98 步骤顺序)
-    const fieldOrder = CONSTELLATIONS.flatMap((c) => c.fields.map((f) => f.id));
-    const idx = fieldOrder.indexOf(modalField);
-    const nextFieldId = idx >= 0 && idx < fieldOrder.length - 1 ? fieldOrder[idx + 1] : null;
+    // 3. 计算下一字段 (R115 fix: 用 FIELD_ORDER 常量, 避免重复 flatMap)
+    const idx = FIELD_ORDER.indexOf(modalField);
+    const nextFieldId = idx >= 0 && idx < FIELD_ORDER.length - 1 ? FIELD_ORDER[idx + 1] : null;
 
     if (!nextFieldId) {
       // 全部答完
@@ -562,7 +571,7 @@ PageImpl({
       return;
     }
 
-    // 4. 调 AI 拿下一问
+    // 4. 调 AI 拿下一问 (R115 fix: 显式 modalVisible: true, 保持 modal 打开给下一问)
     const nextLabel = this._getFieldLabelById(nextFieldId);
     this.setData({
       wizardCurrentField: nextFieldId,
@@ -572,6 +581,7 @@ PageImpl({
       modalFieldLabel: nextLabel,
       modalValue: '',
       modalPlaceholder: `请输入${nextLabel}`,
+      modalVisible: true,
       wizardNextQuestion: '',
       wizardHint: '',
       wizardIsLoading: true,
@@ -701,7 +711,12 @@ PageImpl({
     });
   },
 
-  _saveModal(value) {
+  /**
+   * R115 fix (Critical Bug): 纯写 form + 副作用 (刷新粒子/划线/完成度), 不动 modal 状态.
+   * _saveModal 和 _wizardNext 共用此函数, 避免 _saveModal 内含 modalVisible:false 导致 wizard
+   * 首问后即关闭.
+   */
+  _writeFormAndSideEffects(value) {
     const { modalField } = this.data;
     const form = JSON.parse(JSON.stringify(this.data.form));
     let skillsCount = this.data.skillsCount;
@@ -736,6 +751,22 @@ PageImpl({
       form,
       skillsCount,
       completion,
+      // 不动 modal 状态 — 由调用方决定
+    }, () => {
+      // R106b: 重算每个粒子的 filled 视觉态 (避免 WXML inline _isFieldFilled 整段 view 不渲染)
+      this._refreshParticleFilled();
+      this._drawLines(this.data.width, this.data.height);
+      // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色
+      this._applyCompletionBump(prevCompletion, completion);
+      // R107 T4: 完成度阈值 → 星座旋转 + 中心庆祝
+      this._watchCompletionTier(completion);
+    });
+  },
+
+  _saveModal(value) {
+    // R115 fix: 调 _writeFormAndSideEffects 写 form, 然后显式关 modal
+    this._writeFormAndSideEffects(value);
+    this.setData({
       modalVisible: false,
       modalField: null,
       modalFieldLabel: '',
@@ -745,14 +776,6 @@ PageImpl({
       modalValue: '',
       modalOptions: null,
       modalPlaceholder: '',
-    }, () => {
-      // R106b: 重算每个粒子的 filled 视觉态 (避免 WXML inline _isFieldFilled 整段 view 不渲染)
-      this._refreshParticleFilled();
-      this._drawLines(this.data.width, this.data.height);
-      // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色
-      this._applyCompletionBump(prevCompletion, completion);
-      // R107 T4: 完成度阈值 → 星座旋转 + 中心庆祝
-      this._watchCompletionTier(completion);
     });
   },
 

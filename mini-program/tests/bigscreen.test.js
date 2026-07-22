@@ -785,3 +785,48 @@ test('R115: js has wizard state fields + _wizardNext function', () => {
     'R115: CONSTELLATIONS 必须保留 (按步骤顺序遍历)');
 });
 
+// ─── R115 T2 review 防回归: 抓 Critical Bug + 3 Important ─────────────
+test('R115 fix: js _saveModal 不内含 setData({modalVisible:false}) — _wizardNext 依赖此不变量', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  // 抽 _writeFormAndSideEffects 必须存在 (不依赖 _saveModal 关 modal)
+  assert.ok(src.includes('_writeFormAndSideEffects'),
+    'R115 fix: 必须抽 _writeFormAndSideEffects 让 _wizardNext 可复用');
+  // _wizardNext 必须调 _writeFormAndSideEffects, 不是 _saveModal
+  const wizardNextMatch = src.match(/_wizardNext\s*\(\s*\)\s*\{[\s\S]*?\n\s*\}/);
+  assert.ok(wizardNextMatch, 'R115 fix: 必须有 _wizardNext 函数');
+  assert.ok(wizardNextMatch[0].includes('_writeFormAndSideEffects'),
+    'R115 fix: _wizardNext 必须调 _writeFormAndSideEffects (避免关 modal)');
+  // 切下一字段时必须显式 modalVisible: true
+  assert.ok(/modalVisible:\s*true/.test(src),
+    'R115 fix: _wizardNext 切下一字段时必须显式 modalVisible: true (保持 modal 打开)');
+});
+
+test('R115 fix: js wizardTotal 必须等于实际字段数 (非硬编码 14)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(/wizardTotal\s*:\s*FIELD_COUNT/.test(src),
+    'R115 fix: wizardTotal 必须从 CONSTELLATIONS 派生 (FIELD_COUNT), 非硬编码');
+  // wizardTotal 不能硬编码 14 (实际 18 字段)
+  assert.ok(!/wizardTotal\s*:\s*14\b/.test(src),
+    'R115 fix: wizardTotal 不能硬编码 14 (实际 18 字段)');
+  // FIELD_COUNT 必须派生自 CONSTELLATIONS
+  assert.ok(/FIELD_COUNT\s*=\s*FIELD_ORDER\.length/.test(src),
+    'R115 fix: FIELD_COUNT 必须派生自 FIELD_ORDER.length');
+});
+
+test('R115 fix: js onModalInput 在 wizard 模式下跳过 _aiSuggest', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  // 找 onModalInput 函数体 — 直到下一个 2-space 缩进的 }, (方法闭合)
+  const inputMatch = src.match(/onModalInput\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\},/);
+  assert.ok(inputMatch, 'R115 fix: 必须找到 onModalInput 函数');
+  assert.ok(inputMatch[0].includes('wizardMode'),
+    'R115 fix: onModalInput 必须检查 wizardMode, wizard 模式跳过 _aiSuggest (避免 LLM 浪费)');
+  assert.ok(/if\s*\(\s*this\.data\.wizardMode\s*\)/.test(inputMatch[0]),
+    'R115 fix: onModalInput 必须有 if (this.data.wizardMode) 早返回守卫');
+});
+
