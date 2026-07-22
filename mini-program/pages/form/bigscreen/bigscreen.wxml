@@ -7,7 +7,7 @@
 -->
 <view class="feed-page">
 
-  <scroll-view class="feed-scroll" scroll-y="true" bindscrolltolower="onFeedScrollLower">
+  <scroll-view class="feed-scroll" scroll-y="true" bindscroll="onFeedScroll" bindscrolltolower="onFeedScrollLower">
 
     <!-- 顶部进度点 (5 星座 × 进度数字) -->
     <view class="feed-progress">

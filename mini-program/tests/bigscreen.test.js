@@ -234,16 +234,20 @@ test('R103 → R116: wxss no longer has lines-canvas + particle float animation'
     'R103 → R116: 无粒子 float keyframe');
 });
 
-test('R103 → R116: js _drawLines 改 no-op (无 canvas 无划线)', () => {
-  // R116 翻转: _drawLines 是 no-op, 不再用 createSelectorQuery/getContext
+test('R103 → R116: js _drawLines 改 no-op + _snapToSection 用 createSelectorQuery 仍可', () => {
+  // R116 翻转: _drawLines 是 no-op, 不再用 createSelectorQuery/getContext 画线
+  // R116 T2 补充: _snapToSection 用 createSelectorQuery 算 scrollTop (非 _drawLines 用, 合法)
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
   assert.ok(src.includes('_drawLines'),
-    'R103 → R116: 函数名仍保留 (no-op 兼容), 但不再调 createSelectorQuery');
-  assert.ok(!src.includes('createSelectorQuery'),
-    'R103 → R116: 不应再调 createSelectorQuery (无 canvas 划线)');
-  assert.ok(!src.includes("getContext('2d')"),
-    'R103 → R116: 不应再有 getContext 2d');
+    'R103 → R116: 函数名仍保留 (no-op 兼容)');
+  // 找 _drawLines 函数体, 验证不调 createSelectorQuery
+  const drawLinesMatch = src.match(/_drawLines\s*\([^)]*\)\s*\{[\s\S]*?\n\s*\}/);
+  assert.ok(drawLinesMatch, 'R103 → R116: 必须有 _drawLines 函数');
+  assert.ok(!drawLinesMatch[0].includes('createSelectorQuery'),
+    'R103 → R116: _drawLines 函数体内不应调 createSelectorQuery');
+  assert.ok(!drawLinesMatch[0].includes("getContext('2d')"),
+    'R103 → R116: _drawLines 函数体内不应有 getContext 2d');
 });
 
 test('R104 → R116: wxml no longer has type="2d" canvas', () => {
@@ -762,6 +766,25 @@ test('R116 恢复: wxml modal 仍有 modal-ai-bubble (R99 元素, assist 模式 
   assert.ok(/modal-ai-bubble[^>]*aiHistory\.length\s*===\s*0/.test(src) ||
             /aiHistory\.length\s*===\s*0[^}]*modal-ai-bubble/.test(src),
     'R116 恢复: R99 modal-ai-bubble 必有 aiHistory.length===0 条件避免重复');
+});
+
+// ─── R116 T2: 竖滑 snap-to-section ─────────────
+test('R116 T2: js has onFeedScroll handler + _snapToSection helper', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(src.includes('onFeedScroll'),
+    'R116 T2: js 必有 onFeedScroll handler (bindscroll)');
+  assert.ok(src.includes('_snapToSection'),
+    'R116 T2: js 必有 _snapToSection helper (弹性反馈)');
+});
+
+test('R116 T2: wxml scroll-view bindscroll 事件', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(src.includes('bindscroll="onFeedScroll"'),
+    'R116 T2: scroll-view 必须 bind scroll 事件 (用于 snap)');
 });
 
 // ─── R116 fix: WXML 不再有 inline function (R106b 教训) ─────────────
