@@ -119,6 +119,42 @@ test('POST /api/ai/assist-field mode=wizard returns nextQuestion + hint + isComp
   }
 });
 
+test('POST /api/ai/assist-field mode=wizard returns recommendations (3 items with value + reason)', async () => {
+  const token = sign({ userId: 2, openid: 'o-ai-test' });
+  stubChatJson(async () => ({
+    parsed: {
+      nextQuestion: '你可能想做哪类工作?',
+      hint: '选最接近的',
+      isComplete: false,
+      recommendations: [
+        { value: '前端工程师', reason: '需求大' },
+        { value: '后端工程师', reason: '稳定' },
+        { value: '全栈工程师', reason: '选择多' },
+      ],
+    },
+    usage: { total_tokens: 100 },
+  }));
+  try {
+    const res = await request(createApp())
+      .post('/api/ai/assist-field')
+      .set('Authorization', `Bearer ${token}`)
+      .send({
+        mode: 'wizard',
+        fieldId: 'work_title',
+        fieldLabel: '职位',
+        currentValue: '',
+        answeredFields: [],
+      });
+    assert.equal(res.status, 200);
+    assert.ok(res.body.data.recommendations, 'R117: 必有 recommendations 字段');
+    assert.equal(res.body.data.recommendations.length, 3, 'R117: 3 个推荐');
+    assert.equal(res.body.data.recommendations[0].value, '前端工程师');
+    assert.equal(res.body.data.recommendations[0].reason, '需求大');
+  } finally {
+    restoreAll();
+  }
+});
+
 test('POST /api/ai/assist-field mode=wizard returns 502 when LLM upstream fails', async () => {
   const token = sign({ userId: 2, openid: 'o-ai-test' });
   stubChatJson(async () => {

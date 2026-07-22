@@ -50,10 +50,14 @@ ${answeredSummary || '(无, 刚开始)'}
 - nextQuestion: 1 个具体问题 (亲切自然, 不超过 30 字)
 - hint: 1 个简短提示 (≤20 字), 让候选人知道怎么答
 - isComplete: 当前字段是否已完成 (当前值足够好就 true, 还差就 false)
+- recommendations: 给 3 个推荐答案 (Tinder 划卡), 每项 {value, reason}:
+  - value: 用户可能填的具体值 (≤20 字, 字段合理可填)
+  - reason: 选这个的理由 (≤15 字)
+  - 基于已答字段 + 通用知识推断, 越具体越好
 
-输出 JSON: {"nextQuestion": "...", "hint": "...", "isComplete": false}`;
+输出 JSON: {"nextQuestion": "...", "hint": "...", "isComplete": false, "recommendations": [{"value": "...", "reason": "..."}, ...]}`;
       userMessage = `请对"${safeLabel}"字段提一个问题`;
-      maxTokens = 200;
+      maxTokens = 350;
     } else {
       systemPrompt = `你是简历助手。<user_input>用户正在填写"${safeLabel}"字段。当前值: "${safeValue}"。</user_input>任务:
 1. 给一句开场白 (亲切自然, 不超过 20 字)

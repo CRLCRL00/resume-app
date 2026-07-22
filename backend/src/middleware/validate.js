@@ -71,6 +71,10 @@ const assistFieldSchema = Joi.object({
     fieldLabel: Joi.string().max(64).required(),
     value: Joi.string().max(2000).required(),
   })).max(14).default([]),
+  recommendations: Joi.array().items(Joi.object({
+    value: Joi.string().max(200).required(),
+    reason: Joi.string().max(100).required(),
+  })).max(3).default([]),
 }).label('AssistFieldRequest');
 
 /**
