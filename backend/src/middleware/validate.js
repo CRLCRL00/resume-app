@@ -56,6 +56,17 @@ const promptUpdateSchema = Joi.object({
   content: Joi.string().max(50000).required(),
 }).label('PromptUpdateRequest');
 
+// R114 T1: AI assist-field 入参校验（含长度上限，防止超长输入打爆 LLM / 注入）
+const assistFieldSchema = Joi.object({
+  fieldId: Joi.string().max(64).required(),
+  fieldLabel: Joi.string().max(64).required(),
+  currentValue: Joi.string().allow('').max(2000).required(),
+  history: Joi.array().items(Joi.object({
+    role: Joi.string().valid('user', 'assistant').required(),
+    content: Joi.string().max(2000).required(),
+  })).max(20).default([]),
+}).label('AssistFieldRequest');
+
 /**
  * validateBody(schema, { source = 'body', stripUnknown = false } = {})
  * Express middleware: validate req[source] against joi schema.
@@ -94,4 +105,4 @@ function validateBody(schema, { source = 'body', stripUnknown = false } = {}) {
   return mw;
 }
 
-module.exports = { resumeSchema, jobSchema, promptUpdateSchema, validateBody };
+module.exports = { resumeSchema, jobSchema, promptUpdateSchema, assistFieldSchema, validateBody };

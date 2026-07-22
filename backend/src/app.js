@@ -3,6 +3,7 @@ const healthRouter = require('./routes/health');
 const authRouter = require('./routes/auth');
 const testRouter = require('./routes/test');
 const adminRouter = require('./routes/admin');
+const aiRouter = require('./routes/ai');
 const resumeRouter = require('./routes/resume');
 const matchRouter = require('./routes/match');
 const jobsRouter = require('./routes/jobs');
@@ -136,6 +137,24 @@ function createApp() {
   app.use('/api/auth', lockoutMiddleware);
   app.use('/api/auth', authRouter);
   app.use('/api/test', testRouter);
+  // AI assist-field 限流（R114 T1）：IP 滑窗 + 用户级滑窗，参照 resumeGenUserLimiter 模式。
+  // 必须注册在 `/api/ai` 宽匹配之前，否则会被宽匹配提前消费。
+  // 注意：userAuth 在 router 内部，故此处 keyFn 按 IP 兜底（req.user 尚未设置）。
+  const aiAssistIpLimiter = sliding({
+    name: 'ai-assist-ip',
+    limit: 30,
+    windowMs: 60_000,
+    keyFn: (req) => req.ip || req.socket?.remoteAddress || 'unknown',
+  });
+  const aiAssistUserLimiter = sliding({
+    name: 'ai-assist-user',
+    limit: 10,
+    windowMs: 60_000,
+    keyFn: (req) => req.user?.openid || req.user?.userId || req.ip || 'unknown',
+  });
+  app.use('/api/ai/assist-field', aiAssistIpLimiter);
+  app.use('/api/ai/assist-field', aiAssistUserLimiter);
+  app.use('/api/ai', aiRouter);
   app.use('/api/admin', adminAuditMiddleware);
   app.use('/api/admin', adminRouter);
   // LLM 端点限流：仅作用于具体子路径
