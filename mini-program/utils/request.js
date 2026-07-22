@@ -42,7 +42,34 @@ function doRequest(opts) {
       success: (res) => {
         if (res.statusCode === 200) {
           resolve(res.data);
+        } else if (res.statusCode === 401 && !opts._retried401) {
+          // R111: 401 自动 refresh — 调 /auth/refresh 换新 token, 重试原请求
+          // 避免无限循环: _retried401 flag
+          const app = getApp ? getApp() : null;
+          if (app && typeof app.refreshAccessToken === 'function') {
+            app.refreshAccessToken().then((r) => {
+              if (r && r.ok) {
+                // 用新 token 重试原请求
+                doRequest(Object.assign({}, opts, { _retried401: true })).then(resolve, reject);
+              } else {
+                // refresh 也失败 → 清 token + toast + reject
+                clearToken();
+                if (!opts.silent) showToast(res.data?.message || '请重新登录');
+                reject(res.data);
+              }
+            }).catch(() => {
+              clearToken();
+              if (!opts.silent) showToast(res.data?.message || '请重新登录');
+              reject(res.data);
+            });
+          } else {
+            // 无 app 实例 (单测环境) → 原行为
+            clearToken();
+            if (!opts.silent) showToast(res.data?.message || '请重新登录');
+            reject(res.data);
+          }
         } else if (res.statusCode === 401) {
+          // 已经 retry 过仍 401 → 放弃
           clearToken();
           if (!opts.silent) showToast(res.data?.message || '请重新登录');
           reject(res.data);

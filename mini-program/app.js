@@ -100,8 +100,7 @@ App({
           data: { code },
           success: (res) => {
             if (res.data?.code === 0) {
-              wx.setStorageSync('token', res.data.data.token);
-              wx.setStorageSync('user', res.data.data.user);
+              this._saveAuth(res.data.data);
               this.checkAdmin();
             }
           },
@@ -125,6 +124,90 @@ App({
   },
 
   /**
+   * R111: 统一存 access + refresh token 到 storage
+   * 后端 /api/auth/login 响应 {token, refreshToken, csrfToken, user}
+   */
+  _saveAuth(data) {
+    if (!data) return;
+    if (data.token) wx.setStorageSync('token', data.token);
+    if (data.refreshToken) wx.setStorageSync('refreshToken', data.refreshToken);
+    if (data.user) wx.setStorageSync('user', data.user);
+  },
+
+  /**
+   * R111: 用 refreshToken 换新 accessToken (用于 401 自动 refresh + onShow 临期检查)
+   * 后端 /api/auth/refresh 返 {code:0, data:{access_token, refresh_token, expires_in}}
+   * 失败清 storage 让上层重新登录
+   */
+  refreshAccessToken() {
+    return new Promise((resolve) => {
+      const refreshToken = wx.getStorageSync('refreshToken');
+      if (!refreshToken) {
+        resolve({ ok: false, reason: 'no refresh_token' });
+        return;
+      }
+      wx.request({
+        url: `${apiBaseUrl}/api/auth/refresh`,
+        method: 'POST',
+        header: { 'Content-Type': 'application/json' },
+        data: { refresh_token: refreshToken },
+        success: (res) => {
+          if (res.data && res.data.code === 0) {
+            const d = res.data.data;
+            wx.setStorageSync('token', d.access_token);
+            if (d.refresh_token) wx.setStorageSync('refreshToken', d.refresh_token);
+            resolve({ ok: true, token: d.access_token });
+          } else {
+            // refresh_token 也失效 (撤销/复用检测失败) → 清 storage
+            wx.removeStorageSync('token');
+            wx.removeStorageSync('refreshToken');
+            resolve({ ok: false, reason: (res.data && res.data.message) || 'refresh failed' });
+          }
+        },
+        fail: (err) => resolve({ ok: false, reason: (err && err.errMsg) || 'network' }),
+      });
+    });
+  },
+
+  /**
+   * R111: onShow 自动检测 token 临期 (decode JWT exp 字段, 临期 < 5 分钟)
+   * 主动 refresh 避免用户在表单中途 token 失效 401
+   */
+  checkTokenFreshness() {
+    const token = wx.getStorageSync('token');
+    if (!token) return;
+    const exp = this._decodeJwtExp(token);
+    if (!exp) return;
+    const now = Math.floor(Date.now() / 1000);
+    const fiveMin = 5 * 60;
+    if (exp - now < fiveMin) {
+      this.refreshAccessToken(); // 后台 fire-and-forget
+    }
+  },
+
+  /**
+   * R111: 简单 JWT exp 字段解析 (base64url 解码 payload, 不验签)
+   * 失败返 null, 让上层不 refresh
+   */
+  _decodeJwtExp(token) {
+    try {
+      const parts = token.split('.');
+      if (parts.length !== 3) return null;
+      // base64url → base64 → JSON
+      const b64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+      const pad = b64.length % 4 === 0 ? '' : '='.repeat(4 - b64.length % 4);
+      // wx env 没有 atob, 用 decodeURIComponent(escape(...)) 兼容
+      const json = typeof atob !== 'undefined'
+        ? decodeURIComponent(escape(atob(b64 + pad)))
+        : null;
+      if (!json) return null;
+      return JSON.parse(json).exp || null;
+    } catch (_) {
+      return null;
+    }
+  },
+
+  /**
    * R108: 一行 dev-bypass login — IDE 沙箱 wx.login 永远 timeout 的 workaround
    * 用法 (IDE console): getApp().devQuickLogin('oemfzxT1ND_EukOcGdzN3rOWGBaY')
    * (或任意 openid 字符串, server 自动创建 user)
@@ -140,8 +223,7 @@ App({
         data: { openid },
         success: (res) => {
           if (res.data && res.data.code === 0) {
-            wx.setStorageSync('token', res.data.data.token);
-            wx.setStorageSync('user', res.data.data.user);
+            this._saveAuth(res.data.data);
             this.checkAdmin();
             resolve(res.data.data);
           } else {
@@ -151,6 +233,13 @@ App({
         fail: (err) => resolve({ error: (err && err.errMsg) || 'network' }),
       });
     });
+  },
+
+  /**
+   * R111: onLaunch / onShow 触发 token 临期检查
+   */
+  onShow() {
+    this.checkTokenFreshness();
   },
 
   /**

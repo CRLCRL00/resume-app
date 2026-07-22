@@ -768,6 +768,68 @@ test('R116 恢复: wxml modal 仍有 modal-ai-bubble (R99 元素, assist 模式 
     'R116 恢复: R99 modal-ai-bubble 必有 aiHistory.length===0 条件避免重复');
 });
 
+// ─── R111: 永久 token (refresh token 自动续期) ─────────────
+test('R111: app.js 必有 _saveAuth / refreshAccessToken / checkTokenFreshness / _decodeJwtExp', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  assert.ok(src.includes('_saveAuth'),
+    'R111: app.js 必有 _saveAuth helper (统一存 access + refresh token)');
+  assert.ok(src.includes('refreshAccessToken'),
+    'R111: app.js 必有 refreshAccessToken (调 /auth/refresh 换新 token)');
+  assert.ok(src.includes('checkTokenFreshness'),
+    'R111: app.js 必有 checkTokenFreshness (onShow 临期检查)');
+  assert.ok(src.includes('_decodeJwtExp'),
+    'R111: app.js 必有 _decodeJwtExp (解析 JWT exp 字段)');
+});
+
+test('R111: utils/request.js 401 路径必须调 refreshAccessToken (不直接 clearToken)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../utils/request.js'), 'utf8');
+  // 401 处理路径: 必须有 refreshAccessToken 调用 + _retried401 守卫防无限循环
+  assert.ok(src.includes('refreshAccessToken'),
+    'R111: utils/request.js 401 路径必须调 app.refreshAccessToken 自动续期');
+  assert.ok(src.includes('_retried401'),
+    'R111: utils/request.js 必须有 _retried401 守卫防止无限循环 refresh');
+});
+
+// ─── R111: 永久 token (refresh token 自动续期) ─────────────
+test('R111: app.js 必有 _saveAuth / refreshAccessToken / checkTokenFreshness / _decodeJwtExp', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  assert.ok(src.includes('_saveAuth'),
+    'R111: app.js 必有 _saveAuth helper (统一存 access + refresh token)');
+  assert.ok(src.includes('refreshAccessToken'),
+    'R111: app.js 必有 refreshAccessToken (调 /auth/refresh 换新 token)');
+  assert.ok(src.includes('checkTokenFreshness'),
+    'R111: app.js 必有 checkTokenFreshness (onShow 临期检查)');
+  assert.ok(src.includes('_decodeJwtExp'),
+    'R111: app.js 必有 _decodeJwtExp (解析 JWT exp 字段)');
+});
+
+test('R111: utils/request.js 401 路径必须调 refreshAccessToken (不直接 clearToken)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../utils/request.js'), 'utf8');
+  assert.ok(src.includes('refreshAccessToken'),
+    'R111: utils/request.js 401 路径必须调 app.refreshAccessToken 自动续期');
+  assert.ok(src.includes('_retried401'),
+    'R111: utils/request.js 必须有 _retried401 守卫防止无限循环 refresh');
+});
+
+test('R111: app.js login / devQuickLogin 改用 _saveAuth (多存 refreshToken)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../app.js'), 'utf8');
+  // login 函数: 从 "login() {" 到 "this._saveAuth" (而非 wx.login, 因 wx.login 不含 _saveAuth)
+  const loginMatch = src.match(/login\s*\(\s*\)\s*\{[\s\S]*?this\._saveAuth/);
+  assert.ok(loginMatch, 'R111: 必有 login 函数且调 _saveAuth');
+  const devMatch = src.match(/devQuickLogin\s*\([^)]*\)\s*\{[\s\S]*?this\._saveAuth/);
+  assert.ok(devMatch, 'R111: 必有 devQuickLogin 函数且调 _saveAuth');
+});
+
 // ─── R116 T2: 竖滑 snap-to-section ─────────────
 test('R116 T2: js has onFeedScroll handler + _snapToSection helper', () => {
   const fs = require('node:fs');
