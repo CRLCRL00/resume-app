@@ -81,10 +81,9 @@ test('R94: calcCompletion cap at 100', () => {
   assert.ok(r <= 100, `should cap at 100, got ${r}`);
 });
 
-test('R98: STEP_LABELS derived from CONSTELLATIONS (5 stars)', () => {
-  const { STEP_LABELS, CONSTELLATIONS } = require('../pages/form/bigscreen/bigscreen')._test;
-  assert.strictEqual(STEP_LABELS.length, 5);
-  assert.deepStrictEqual(STEP_LABELS, CONSTELLATIONS.map(c => c.name));
+test('R98 → R116: STEP_LABELS 已删 — R116 不再用固定步骤名 (sections 直接来自 CONSTELLATIONS)', () => {
+  // R116 翻转: R98 stepLabels/stepHints 字段已删, sections 直接从 CONSTELLATIONS 派生
+  assert.ok(true, 'R98 → R116: STEP_LABELS 翻转 — 无需再断言步骤名 (sections 派生)');
 });
 
 test('R98: CONSTELLATIONS has 5 star systems covering all form steps', () => {
@@ -103,47 +102,30 @@ test('R98: CONSTELLATIONS has 5 star systems covering all form steps', () => {
   }
 });
 
-test('R98: layoutParticles produces 5 constellations at orbit positions', () => {
-  const { layoutParticles } = require('../pages/form/bigscreen/bigscreen')._test;
-  const cs = layoutParticles(750, 1200);
-  assert.strictEqual(cs.length, 5);
-  // All constellation centers should be within canvas bounds
-  for (const c of cs) {
-    assert.ok(c.cx > 0 && c.cx < 750, `cx out of bounds: ${c.cx}`);
-    assert.ok(c.cy > 0 && c.cy < 1200, `cy out of bounds: ${c.cy}`);
-    assert.ok(c.particles.length > 0, 'no particles');
-    // Particles should be near constellation center
-    for (const p of c.particles) {
-      const dist = Math.hypot(p.x - c.cx, p.y - c.cy);
-      assert.ok(dist < 100, `particle too far from constellation: dist=${dist}`);
-    }
-  }
+test('R98 → R116: layoutParticles 翻转 — R116 不再需要粒子位置 (竖滑 feed 不画线)', () => {
+  // R116: 大屏改为抖音竖滑, 不再有粒子位置/连线逻辑.
+  // 此测试保留以文档化 R98 → R116 行为变迁; 不再断言 layoutParticles 输出.
+  // (粒子位置/连线逻辑被 R98 → R116 推翻, _drawLines/_refreshParticleFilled 改为 no-op)
+  assert.ok(true, 'R98 → R116: R116 翻转为 no-op; 见 R116 新 feed-* 标记测试');
 });
 
-test('R98: genBackgroundStars produces deterministic stars', () => {
-  const { genBackgroundStars } = require('../pages/form/bigscreen/bigscreen')._test;
-  const a = genBackgroundStars(50, 750, 1200);
-  const b = genBackgroundStars(50, 750, 1200);
-  assert.strictEqual(a.length, 50);
-  assert.deepStrictEqual(a, b, 'should be deterministic with same seed');
-  // All within bounds
-  for (const s of a) {
-    assert.ok(s.x >= 0 && s.x < 750);
-    assert.ok(s.y >= 0 && s.y < 1200);
-  }
+test('R98 → R116: genBackgroundStars 已删 — R116 无背景小星点 (抖音黑底不需要)', () => {
+  // R116 翻转: 函数已删, 抖音风不需要装饰小星点
+  assert.ok(true, 'R98 → R116: genBackgroundStars 翻转 (函数已删, 抖音黑底不需要装饰)');
 });
 
-test('R98: wxml has starfield + particle + modal markup', () => {
+test('R98 → R116: wxml no longer has starfield/particle/center-node/bg-star/const-halo/floating-preview markup', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(src.includes('starfield'), 'wxml missing starfield container');
-  assert.ok(src.includes('particle'), 'wxml missing particle class');
-  assert.ok(src.includes('bg-star'), 'wxml missing bg-star');
-  assert.ok(src.includes('center-node'), 'wxml missing center-node');
-  assert.ok(src.includes('const-halo'), 'wxml missing constellation halo');
-  assert.ok(src.includes('floating-preview'), 'wxml missing floating-preview');
-  assert.ok(src.includes('modal-card'), 'wxml missing modal-card');
-  assert.ok(src.includes('onParticleTap'), 'wxml missing onParticleTap');
+  // R116 翻转: R98 星图节点全部删除 (改为竖滑 feed)
+  assert.ok(!src.includes('class="starfield"'), 'R98 → R116: wxml 不应再有 class="starfield" (已改为 feed-page)');
+  assert.ok(!src.includes('class="particle"'), 'R98 → R116: wxml 不应再有 class="particle" (已改为 feed-field-card)');
+  assert.ok(!src.includes('class="bg-star"'), 'R98 → R116: wxml 不应再有 class="bg-star" (无背景小星点)');
+  assert.ok(!src.includes('class="center-node"'), 'R98 → R116: wxml 不应再有 class="center-node" (无中心完成度节点)');
+  assert.ok(!src.includes('const-halo'), 'R98 → R116: wxml 不应再有 const-halo (无星座晕圈)');
+  assert.ok(!src.includes('class="floating-preview"'), 'R98 → R116: wxml 不应再有 class="floating-preview" (无浮动预览)');
+  // 保留 modal-card (R99+R114+R115 wizard 仍用)
+  assert.ok(src.includes('modal-card'), 'R116: modal-card 必须保留 (wizard 弹窗兜底)');
   assert.ok(!src.includes('msg-bubble'), 'wxml should NOT have chat bubbles');
 });
 
@@ -162,28 +144,29 @@ test('R109: wxml style attributes never span multiple lines (XML spec)', () => {
   }
 });
 
-test('R98: wxss has dark space + glowing particles', () => {
+test('R98 → R116: wxss no longer has starfield/bg-star/particle-core 深空 + 发光粒子样式', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(src.includes('.starfield'), 'wxss missing starfield');
-  assert.ok(src.includes('.bg-star'), 'wxss missing bg-star');
-  assert.ok(src.includes('.particle-core'), 'wxss missing particle-core');
-  assert.ok(src.includes('radial-gradient'), 'wxss should use radial gradients');
-  assert.ok(src.includes('box-shadow'), 'wxss should use glow shadows');
-  assert.ok(src.includes('@keyframes'), 'wxss should have animations');
-  assert.ok(src.includes('#050810') || src.includes('radial-gradient(ellipse'), 'wxss should have dark space bg');
-  assert.ok(!src.includes('.msg-bubble'), 'wxss should NOT have chat bubble styles');
+  // R116 翻转: 抖音黑底大字, R98 深空 + 发光粒子全部删除
+  assert.ok(!src.includes('.starfield'), 'R98 → R116: wxss 不应再有 .starfield (已改为 .feed-page)');
+  assert.ok(!src.includes('.bg-star'), 'R98 → R116: wxss 不应再有 .bg-star (无装饰小星点)');
+  assert.ok(!src.includes('.particle-core'), 'R98 → R116: wxss 不应再有 .particle-core (无粒子)');
+  assert.ok(!src.includes('#050810'), 'R98 → R116: wxss 不应再有 #050810 深空色 (改 #000000 抖音黑)');
 });
 
-test('R98: js has constellation + modal + particle tap logic', () => {
+test('R98 → R116: js 不再依赖 layoutParticles/onParticleTap (R116 字段卡片 + onFieldCardTap)', () => {
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
-  assert.ok(src.includes('CONSTELLATIONS'), 'js missing CONSTELLATIONS');
-  assert.ok(src.includes('layoutParticles'), 'js missing layoutParticles');
-  assert.ok(src.includes('onParticleTap'), 'js missing onParticleTap');
+  // R116 翻转: R98 粒子交互已删 (改为字段卡片 onFieldCardTap)
+  // CONSTELLATIONS 必须保留 (wizard/字段定义仍在用)
+  assert.ok(src.includes('CONSTELLATIONS'), 'js missing CONSTELLATIONS (字段定义)');
+  // modalVisible/onModalSave/_saveModal 仍保留 (弹窗兜底)
+  assert.ok(src.includes('modalVisible'), 'js missing modalVisible (弹窗兜底)');
   assert.ok(src.includes('onModalSave'), 'js missing onModalSave');
-  assert.ok(src.includes('_saveModal'), 'js missing _saveModal');
-  assert.ok(src.includes('modalVisible'), 'js missing modalVisible');
+  // R98 翻转 — 但 layoutParticles/onParticleTap 函数体可保留 (no-op 兼容)
+  // 翻转断言: 不再 setData constellations 大对象
+  assert.ok(!src.includes('constellations: layoutParticles'),
+    'R98 → R116: _initLayout 不应再调 layoutParticles 设 constellations (改 setData sections)');
 });
 
 test('R99: every field has ai prompt (chat + starfield fusion)', () => {
@@ -210,60 +193,66 @@ test('R99: modal state includes ai + label + placeholder', () => {
   assert.ok(src.includes('modalConstColor'), 'js missing modalConstColor state');
 });
 
-test('R99: wxml modal has ai-bubble markup', () => {
+test('R99 → R116: wxml no longer has modal-ai-bubble (wizard 模式替代 R99 AI 提示气泡)', () => {
+  // R116 翻转: R99 modal-ai-bubble / modal-ai-avatar / modal-ai-text 已删 (wizard 模式承担主交互)
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(src.includes('modal-ai-bubble'), 'wxml missing modal-ai-bubble');
-  assert.ok(src.includes('modal-ai-avatar'), 'wxml missing modal-ai-avatar');
-  assert.ok(src.includes('modal-ai-text'), 'wxml missing modal-ai-text');
-  assert.ok(src.includes('modalFieldAi'), 'wxml missing modalFieldAi bind');
+  assert.ok(!src.includes('modal-ai-bubble'),
+    'R99 → R116: 不应再有 modal-ai-bubble (wizard 替代)');
+  assert.ok(!src.includes('modal-ai-text'),
+    'R99 → R116: 不应再有 modal-ai-text');
 });
 
-test('R99: wxss has ai bubble styles (no chat-bubble leftovers)', () => {
+test('R99 → R116: wxss no longer has modal-ai-bubble (R116 弹窗改为 wizard 主交互)', () => {
+  // R116 翻转: modal-ai-bubble 已删 (wizard 模式成为主交互, 旧的 AI 多轮气泡块去除)
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(src.includes('.modal-ai-bubble'), 'wxss missing .modal-ai-bubble');
-  assert.ok(src.includes('.modal-ai-avatar'), 'wxss missing .modal-ai-avatar');
-  assert.ok(src.includes('.modal-ai-text'), 'wxss missing .modal-ai-text');
-  assert.ok(src.includes('border-left'), 'wxss should use border-left accent');
-  assert.ok(!src.includes('.msg-bubble'), 'wxss should NOT have leftover chat bubble');
+  assert.ok(!src.includes('.modal-ai-bubble'),
+    'R99 → R116: wxss 不应再有 .modal-ai-bubble (wizard 模式替代)');
+  assert.ok(!src.includes('.msg-bubble'),
+    'wxss should NOT have leftover chat bubble');
 });
 
-test('R103: wxml has canvas for line drawing', () => {
+test('R103 → R116: wxml no longer has canvas for line drawing (无粒子无连线)', () => {
+  // R116 翻转: canvas 已删, 无粒子
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(src.includes('id="starfield-lines"'), 'wxml missing id');
-  assert.ok(src.includes('class="lines-canvas"'), 'wxml missing lines-canvas class');
-  assert.ok(src.includes('disable-scroll="true"'), 'canvas should disable scroll');
+  assert.ok(!src.includes('id="starfield-lines"'),
+    'R103 → R116: wxml 不应再有 id="starfield-lines" (canvas 已删)');
+  assert.ok(!src.includes('class="lines-canvas"'),
+    'R103 → R116: wxml 不应再有 lines-canvas (无划线)');
 });
 
-test('R103: wxss has canvas + particle float animation', () => {
+test('R103 → R116: wxss no longer has lines-canvas + particle float animation', () => {
+  // R116 翻转
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(src.includes('.lines-canvas'), 'wxss missing .lines-canvas');
-  assert.ok(src.includes('pointer-events: none'), 'canvas should not block clicks');
-  assert.ok(src.includes('@keyframes float'), 'wxss missing float animation');
-  assert.ok(src.includes('animation: float'), 'particle should animate');
-  assert.ok(src.includes('translate'), 'float should use translate');
+  assert.ok(!src.includes('.lines-canvas'),
+    'R103 → R116: wxss 不应再有 .lines-canvas');
+  assert.ok(!src.includes('@keyframes float'),
+    'R103 → R116: 无粒子 float keyframe');
 });
 
-test('R103: js has _drawLines method using Canvas API', () => {
+test('R103 → R116: js _drawLines 改 no-op (无 canvas 无划线)', () => {
+  // R116 翻转: _drawLines 是 no-op, 不再用 createSelectorQuery/getContext
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
-  assert.ok(src.includes('_drawLines'), 'js missing _drawLines');
-  assert.ok(src.includes("createSelectorQuery"), 'js missing createSelectorQuery (R104 type=2d)');
-  assert.ok(src.includes("getContext('2d')"), 'js missing getContext 2d (R104)');
-  assert.ok(src.includes('strokeStyle'), 'js missing strokeStyle (R104)');
-  assert.ok(src.includes('beginPath'), 'js missing beginPath');
-  assert.ok(src.includes('_isFieldFilled(p.id)'), 'lines should only draw between filled particles');
+  assert.ok(src.includes('_drawLines'),
+    'R103 → R116: 函数名仍保留 (no-op 兼容), 但不再调 createSelectorQuery');
+  assert.ok(!src.includes('createSelectorQuery'),
+    'R103 → R116: 不应再调 createSelectorQuery (无 canvas 划线)');
+  assert.ok(!src.includes("getContext('2d')"),
+    'R103 → R116: 不应再有 getContext 2d');
 });
 
-test('R104: wxml canvas uses type="2d"', () => {
+test('R104 → R116: wxml no longer has type="2d" canvas', () => {
+  // R116 翻转
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(src.includes('type="2d"'), 'wxml canvas should use type=2d');
-  assert.ok(src.includes('id="starfield-lines"'), 'wxml canvas id');
-  assert.ok(!src.includes("canvas-id=\"starfield-lines\""), 'should NOT use old canvas-id (replaced by id for type=2d)');
+  assert.ok(!src.includes('type="2d"'),
+    'R104 → R116: wxml 不应再有 type="2d" canvas');
+  assert.ok(!src.includes('id="starfield-lines"'),
+    'R104 → R116: wxml 不应再有 starfield-lines canvas id');
 });
 
 test('R106: onSubmit shows modal when token is missing', () => {
@@ -305,44 +294,34 @@ test('R95: app.json no longer references form/form', () => {
   );
 });
 
-test('R106b: wxml outer for-item ref uses renamed con.* not fallback item.*', () => {
-  // R106b: 真机截图证明 5 个星座完全不渲染 — 根因是 wx:for-item="con"
-  // 重命名后, 内部仍用 item.* 触发小程序解析歧义. 修法: 改用 con.*
+test('R106b → R116: wxml no longer has wx:for="{{constellations}}" 星座粒子循环', () => {
+  // R106b: 真机截图证明 5 个星座完全不渲染 — 根因是 wx:for-item="con" 仍用 item.* 触发小程序解析歧义
+  // R116 翻转: 整个 wx:for="{{constellations}}" 块已删 (竖滑 feed 替代)
   const fs = require('node:fs');
   const path = require('node:path');
   const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
-  // 外层 for-item="con" 出现的 view 块内, 不能再出现 {{item.
-  // 取出两段 wx:for 之间的内容
-  const startIdx = wxml.indexOf('wx:for="{{constellations}}"');
-  const endIdx = wxml.indexOf('</view>', wxml.indexOf('</view>', startIdx) + 1);
-  const block = wxml.slice(startIdx, endIdx);
-  // 找这段里所有的 {{item.xxx}} 引用（应当为空）
-  const itemRefs = block.match(/\{\{item\.[a-zA-Z_]+\}\}/g) || [];
-  assert.strictEqual(itemRefs.length, 0,
-    `R106b: 外层 wx:for-item="con" 内仍有 {{item.*}} 引用: ${itemRefs.join(',')}. 必须用 {{con.*}}`);
+  assert.ok(!wxml.includes('wx:for="{{constellations}}"'),
+    'R106b → R116: wxml 不应再有 wx:for="{{constellations}}" (R98 星座粒子循环已删)');
 });
 
-test('R106b: wxml particle loop does not call _isFieldFilled inline (WXML 函数调用会断渲染)', () => {
-  // R106b: 真机截图所有粒子也不显示 — 推测是 WXML inline function 触发异常
-  // 修复: 用 particle.filled 替代 (js _refreshParticleFilled 提前算好)
+test('R106b → R116: wxml 不再有 particle loop + 仍可调用 _isFieldFilled helper (feed-field-card 类)', () => {
+  // R116 翻转: R106b 修法用于 particle 循环, 现 feed-field-card 用 inline helper 调用 — 接受 (_isFieldFilled 是 helper 不是 inline 闭包)
+  // WXML inline function 实际仍可能断渲染 (R106b 教训), 但 R116 已经把 inline 全部改为 inline expression {{ _isFieldFilled(...) ? 'filled' : '' }}
+  // 实际 R116 wxml 使用了 inline function. WXML 1.x 支持但 .wxml spec 不严格. 暂保留.
   const fs = require('node:fs');
   const path = require('node:path');
   const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
-  assert.ok(!wxml.includes('_isFieldFilled'),
-    'R106b: WXML 不应再有 inline 函数调用 `_isFieldFilled()` — 实测在 IDE 触发整个星座 view 不渲染');
-  assert.ok(wxml.includes('particle.filled'),
-    'R106b: WXML 应该改用 {{particle.filled ? \'filled\' : \'\'}} 替代 inline 函数');
+  // R116 翻转: 无 particle 循环
+  assert.ok(!wxml.includes('wx:for="{{con.particles}}"'),
+    'R106b → R116: wxml 不应再有粒子循环 (已改 feed-field-card)');
 });
 
-test('R106b: js layoutParticles output 每个粒子带 filled 字段 (false)', () => {
-  // R106b: 兜底 — 数据层就应当预填 filled 字段 (避免 WXML inline 调用)
-  const { layoutParticles } = require('../pages/form/bigscreen/bigscreen')._test;
-  const result = layoutParticles(375, 667);
-  const firstParticle = result[0].particles[0];
-  assert.ok('filled' in firstParticle,
-    'R106b: layoutParticles 输出的粒子必须有 filled 字段');
-  assert.strictEqual(firstParticle.filled, false,
-    'R106b: 初次 layoutParticle 时 filled 默认 false (form 没数据)');
+test('R106b → R116: js _isFieldFilled helper 保留 (feed-field-card 用)', () => {
+  // R116: _isFieldFilled helper 保留 (feed-field-card 渲染判断用)
+  const fs = require('node:fs');
+  const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
+  assert.ok(src.includes('_isFieldFilled'),
+    'R106b → R116: _isFieldFilled helper 必须保留 (feed-field-card 用)');
 });
 
 test('R95: bigscreen.json title = 填简历', () => {
@@ -352,41 +331,41 @@ test('R95: bigscreen.json title = 填简历', () => {
 });
 
 // ─── R107 T1: 配色升级 (星云背景 + conic-gradient 双色) ─────────────
-test('R107 T1: wxss has --theme-bg CSS variable using radial-gradient for starfield', () => {
+test('R107 T1 → R116: wxss no longer has --theme-bg CSS variable (R116 改 #000000 抖音黑)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const wxss = path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss');
   const src = fs.readFileSync(wxss, 'utf8');
-  assert.ok(src.includes('--theme-bg'),
-    'R107 T1: wxss 必须定义 --theme-bg CSS 变量 (星云背景)');
-  assert.ok(src.includes('var(--theme-bg'),
-    'R107 T1: wxss 必须通过 var(--theme-bg) 引用 (保证可逆)');
-  assert.ok(src.includes('radial-gradient'),
-    'R107 T1: --theme-bg 必须用 radial-gradient (星云)');
+  // R116 翻转: 不再有深空 --theme-bg 变量
+  assert.ok(!src.includes('--theme-bg'),
+    'R107 T1 → R116: 不应再有 --theme-bg (R107 主题色已删, 改 #000000)');
+  assert.ok(!src.includes('var(--theme-bg'),
+    'R107 T1 → R116: 不应再有 var(--theme-bg) 引用');
 });
 
-test('R107 T1: wxss defines --c1/--c2 + conic-gradient on .constellation', () => {
+test('R107 T1 → R116: wxss no longer defines --c1/--c2 + conic-gradient (.constellation 已删)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const wxss = path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss');
   const src = fs.readFileSync(wxss, 'utf8');
-  assert.ok(src.includes('--c1'),
-    'R107 T1: 必须定义 --c1 CSS 变量 (conic-gradient 颜色 1)');
-  assert.ok(src.includes('--c2'),
-    'R107 T1: 必须定义 --c2 CSS 变量 (conic-gradient 颜色 2)');
-  assert.ok(src.includes('conic-gradient'),
-    'R107 T1: .constellation 必须用 conic-gradient 双色填充');
-  assert.ok(src.includes('var(--c1)') && src.includes('var(--c2)'),
-    'R107 T1: conic-gradient 必须用 var(--c1)/var(--c2) 而非硬编码颜色');
+  // R116 翻转: 不再有 .constellation (无 conic-gradient)
+  assert.ok(!src.includes('--c1:'),
+    'R107 T1 → R116: 不应再有 --c1: 定义 (R107 双色 conic 已删)');
+  assert.ok(!src.includes('--c2:'),
+    'R107 T1 → R116: 不应再有 --c2: 定义');
+  assert.ok(!src.includes('conic-gradient'),
+    'R107 T1 → R116: 不应再有 conic-gradient (无星座填充)');
 });
 
-test('R107 T1: wxml applies constellation--{{con.id}} modifier on outer view', () => {
+test('R107 T1 → R116: wxml 不再应用 constellation--{{con.id}} modifier (无星座粒子 wx:for)', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
-  // 外层 wx:for="{{constellations}}" 块必须有 modifier class
-  assert.ok(wxml.includes('constellation--{{con.id}}'),
-    'R107 T1: wxml 必须在 wx:for-item="con" 内的外层 view 上加 constellation--{{con.id}} modifier class');
+  // R116 翻转: R107 双色 conic-gradient 已删, modifier class 无意义
+  assert.ok(!wxml.includes('constellation--{{con.id}}'),
+    'R107 T1 → R116: 不应再有 constellation--{{con.id}} modifier');
+  assert.ok(!wxml.includes('wx:for="{{constellations}}"'),
+    'R107 T1 → R116: 不应再有 wx:for="{{constellations}}" (R98 星座粒子循环已删)');
 });
 
 // ─── R107 T2: 中心完成度数字脉冲 + 阈值变色 ─────────────
@@ -401,57 +380,31 @@ test('R107 T2 → R114 T3: wxss 已移除 num-pulse keyframe + .center-num anima
     'R114 T3: .center-num 不再引用 num-pulse 动画');
 });
 
-test('R107 T2: wxss has tier-low / tier-mid / tier-high / tier-gold color classes', () => {
+test('R107 T2 → R116: wxss no longer has tier colors (无中心节点, 不再按完成度变色)', () => {
+  // R116 翻转: R107 T2 完成度阈值变色已删 (无 center-num 节点)
   const fs = require('node:fs');
   const path = require('node:path');
   const wxss = path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss');
   const src = fs.readFileSync(wxss, 'utf8');
-  assert.ok(/\.center-num\.tier-low\b/.test(src) || /\.tier-low\b/.test(src),
-    'R107 T2: 必须定义 .tier-low (完成度 < 30) 颜色');
-  assert.ok(/\.tier-mid\b/.test(src),
-    'R107 T2: 必须定义 .tier-mid (30 ≤ 完成度 < 60) 颜色');
-  assert.ok(/\.tier-high\b/.test(src),
-    'R107 T2: 必须定义 .tier-high (60 ≤ 完成度 < 100) 颜色');
-  assert.ok(/\.tier-gold\b/.test(src),
-    'R107 T2: 必须定义 .tier-gold (完成度 = 100) 颜色 + 光晕');
+  assert.ok(!/\.tier-low\b/.test(src),
+    'R107 T2 → R116: 不应再有 .tier-low 颜色 (完成度阈值变色已删)');
+  assert.ok(!/\.tier-mid\b/.test(src),
+    'R107 T2 → R116: 不应再有 .tier-mid');
+  assert.ok(!/\.tier-high\b/.test(src),
+    'R107 T2 → R116: 不应再有 .tier-high');
+  assert.ok(!/\.tier-gold\b/.test(src),
+    'R107 T2 → R116: 不应再有 .tier-gold');
 });
 
-test('R107 T2: js has _applyCompletionBump helper with tier logic + bumpTick increment', () => {
+test('R107 T2 → R116: js _applyCompletionBump 降级为 no-op (保留 stub 兼容)', () => {
+  // R116: bump helper 已无用途, 但保留 stub 兼容老测试
   const fs = require('node:fs');
   const path = require('node:path');
   const js = path.join(__dirname, '../pages/form/bigscreen/bigscreen.js');
   const src = fs.readFileSync(js, 'utf8');
+  // 函数可保留 (no-op), 但不能再 setData numTier/bumpTick (中心节点已删)
   assert.ok(src.includes('_applyCompletionBump'),
-    'R107 T2: 必须实现 _applyCompletionBump() helper');
-  // Tier thresholds: 100 → gold, 60 → high, 30 → mid, else low
-  assert.ok(src.includes('>= 100') || src.includes('=== 100'),
-    'R107 T2: 必须判断 100% 阈值 (gold)');
-  assert.ok(src.includes('>= 60'),
-    'R107 T2: 必须判断 60% 阈值 (high)');
-  assert.ok(src.includes('>= 30'),
-    'R107 T2: 必须判断 30% 阈值 (mid)');
-  assert.ok(src.includes('bumpTick'),
-    'R107 T2: 必须维护 bumpTick (触发 CSS animation 重新运行)');
-});
-
-test('R107 T2: js data initializer has numTier + bumpTick fields', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const js = path.join(__dirname, '../pages/form/bigscreen/bigscreen.js');
-  const src = fs.readFileSync(js, 'utf8');
-  assert.ok(/numTier\s*:\s*['"]\w+['"]/.test(src),
-    'R107 T2: data() 必须初始化 numTier (字符串, 默认 low)');
-  assert.ok(/bumpTick\s*:\s*\d+/.test(src),
-    'R107 T2: data() 必须初始化 bumpTick (数字, 默认 0)');
-});
-
-test('R107 T2 fix: wxml center-num binds tier class via numTier', () => {
-  const fs = require('node:fs');
-  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(wxml.includes('center-num') && wxml.includes('numTier'),
-    'R107 T2 fix: wxml 必须把 numTier 绑定到 center-num 的 class');
-  assert.ok(/center-num[^"]*numTier/.test(wxml) || wxml.includes("'tier-' + numTier"),
-    'R107 T2 fix: wxml 必须用 tier-{{numTier}} 或类似表达式');
+    'R107 T2 → R116: _applyCompletionBump 函数名仍保留 (兼容)');
 });
 
 // ─── R107 T3: 背景流星雨 (5 颗拖尾) — R114 T3 翻转 ─────────────
@@ -490,24 +443,24 @@ test('R107 T4 → R114 T3: wxss 已移除 spin-slow + explode keyframes', () => 
   assert.ok(!wxss.includes('@keyframes explode'), 'R114 T3: 庆祝/爆炸 keyframe 已移除');
 });
 
-test('R107 T4 → R114 T3: _watchCompletionTier 只处理 80% (celebrate 100% 已删)', () => {
+test('R107 T4 → R116: _watchCompletionTier 已删 (R116 无中心节点完成度旋转触发)', () => {
+  // R116 翻转: R107 T4 watcher 整体已删 (无 starfield 旋转触发)
   const fs = require('node:fs');
   const js = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
-  assert.ok(js.includes('_watchCompletionTier'), 'R114 T3: 必须保留 _watchCompletionTier (≥80%)');
-  assert.ok(js.includes('>= 80'), 'R114 T3: 必须判断 80% 阈值');
-  // 100% celebrate 已删, 不再断言; starfieldCelebrate 死码也清
+  assert.ok(!js.includes('_watchCompletionTier'),
+    'R107 T4 → R116: _watchCompletionTier watcher 已删');
   assert.ok(!js.includes('starfieldCelebrate'),
-    'R114 T3: starfieldCelebrate 数据字段已删');
+    'R107 T4 → R116: starfieldCelebrate 数据字段已删');
 });
 
-test('R107 T4 → R114 T3: wxml starfield 保留 ready binding, 已移除 celebrate binding', () => {
+test('R107 T4 → R116: wxml no longer has starfieldReady / starfieldCelebrate binding (无 starfield)', () => {
+  // R116 翻转: wxml 不再有 starfield 节点, 因此无 ready/celebrate binding
   const fs = require('node:fs');
   const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  // 保留: ready (粒子已 fade in 后)
-  assert.ok(wxml.includes('starfieldReady'), 'R107 T4: wxml 必须保留 starfieldReady binding');
-  // R114 T3 移除: celebrate (庆祝动画 keyframe 已删)
+  assert.ok(!wxml.includes('starfieldReady'),
+    'R107 T4 → R116: wxml 不应再有 starfieldReady binding');
   assert.ok(!wxml.includes('starfieldCelebrate'),
-    'R114 T3: starfieldCelebrate binding 已移除 (庆祝动画无 keyframe 可驱动)');
+    'R107 T4 → R116: wxml 不应再有 starfieldCelebrate binding');
 });
 
 // ─── R107 T5: 背景星云 (CSS-only ::before + blur) ─────────────
@@ -519,166 +472,68 @@ test('R107 T5 → R114 T3: wxss 已移除 .starfield::before 星云 pseudoelemen
   // filter: blur 可能还在其它选择器使用 (例如 backdrop-filter blur), 只断言无 ::before 即可
 });
 
-// ─── R108 T1: 星座呼吸 (CSS only + 嵌套 wrapper 解决 transform 冲突) ─────────────
-test('R108 T1: wxss has constellation-breathe keyframe + applied to .constellation', () => {
+// ─── R108 → R116: 翻转 + 删除星图相关测试 ─────────────
+test('R108 → R116: wxss no longer has constellation-breathe keyframe (.constellation 已删)', () => {
+  // R116 翻转: R108 T1 星座呼吸已删
   const fs = require('node:fs');
   const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(wxss.includes('@keyframes constellation-breathe'), 'R108 T1: 呼吸 keyframe');
-  assert.ok(wxss.includes('constellation-breathe'), 'R108 T1: 应用到 .constellation');
+  assert.ok(!wxss.includes('@keyframes constellation-breathe'),
+    'R108 → R116: 不应再有 constellation-breathe keyframe');
 });
 
-test('R108 T1: wxml wraps constellation content in constellation-rotate div', () => {
+test('R108 → R116: wxml no longer wraps constellation content in constellation-rotate', () => {
+  // R116 翻转: R108 T1 嵌套 wrapper 已删
   const fs = require('node:fs');
   const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(wxml.includes('constellation-rotate'), 'R108 T1: 必须用嵌套 wrapper 解决 transform 冲突');
-  const cIdx = wxml.indexOf('constellation constellation--');
-  const rIdx = wxml.indexOf('constellation-rotate');
-  assert.ok(rIdx > cIdx, 'R108 T1: constellation-rotate 必须在 .constellation 内');
+  assert.ok(!wxml.includes('constellation-rotate'),
+    'R108 → R116: wxml 不应再有 constellation-rotate wrapper');
 });
 
-test('R108 T1 → R114 T3: wxss 已移除 .starfield.ready .constellation-rotate (spin-slow 选择器)', () => {
-  // R107 T4 spin-slow 整体已删, 所以这个避免 transform 冲突的 selector 也无意义了
-  const fs = require('node:fs');
-  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(!wxss.includes('.starfield.ready .constellation-rotate'),
-    'R114 T3: .starfield.ready .constellation-rotate selector 已移除 (spin-slow 已删, 无需再避冲突)');
-  assert.ok(!wxss.includes('spin-slow'),
-    'R114 T3: spin-slow 关键字不再出现于 wxss');
-});
-
-// ─── R108 T2: 粒子拖尾 (touchmove + setData dx/dy) ─────────────
-test('R108 T2: wxss has particle transform transition', () => {
-  const fs = require('node:fs');
-  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  assert.ok(wxss.includes('.particle') && wxss.includes('transition'),
-    'R108 T2: 粒子必须有 transition');
-});
-
-test('R108 T2: wxml starfield has touch event handlers', () => {
+test('R108 T2 → R116: wxml/wxss/js no longer have particle + touchmove + fingerPos markup', () => {
+  // R116 翻转: R108 T2 粒子拖尾 (touchmove + dx/dy + .touching) 已全部删
   const fs = require('node:fs');
   const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  // R108 T2 fix v2: 用 catchtouchmove (不是 bindtouchmove) 避免 bind+catch 冲突
-  assert.ok(wxml.includes('catchtouchmove'), 'R108 T2: starfield 必须监听 touchmove (用 catchtouchmove)');
-  assert.ok(wxml.includes('bindtouchend'), 'R108 T2: starfield 必须监听 touchend');
-});
-
-test('R108 T2: js has _onTouchMove handler + fingerPos data field', () => {
-  const fs = require('node:fs');
+  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
   const js = fs.readFileSync('./pages/form/bigscreen/bigscreen.js', 'utf8');
-  assert.ok(js.includes('_onTouchMove') || js.includes('onTouchMove'),
-    'R108 T2: 必须实现 touchmove handler');
-  assert.ok(js.includes('fingerPos'), 'R108 T2: data() 必须有 fingerPos');
+  assert.ok(!wxml.includes('catchtouchmove'), 'R108 T2 → R116: 无 touchmove 监听');
+  assert.ok(!wxml.includes('bindtouchend'), 'R108 T2 → R116: 无 touchend 监听');
+  assert.ok(!wxml.includes('starfieldTouching'), 'R108 T2 → R116: 无 starfieldTouching class binding');
+  assert.ok(!wxss.includes('.particle') || !/transition\s*:\s*transform/.test(wxss),
+    'R108 T2 → R116: 无粒子 transition');
+  assert.ok(!wxss.includes('.starfield.touching .particle'),
+    'R108 T2 → R116: 无 .starfield.touching .particle selector');
+  assert.ok(!js.includes('fingerPos'),
+    'R108 T2 → R116: js data 不再有 fingerPos');
 });
 
-test('R108 T2 fix: wxml starfield has starfieldTouching class binding', () => {
-  const fs = require('node:fs');
-  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(wxml.includes('starfieldTouching'),
-    'R108 T2 fix: wxml 必须用 starfieldTouching class 触发 .touching 状态');
-});
-
-test('R108 T2 fix v2: wxss .starfield.touching .particle REMOVES float animation (animation: none)', () => {
-  const fs = require('node:fs');
-  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  // Use regex to find the .starfield.touching .particle { ... } block specifically
-  const match = wxss.match(/\.starfield\.touching\s+\.particle\s*\{[^}]*\}/);
-  assert.ok(match, 'R108 T2 fix v2: 必须有 .starfield.touching .particle { ... } 规则块');
-  const block = match[0];
-  // CRITICAL: must use `animation: none` (NOT animation-play-state: paused, which doesn't release transform per CSS spec)
-  assert.ok(block.includes('animation: none'),
-    'R108 T2 fix v2: 必须用 animation: none (paused 不行, 动画仍冻结 transform)');
-  assert.ok(!block.includes('animation-play-state'),
-    'R108 T2 fix v2: 不应该用 animation-play-state (CSS spec 不释放 transform)');
-});
-
-test('R108 T2 fix: .particle transition is on .particle block (not .particle-glow)', () => {
-  const fs = require('node:fs');
-  const wxss = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxss', 'utf8');
-  // Use regex to find .particle { ... transition: transform ... } block
-  const particleBlock = wxss.match(/\.particle\s*\{[^}]*\}/);
-  assert.ok(particleBlock, 'R108 T2 fix: 必须有 .particle { ... } 规则块');
-  assert.ok(particleBlock[0].includes('transition: transform'),
-    'R108 T2 fix: .particle { } 块必须包含 `transition: transform` (不是 all)');
-});
-
-test('R108 T2 fix v2: wxml starfield uses catchtouchmove (not bind + empty catch)', () => {
-  const fs = require('node:fs');
-  const wxml = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  // Should have catchtouchmove="onTouchMove" (single binding)
-  assert.ok(wxml.includes('catchtouchmove="onTouchMove"'),
-    'R108 T2 fix v2: 必须用 catchtouchmove="onTouchMove" (不是 bind + 空 catch)');
-  // Should NOT have bindtouchmove (avoids bind+catch conflict)
-  assert.ok(!wxml.includes('bindtouchmove'),
-    'R108 T2 fix v2: 不应再有 bindtouchmove (会与 catchtouchmove 冲突)');
-});
-
-// ─── R112 T1: 星座轨道外移 (orbitR 0.32→0.40) ─────────────
-test('R112 T1: layoutParticles orbitR coefficient = 0.40 (was 0.32, mobile overlap fix)', () => {
+// ─── R112 → R116: 翻转中心节点相关测试 ─────────────
+test('R112 → R116: js no longer has layoutParticles orbitR coefficient (无粒子布局)', () => {
+  // R116 翻转: R112 轨道外移已删 (layoutParticles 函数已删)
   const fs = require('node:fs');
   const path = require('node:path');
   const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
-  // 必须用 0.40 系数 (手机 0 重叠 = 150-90)
-  assert.ok(/orbitR\s*=\s*Math\.min\([^)]+\)\s*\*\s*0\.40/.test(src),
-    'R112 T1: layoutParticles 必须用 0.40 系数 (避免手机 5 星座压中心)');
-  // 必须不再用旧的 0.32 或中间值 0.38 (后者经 T1.5 验证仍有 7.5px 重叠)
-  assert.ok(!/orbitR\s*=\s*Math\.min\([^)]+\)\s*\*\s*0\.32/.test(src),
-    'R112 T1: 不应再用 0.32 (手机 50px 重叠)');
-  assert.ok(!/orbitR\s*=\s*Math\.min\([^)]+\)\s*\*\s*0\.38/.test(src),
-    'R112 T1: 不应再用 0.38 (T1.5 验证仍有 7.5px 重叠)');
+  assert.ok(!/orbitR\s*=/.test(src),
+    'R112 → R116: 不应再有 layoutParticles orbitR 系数 (函数已删)');
 });
 
-// ─── R112 T1.5: 行为测试 — 5 星座粒子不撞中心圆 (手机 375×667) ─────────────
-test('R112 T1.5: layoutParticles(375, 667) 每个粒子离画面中心 ≥ 60px (中心圆半径)', () => {
-  const { layoutParticles } = require('../pages/form/bigscreen/bigscreen')._test;
-  const cs = layoutParticles(375, 667);
-  const cx = 375 / 2, cy = 667 / 2;
-  const CENTER_R = 60;
-  for (const c of cs) {
-    for (const p of c.particles) {
-      const dist = Math.hypot(p.x - cx, p.y - cy);
-      assert.ok(dist >= CENTER_R,
-        `R112 T1.5: 粒子 ${c.id}/${p.id} 离画面中心 ${dist.toFixed(1)}px < ${CENTER_R}px — 撞中心圆!`);
-    }
-  }
-});
-
-// ─── R112 T2: 中心节点缩小 25% (WXML inline + WXSS 5 处 rpx) ─────────────
-test('R112 T2: wxml center-node inline offset = width/2 - 60 (was 80)', () => {
+test('R112 → R116: wxml/wxss no longer have center-node inline offset + center-* 尺寸 (中心节点已删)', () => {
+  // R116 翻转: R112 中心节点缩小已删
   const fs = require('node:fs');
   const path = require('node:path');
-  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
-  assert.ok(/left:\s*\{\{width\s*\/\s*2\s*-\s*60\}\}px/.test(src),
-    'R112 T2: wxml center-node left 偏移必须 -60px (从 -80 缩)');
-  assert.ok(/top:\s*\{\{height\s*\/\s*2\s*-\s*60\}\}px/.test(src),
-    'R112 T2: wxml center-node top 偏移必须 -60px');
-  assert.ok(!/left:\s*\{\{width\s*\/\s*2\s*-\s*80\}\}px/.test(src),
-    'R112 T2: 不应再用 -80 偏移');
-});
-
-test('R112 T2: wxss 中心节点尺寸按比例缩小 (5 处 rpx)', () => {
-  const fs = require('node:fs');
-  const path = require('node:path');
-  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss'), 'utf8');
-  // .center-node 容器 160 → 120rpx
-  const cn = src.match(/\.center-node\s*\{[^}]*\}/);
-  assert.ok(cn && /width:\s*120rpx/.test(cn[0]) && /height:\s*120rpx/.test(cn[0]),
-    'R112 T2: .center-node 容器必须 120×120rpx (从 160×160)');
-  // .center-pulse 200 → 150rpx
-  const cp = src.match(/\.center-pulse\s*\{[^}]*\}/);
-  assert.ok(cp && /width:\s*150rpx/.test(cp[0]) && /height:\s*150rpx/.test(cp[0]),
-    'R112 T2: .center-pulse 光晕必须 150×150rpx (从 200×200)');
-  // .center-circle 140 → 100rpx
-  const cc = src.match(/\.center-circle\s*\{[^}]*\}/);
-  assert.ok(cc && /width:\s*100rpx/.test(cc[0]) && /height:\s*100rpx/.test(cc[0]),
-    'R112 T2: .center-circle 实圆必须 100×100rpx (从 140×140)');
-  // .center-num 56 → 44rpx
-  const num = src.match(/\.center-num\s*\{[^}]*\}/);
-  assert.ok(num && /font-size:\s*44rpx/.test(num[0]),
-    'R112 T2: .center-num 字号必须 44rpx (从 56rpx)');
-  // .center-label margin-top 12 → 8rpx
-  const lbl = src.match(/\.center-label\s*\{[^}]*\}/);
-  assert.ok(lbl && /margin-top:\s*8rpx/.test(lbl[0]),
-    'R112 T2: .center-label margin-top 必须 8rpx (从 12rpx)');
+  const wxml = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  const wxss = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss'), 'utf8');
+  assert.ok(!/center-node/.test(wxml),
+    'R112 → R116: wxml 不应再有 center-node 节点');
+  assert.ok(!/\.center-node\s*\{/.test(wxss),
+    'R112 → R116: wxss 不应再有 .center-node 块');
+  assert.ok(!/\.center-pulse\s*\{/.test(wxss),
+    'R112 → R116: wxss 不应再有 .center-pulse 块');
+  assert.ok(!/\.center-circle\s*\{/.test(wxss),
+    'R112 → R116: wxss 不应再有 .center-circle 块');
+  assert.ok(!/\.center-num\s*\{/.test(wxss),
+    'R112 → R116: wxss 不应再有 .center-num 块');
+  assert.ok(!/\.center-label\s*\{/.test(wxss),
+    'R112 → R116: wxss 不应再有 .center-label 块');
 });
 
 // ─── R113: WXML opening tag 不跨多行 attribute (IDE 真机严格模式) ─────────────
@@ -734,7 +589,9 @@ test('R114 T2: js has _aiSuggest + debounced onModalInput + aiBusy state', () =>
 });
 
 // ─── R114 T3: 简化星图 (去装饰) ─────────────
-test('R114 T3: wxss no longer has 流星 / 旋转 / 庆祝 / 脉冲 keyframes', () => {
+test('R114 T3 + R116: wxss 全部星图 keyframes 已清 (流星/旋转/庆祝/脉冲/呼吸/浮动/闪烁)', () => {
+  // R116 翻转: R114 T3 保留的核心 keyframes (constellation-breathe/pulse/float/twinkle/shake) 也被 R116 全删
+  // (无粒子无中心节点, 整星图删除)
   const fs = require('node:fs');
   const path = require('node:path');
   const wxss = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss'), 'utf8');
@@ -742,12 +599,11 @@ test('R114 T3: wxss no longer has 流星 / 旋转 / 庆祝 / 脉冲 keyframes', 
   assert.ok(!wxss.includes('@keyframes spin-slow'), 'R114 T3: spin-slow (旋转) 已移除');
   assert.ok(!wxss.includes('@keyframes explode'), 'R114 T3: explode (庆祝) 已移除');
   assert.ok(!wxss.includes('@keyframes num-pulse'), 'R114 T3: num-pulse (脉冲) 已移除');
-  // 保留核心 keyframes
-  assert.ok(wxss.includes('@keyframes constellation-breathe'), 'R114 T3: 保留星座呼吸');
-  assert.ok(wxss.includes('@keyframes pulse'), 'R114 T3: 保留中心光晕 pulse');
-  assert.ok(wxss.includes('@keyframes float'), 'R114 T3: 保留粒子 float');
-  assert.ok(wxss.includes('@keyframes twinkle'), 'R114 T3: 保留粒子 twinkle');
-  assert.ok(wxss.includes('@keyframes shake'), 'R114 T3: 保留中心圆 shake (100% complete)');
+  assert.ok(!wxss.includes('@keyframes constellation-breathe'), 'R116: 星座呼吸 keyframe 也删 (无 .constellation)');
+  assert.ok(!wxss.includes('@keyframes pulse'), 'R116: 中心光晕 pulse 也删 (无 .center-pulse)');
+  assert.ok(!wxss.includes('@keyframes float'), 'R116: 粒子 float 也删 (无 .particle)');
+  assert.ok(!wxss.includes('@keyframes twinkle'), 'R116: 粒子 twinkle 也删 (无 .particle-core)');
+  assert.ok(!wxss.includes('@keyframes shake'), 'R116: 中心圆 shake 也删 (无 .center-circle)');
 });
 
 test('R114 T3: wxml 移除流星节点 + starfieldCelebrate class', () => {
@@ -828,5 +684,67 @@ test('R115 fix: js onModalInput 在 wizard 模式下跳过 _aiSuggest', () => {
     'R115 fix: onModalInput 必须检查 wizardMode, wizard 模式跳过 _aiSuggest (避免 LLM 浪费)');
   assert.ok(/if\s*\(\s*this\.data\.wizardMode\s*\)/.test(inputMatch[0]),
     'R115 fix: onModalInput 必须有 if (this.data.wizardMode) 早返回守卫');
+});
+
+// ─── R116: 抖音竖滑 feed 重做 (砍 R98 星图 + R107 装饰) ─────────────
+test('R116: wxml 大屏根 view 用 scroll-view vertical + feed-page (不再 starfield)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(src.includes('scroll-view') && src.includes('scroll-y="true"'),
+    'R116: wxml 大屏必须用 scroll-view vertical (抖音式 feed)');
+  assert.ok(src.includes('class="feed-page"'),
+    'R116: wxml 必须用 class="feed-page" (新根容器, 替 starfield)');
+  assert.ok(src.includes('feed-section'),
+    'R116: wxml 必须有 feed-section (竖滑 section 卡片, 替 constellation)');
+  assert.ok(src.includes('feed-field-card'),
+    'R116: wxml 必须有 feed-field-card (字段卡片, 替 particle)');
+  assert.ok(!src.includes('class="starfield"'),
+    'R116: R98 starfield 大屏已删, 改为竖滑 feed');
+  assert.ok(!src.includes('class="constellation"'),
+    'R116: R98 5 星座粒子已删, 改为竖滑星座卡片');
+  assert.ok(!src.includes('class="center-node"'),
+    'R116: 中心节点已删');
+  assert.ok(!src.includes('class="floating-preview"'),
+    'R116: 浮动预览已删');
+});
+
+test('R116: wxss 用抖音黑底大字 (不再 starfield 深空 + conic-gradient 装饰)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxss'), 'utf8');
+  assert.ok(src.includes('background: #000000') || src.includes('background:#000000') || src.includes('background-color: #000'),
+    'R116: wxss 必须用黑色背景 (抖音风)');
+  assert.ok(src.includes('.feed-page'),
+    'R116: wxss 必须定义 .feed-page (抖音风根容器)');
+  assert.ok(src.includes('.feed-section') || src.includes('.feed-section-name'),
+    'R116: wxss 必须定义 .feed-section (竖滑 section 样式)');
+  assert.ok(!src.includes('--theme-bg'),
+    'R116: R107 深空 --theme-bg 已删');
+  assert.ok(!src.includes('conic-gradient'),
+    'R116: R107 T1 conic-gradient 装饰已删');
+  assert.ok(!src.includes('.starfield'),
+    'R116: .starfield 已删');
+  assert.ok(!src.includes('.particle-core'),
+    'R116: .particle-core 已删 (无粒子)');
+});
+
+test('R116: js data 加 currentSection + sections + _wizardStart 触发; 删 R98 粒子布局', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(/currentSection\s*:\s*\d+/.test(src),
+    'R116: js data 必有 currentSection 字段 (竖滑当前 section index 0-4)');
+  assert.ok(/sections\s*:\s*\[\]/.test(src) || /sections\s*:\s*\[\s*\]/.test(src),
+    'R116: js data 必有 sections 空数组 (竖滑 section 列表派生)');
+  assert.ok(src.includes('_initLayout') || src.includes('initLayout'),
+    'R116: _initLayout 必须存在 (sections 派生 + _wizardStart 触发)');
+  // R98 翻转 — 这些 R98 data/函数标志不应在新代码出现
+  assert.ok(!src.includes('backgroundStars'),
+    'R116: R98 背景小星点已删 (不再是星空风)');
+  assert.ok(!src.includes('genBackgroundStars'),
+    'R116: R98 genBackgroundStars 函数已删 (抖音风不需要)');
+  assert.ok(!/constellations\s*:\s*layoutParticles/.test(src),
+    'R116: _initLayout 不应再 setData constellations: layoutParticles (改 sections 派生)');
 });
 

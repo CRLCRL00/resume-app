@@ -1,13 +1,10 @@
 /**
- * R98 粒子星图填简历
+ * R116 抖音式大屏填简历
  *
- * 推翻传统: 用星图可视化, 5 星座 (基本/教育/工作/期望/技能)
- * 每个字段是发光粒子, 点击 → 弹窗填 → 星变亮
- * 实时预览在右下角浮动
- *
- * 与之前兼容:
- *   - emptyForm / calcCompletion 不变
- *   - submit 复用原 form 提交
+ * 推翻 R98 星图: 用竖滑 scroll-view + 字段卡片 + AI 头像大字
+ * 5 星座纵向切换 (sections = CONSTELLATIONS 派生)
+ * 字段卡片横滑 (feed-fields)
+ * R115 wizard + 后端 deepseek 仍工作
  */
 
 // 5 个星座, 每个含字段 (id, label, type, options?, ai 文案)
@@ -75,9 +72,6 @@ const CONSTELLATIONS = [
   },
 ];
 
-const STEP_LABELS = CONSTELLATIONS.map(c => c.name);
-const STEP_HINTS = ['点击粒子填字段', '教育背景', '工作经验', '求职方向', '技能列表'];
-
 // R115 fix: 派生字段顺序 + 总数, 避免硬编码 14 (实际 18 字段: 4+4+5+4+1)
 const FIELD_ORDER = CONSTELLATIONS.flatMap((c) => c.fields.map((f) => f.id));
 const FIELD_COUNT = FIELD_ORDER.length;
@@ -115,63 +109,9 @@ function calcCompletion(form, skillsCount) {
   return Math.min(100, total);
 }
 
-// 计算粒子位置 (5 星座环绕中心)
-// 返回: constellations [{...const, particles: [{x, y, field}]}]
-function layoutParticles(width, height) {
-  const cx = width / 2;
-  const cy = height / 2;
-  const orbitR = Math.min(width, height) * 0.40;
-  return CONSTELLATIONS.map((c, i) => {
-    // 5 个星座均分 360°, 从顶部开始
-    const angle = (i * 72 - 90) * Math.PI / 180;
-    const ccx = cx + Math.cos(angle) * orbitR;
-    const ccy = cy + Math.sin(angle) * orbitR;
-    // 粒子在该星座周围小半径
-    // R106b: filled 字段提前算好 (避开 WXML inline 函数调用, 那会让 view 整段不渲染)
-    const partR = 90;
-    const particles = c.fields.map((f, j) => {
-      const partAngle = (j * 360 / c.fields.length) * Math.PI / 180;
-      return {
-        ...f,
-        x: ccx + Math.cos(partAngle) * partR,
-        y: ccy + Math.sin(partAngle) * partR,
-        filled: false, // 初次 layout 全 false; _initLayout 后由 _refreshParticleFilled 重算
-      };
-    });
-    return { ...c, cx: ccx, cy: ccy, particles };
-  });
-}
-
-// 简易伪随机 (用于背景小星点)
-function mulberry32(seed) {
-  return function () {
-    seed |= 0; seed = (seed + 0x6D2B79F5) | 0;
-    let t = Math.imul(seed ^ (seed >>> 15), 1 | seed);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
-
-function genBackgroundStars(n, w, h, seed = 42) {
-  const r = mulberry32(seed);
-  const stars = [];
-  for (let i = 0; i < n; i++) {
-    stars.push({
-      x: r() * w,
-      y: r() * h,
-      size: 1 + r() * 2.5,
-      opacity: 0.3 + r() * 0.7,
-    });
-  }
-  return stars;
-}
-
-// R114 T3: genMeteors 已删除 (流星 view 已删, 函数死码, 无消费者)
-
 module.exports = {
   _test: {
-    emptyForm, calcCompletion, CONSTELLATIONS, STEP_LABELS, STEP_HINTS,
-    layoutParticles, genBackgroundStars, mulberry32,
+    emptyForm, calcCompletion, CONSTELLATIONS, FIELD_ORDER, FIELD_COUNT,
   },
 };
 
@@ -185,17 +125,16 @@ const PageImpl = typeof Page !== 'undefined'
 PageImpl({
   data: {
     wide: false,
-    width: 750,
-    height: 1200,
-    constellations: [],
-    backgroundStars: [],
-    // R114 T3: meteors 字段已删 (流星 view 已删, 无消费者)
-    stepLabels: STEP_LABELS,
-    stepHints: STEP_HINTS,
+    // R116: 竖滑 feed 状态
+    currentSection: 0,
+    currentFieldIndex: 0,
+    currentFieldId: '',
+    currentFieldPrompt: '',
+    sections: [],
     form: emptyForm(),
     skillsCount: 0,
     completion: 0,
-    // Modal 状态
+    // Modal 状态 (保留 R99+R114+R115 弹窗兜底)
     modalVisible: false,
     modalField: null,
     modalFieldLabel: '',
@@ -210,19 +149,12 @@ PageImpl({
     aiFollowup: '',
     aiSuggestion: '',
     aiBusy: false,
-    // R114 T2 fix: 错误兜底 + 异步竞态防护 + 自动滚底
     aiError: '',
     aiRequestSeq: 0, // generation token, 每次请求 ++, 过期响应丢弃
     aiScrollTop: 0,
-    // R107 T2: 完成度数字脉冲 + 阈值变色
+    // R107 T2: 完成度数字脉冲 + 阈值变色 (保留 dead state)
     numTier: 'low',
     bumpTick: 0,
-    // R107 T4: 完成度阈值 → 触发星座旋转 + 中心庆祝
-    starfieldReady: false,
-    // R108 T2 fix: touching 状态 — 触摸时暂停粒子 float 动画
-    starfieldTouching: false,
-    // R108 T2: 粒子拖尾 — 手指位置 (x/y=-1 表示未触摸)
-    fingerPos: { x: -1, y: -1 },
     // R115: Wizard 模式状态
     wizardMode: false,              // 是否在 wizard 模式
     wizardCurrentField: '',         // 当前正在问的字段 id
@@ -245,8 +177,7 @@ PageImpl({
   },
 
   onShow() {
-    // R103: 数据更新后重绘连线 (中心完成度变 / 字段填满)
-    setTimeout(() => this._drawLines(), 100);
+    // R116: 不再需要 _drawLines (无粒子无 canvas)
   },
 
   onUnload() {
@@ -269,136 +200,144 @@ PageImpl({
     });
   },
 
+  /**
+   * R116: 初始化 — 从 CONSTELLATIONS 派生 sections, 立即启动 wizard 让 AI 主动引导用户
+   * 删 R98 粒子布局 (R98 星点生成 + 连线 + 粒子刷新函数 全部变 no-op)
+   */
   _initLayout(width, height, wide, dpr = 2) {
-    const constellations = layoutParticles(width, height);
-    const backgroundStars = genBackgroundStars(80, width, height);
-    this.setData({ width, height, wide, constellations, backgroundStars });
-    // R106b: 初次 layout 全 false; form 加载完后重算 filled 视觉
-    this._refreshParticleFilled();
-    // R103: 划线 (需 dpr 适配 retina)
-    setTimeout(() => this._drawLines(width, height, dpr), 50);
+    this.setData({
+      wide,
+      sections: CONSTELLATIONS.map((c) => ({ id: c.id, name: c.name, fields: c.fields })),
+      currentSection: 0,
+      currentFieldIndex: 0,
+      currentFieldId: FIELD_ORDER[0],
+      currentFieldPrompt: '点击下方输入开始填简历',
+    });
+    // R116: 大屏不靠粒子交互, 立即启动 wizard (AI 主动提问)
+    this._wizardStart();
   },
 
-  // R106b: 用 form 数据重算每个粒子的 filled 视觉态
-  // (避免 WXML inline 调用 _isFieldFilled() — 实测会断整个 view 渲染)
+  // R116: no-op (无粒子, 保留函数体兼容 R107 测试引用)
   _refreshParticleFilled() {
-    const constellations = (this.data.constellations || []).map((c) => ({
-      ...c,
-      particles: (c.particles || []).map((p) => ({
-        ...p,
-        filled: this._isFieldFilled(p.id),
-      })),
-    }));
-    this.setData({ constellations });
+    // R116: 大屏无粒子, 改为 no-op
   },
 
-  // R103+R104: 在 type=2d Canvas 画 filled 粒子之间连线
+  // R116: no-op (无粒子无 canvas 划线)
   _drawLines(width, height, dpr = 2) {
-    if (!width || !height) return;
-    if (typeof wx === 'undefined') return; // node test 跳过
-    const query = wx.createSelectorQuery();
-    query.select('#starfield-lines')
-      .fields({ node: true, size: true })
-      .exec((res) => {
-        const canvas = res && res[0] && res[0].node;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        const w = width;
-        const h = height;
-        ctx.clearRect(0, 0, w, h);
-
-        // 收集所有 filled 粒子 (按星座上色)
-        const filledPoints = [];
-        for (const c of this.data.constellations || []) {
-          for (const p of c.particles || []) {
-            if (this._isFieldFilled(p.id)) {
-              filledPoints.push({ x: p.x, y: p.y, color: c.color, rgb: c.colorRgb });
-            }
-          }
-        }
-        if (filledPoints.length < 2) return;
-
-        // 两两连线 (透明度 = 距中心越近越亮)
-        const cx = w / 2, cy = h / 2;
-        const maxDist = Math.hypot(w, h) / 2;
-        ctx.lineWidth = 1;
-        for (let i = 0; i < filledPoints.length; i++) {
-          for (let j = i + 1; j < filledPoints.length; j++) {
-            const a = filledPoints[i], b = filledPoints[j];
-            const dx = a.x - b.x, dy = a.y - b.y;
-            const dist = Math.hypot(dx, dy);
-            const maxEdge = Math.max(w, h) * 0.45;
-            if (dist > maxEdge) continue;
-            const midX = (a.x + b.x) / 2;
-            const midY = (a.y + b.y) / 2;
-            const distToCenter = Math.hypot(midX - cx, midY - cy);
-            const alpha = Math.max(0.15, 1 - distToCenter / maxDist);
-            ctx.strokeStyle = `rgba(${a.rgb}, ${alpha.toFixed(2)})`;
-            ctx.beginPath();
-            ctx.moveTo(a.x, a.y);
-            ctx.lineTo(b.x, b.y);
-            ctx.stroke();
-          }
-        }
-        // 中心 → 每个 filled 粒子的连线 (毛笔效应)
-        ctx.lineWidth = 2;
-        for (const p of filledPoints) {
-          ctx.strokeStyle = `rgba(${p.rgb}, 0.6)`;
-          ctx.beginPath();
-          ctx.moveTo(cx, cy);
-          ctx.lineTo(p.x, p.y);
-          ctx.stroke();
-        }
-      });
+    // R116: 大屏无粒子, 改为 no-op
   },
 
-  onParticleTap(e) {
-    const { field, constId } = e.currentTarget.dataset;
-    const constDef = CONSTELLATIONS.find(c => c.id === constId);
-    const fieldDef = constDef?.fields.find(f => f.id === field);
-    const value = this._getFieldValue(field);
-    const modalFieldAi = fieldDef?.ai || '';
+  /**
+   * R116: 字段卡片点击 → 跳到该字段的 section + field index + 启动 wizard
+   */
+  onFieldCardTap(e) {
+    const { fieldId, sectionIdx } = e.currentTarget.dataset;
+    const idx = FIELD_ORDER.indexOf(fieldId);
+    if (idx < 0) return;
+    // 计算该字段所在的 section index (按字段索引落入对应星座)
+    let sIdx = 0;
+    let fIdx = idx;
+    for (let i = 0; i < CONSTELLATIONS.length; i++) {
+      if (fIdx < CONSTELLATIONS[i].fields.length) {
+        sIdx = i;
+        break;
+      }
+      fIdx -= CONSTELLATIONS[i].fields.length;
+    }
+    const constDef = CONSTELLATIONS[sIdx];
+    const fieldDef = constDef?.fields.find((f) => f.id === fieldId);
     // R114 T2 fix: 切换字段前清理 debounce timer + 作废在飞请求 (防串话)
     if (this._aiDebounceTimer) {
       clearTimeout(this._aiDebounceTimer);
       this._aiDebounceTimer = null;
     }
     this._aiRequestSeq = (this._aiRequestSeq || 0) + 1;
-    // R114 T2: 初始化 AI 对话历史 (首条 = R99 静态提示)
-    const initAi = modalFieldAi
-      ? [{ role: 'assistant', content: modalFieldAi, id: this._nextAiMsgId('init') }]
-      : [];
     this.setData({
+      currentSection: sIdx,
+      currentFieldIndex: idx,
+      currentFieldId: fieldId,
+      currentFieldPrompt: this._getFieldAiById(fieldId),
       modalVisible: true,
-      modalField: field,
-      modalFieldLabel: fieldDef?.label || field,
-      modalFieldAi,
-      modalConstId: constId,
+      modalField: fieldId,
+      modalFieldLabel: fieldDef?.label || fieldId,
+      modalFieldAi: this._getFieldAiById(fieldId),
+      modalConstId: constDef?.id,
       modalConstColor: constDef?.color || '#6366f1',
-      modalValue: value || '',
-      modalOptions: fieldDef?.options || null,
-      modalPlaceholder: fieldDef?.placeholder || `请输入${fieldDef?.label || ''}`,
-      // R114 T2: 重置 AI 对话状态
-      aiHistory: initAi,
-      aiFollowup: '',
-      aiSuggestion: '',
-      aiBusy: false,
-      aiError: '',
-      aiRequestSeq: this._aiRequestSeq,
-      aiScrollTop: 0,
-      // R115: 进入 wizard 模式 + 重置 wizard 状态
+      modalValue: this._getFieldValue(fieldId) || '',
+      modalOptions: this._getFieldOptionsById(fieldId),
+      modalPlaceholder: `请输入${fieldDef?.label || fieldId}`,
+      // Wizard 模式
       wizardMode: true,
-      wizardCurrentField: field,
+      wizardCurrentField: fieldId,
       wizardNextQuestion: '',
       wizardHint: '',
-      wizardProgress: this.data.wizardAnswered ? this.data.wizardAnswered.length : 0,
-      wizardAnswered: this.data.wizardAnswered || [],
+      wizardProgress: idx,
+      wizardAnswered: this._buildAnsweredFields(idx, fieldId),
       wizardIsComplete: false,
       wizardIsLoading: true,
     }, () => {
       this._wizardStart();
     });
+  },
+
+  /**
+   * R116: 滑到底触发 (类似抖音"加载更多"模式)
+   */
+  onFeedScrollLower() {
+    // 可选: 自动跳到下一星座, 当前不实现
+  },
+
+  /**
+   * R116: 通过 fieldId 查 field 在 18 字段中的全局 index (0-17)
+   */
+  _getFieldIndex(fieldId) {
+    return FIELD_ORDER.indexOf(fieldId);
+  },
+
+  /**
+   * R116: 辅助 — 从 form 构建前 N 个 answeredFields
+   */
+  _buildAnsweredFields(upToIdx, currentFieldId) {
+    const answered = [];
+    for (let i = 0; i < upToIdx; i++) {
+      const fid = FIELD_ORDER[i];
+      const value = this._getFieldValue(fid);
+      if (value) {
+        answered.push({ fieldId: fid, fieldLabel: this._getFieldLabelById(fid), value });
+      }
+    }
+    return answered;
+  },
+
+  /**
+   * R116: 辅助 — 查字段 ai 文案
+   */
+  _getFieldAiById(fieldId) {
+    for (const c of CONSTELLATIONS) {
+      for (const f of c.fields) {
+        if (f.id === fieldId) return f.ai || '';
+      }
+    }
+    return '';
+  },
+
+  /**
+   * R116: 辅助 — 查字段 options (chips/picker)
+   */
+  _getFieldOptionsById(fieldId) {
+    for (const c of CONSTELLATIONS) {
+      for (const f of c.fields) {
+        if (f.id === fieldId) return f.options || null;
+      }
+    }
+    return null;
+  },
+
+  /**
+   * R116: 保留函数兼容 — wxml 不再 bindtap 粒子 (改为 onFieldCardTap)
+   */
+  onParticleTap(e) {
+    // R116: 大屏无粒子, 改为空函数 (wxml 不再触发)
   },
 
   // R114 T2 fix (Nit #1): 单调递增 msg id — 避免 Date.now 同毫秒重复
@@ -573,7 +512,21 @@ PageImpl({
 
     // 4. 调 AI 拿下一问 (R115 fix: 显式 modalVisible: true, 保持 modal 打开给下一问)
     const nextLabel = this._getFieldLabelById(nextFieldId);
+    // 算下一字段所属 section
+    let sIdx = 0;
+    let fRemain = idx + 1;
+    for (let i = 0; i < CONSTELLATIONS.length; i++) {
+      if (fRemain < CONSTELLATIONS[i].fields.length) {
+        sIdx = i;
+        break;
+      }
+      fRemain -= CONSTELLATIONS[i].fields.length;
+    }
     this.setData({
+      currentSection: sIdx,
+      currentFieldIndex: idx + 1,
+      currentFieldId: nextFieldId,
+      currentFieldPrompt: this._getFieldAiById(nextFieldId),
       wizardCurrentField: nextFieldId,
       wizardProgress: newAnswered.length,
       wizardAnswered: newAnswered,
@@ -582,6 +535,7 @@ PageImpl({
       modalValue: '',
       modalPlaceholder: `请输入${nextLabel}`,
       modalVisible: true,
+      modalFieldAi: this._getFieldAiById(nextFieldId),
       wizardNextQuestion: '',
       wizardHint: '',
       wizardIsLoading: true,
@@ -715,6 +669,8 @@ PageImpl({
    * R115 fix (Critical Bug): 纯写 form + 副作用 (刷新粒子/划线/完成度), 不动 modal 状态.
    * _saveModal 和 _wizardNext 共用此函数, 避免 _saveModal 内含 modalVisible:false 导致 wizard
    * 首问后即关闭.
+   *
+   * R116: 不再调用 _refreshParticleFilled/_drawLines (无粒子无 canvas)
    */
   _writeFormAndSideEffects(value) {
     const { modalField } = this.data;
@@ -753,13 +709,10 @@ PageImpl({
       completion,
       // 不动 modal 状态 — 由调用方决定
     }, () => {
-      // R106b: 重算每个粒子的 filled 视觉态 (避免 WXML inline _isFieldFilled 整段 view 不渲染)
-      this._refreshParticleFilled();
-      this._drawLines(this.data.width, this.data.height);
-      // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色
+      // R116: 删 _refreshParticleFilled + _drawLines (无粒子无 canvas)
+      // R107 T2: 完成度变化 → 数字脉冲 + 阈值变色 (保留 dead state update)
       this._applyCompletionBump(prevCompletion, completion);
-      // R107 T4: 完成度阈值 → 星座旋转 + 中心庆祝
-      this._watchCompletionTier(completion);
+      // R107 T4 完成度阈值 watcher 已删 (R116 不再用)
     });
   },
 
@@ -781,80 +734,13 @@ PageImpl({
 
   // R107 T2: 完成度数字脉冲 + 阈值变色 (每次 setData bumpTick++ 触发 CSS animation 重新运行)
   // tier: gold (100) / high (>=60) / mid (>=30) / low (else)
+  // R116: 保留 helper (仍有 dead state numTier + bumpTick 在 data 中, 测试引用)
   _applyCompletionBump(prev, next) {
     let tier = 'low';
     if (next >= 100) tier = 'gold';
     else if (next >= 60) tier = 'high';
     else if (next >= 30) tier = 'mid';
     this.setData({ numTier: tier, bumpTick: this.data.bumpTick + 1 });
-  },
-
-  /**
-   * R114 T3: 监听完成度阈值切换 (≥80% → starfieldReady 星座旋转; 100% celebrate 已删)
-   */
-  _watchCompletionTier(c) {
-    this.setData({ starfieldReady: c >= 80 });
-  },
-
-  /**
-   * R108 T2: 粒子拖尾 — 触摸事件
-   * 手指按下/移动时, 重算每个粒子 dx/dy 让它们朝手指方向轻微偏移.
-   * 偏移距离 = min(20px, 200/dist) 朝手指方向, 距离 > 400px 不偏移.
-   */
-  onTouchStart(e) {
-    const t = e.touches && e.touches[0];
-    if (!t) return;
-    this.setData({
-      fingerPos: { x: t.x, y: t.y },
-      starfieldTouching: true, // R108 T2 fix: pause float
-    });
-    this._updateParticlesOffset(t.x, t.y);
-  },
-
-  onTouchMove(e) {
-    const t = e.touches && e.touches[0];
-    if (!t) return;
-    // 节流: 每 50ms 更新一次 (高频 touchmove 会卡)
-    const now = Date.now();
-    if (this._lastTouchUpdate && now - this._lastTouchUpdate < 50) return;
-    this._lastTouchUpdate = now;
-    this.setData({ fingerPos: { x: t.x, y: t.y } });
-    this._updateParticlesOffset(t.x, t.y);
-  },
-
-  onTouchEnd() {
-    this.setData({
-      fingerPos: { x: -1, y: -1 },
-      starfieldTouching: false, // R108 T2 fix: resume float
-    });
-    // 复位所有粒子 (dx/dy = 0), CSS transition 会让粒子平滑回弹
-    const constellations = (this.data.constellations || []).map((c) => ({
-      ...c,
-      particles: (c.particles || []).map((p) => ({ ...p, dx: 0, dy: 0 })),
-    }));
-    this.setData({ constellations });
-  },
-
-  /**
-   * R108 T2: 重算每个粒子相对手指的偏移
-   * 调用频繁, 必须 minimal cost — 用 map + 1 次 setData.
-   */
-  _updateParticlesOffset(fx, fy) {
-    const constellations = (this.data.constellations || []).map((c) => ({
-      ...c,
-      particles: (c.particles || []).map((p) => {
-        const dx = fx - p.x;
-        const dy = fy - p.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist === 0 || dist > 400) return { ...p, dx: 0, dy: 0 };
-        // 偏移距离 = min(20, 200/dist) 朝手指方向
-        const mag = Math.min(20, 200 / dist);
-        const ux = dx / dist;
-        const uy = dy / dist;
-        return { ...p, dx: ux * mag, dy: uy * mag };
-      }),
-    }));
-    this.setData({ constellations });
   },
 
   _getFieldValue(field) {

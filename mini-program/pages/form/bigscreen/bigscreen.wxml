@@ -1,177 +1,96 @@
 <!--
-  R98 粒子星图 — 5 星座, 字段 = 发光粒子
-  点击粒子 → 弹窗填字段
-  实时预览在右下浮动
+  R116 抖音式大屏 — 砍掉 R98 星图, 改竖滑 feed
+  5 星座纵向切换 + 字段卡片横滑 + AI 头像大字
+  R115 wizard + 后端 deepseek 仍工作 (modal 部分保留)
+
+  R109/R113 教训: 所有 opening tag 必须单行 (attribute 不跨行)
 -->
-<view class="starfield {{starfieldReady ? 'ready' : ''}} {{starfieldTouching ? 'touching' : ''}}" style="width: {{width}}px; height: {{height}}px;" bindtouchstart="onTouchStart" catchtouchmove="onTouchMove" bindtouchend="onTouchEnd" bindtouchcancel="onTouchEnd">
+<view class="feed-page">
 
-  <!-- 背景小星点 -->
-  <view wx:for="{{backgroundStars}}" wx:key="x" class="bg-star" style="left: {{item.x}}px; top: {{item.y}}px; width: {{item.size}}px; height: {{item.size}}px; opacity: {{item.opacity}};"></view>
+  <scroll-view class="feed-scroll" scroll-y="true" bindscrolltolower="onFeedScrollLower">
 
-  <!-- R103+R104: 连线 canvas (filled 粒子之间, 用 type=2d) -->
-  <canvas type="2d" id="starfield-lines" class="lines-canvas" style="width: {{width}}px; height: {{height}}px;" disable-scroll="true"></canvas>
-
-  <!-- 中心 "完成度" 节点 -->
-  <view class="center-node" style="left: {{width/2 - 60}}px; top: {{height/2 - 60}}px;" bindtap="onSubmit">
-    <view class="center-pulse"></view>
-    <view class="center-circle {{completion >= 100 ? 'complete' : ''}}">
-      <text class="center-num {{numTier ? 'tier-' + numTier : ''}}">{{completion}}</text>
-      <text class="center-pct">%</text>
+    <!-- 顶部进度点 (5 星座 × 进度数字) -->
+    <view class="feed-progress">
+      <view wx:for="{{sections}}" wx:key="id" wx:for-item="sec" wx:for-index="idx" class="feed-dot {{currentSection === idx ? 'active' : ''}} {{idx < currentSection ? 'done' : ''}}" data-section-idx="{{idx}}"></view>
+      <text class="feed-progress-num">{{currentFieldIndex}} / {{wizardTotal}}</text>
     </view>
-    <text class="center-label">{{completion >= 100 ? '点我生成' : '完成度'}}</text>
+
+    <!-- 5 星座 section (竖排, 每屏 1 个) -->
+    <view wx:for="{{sections}}" wx:key="id" wx:for-item="section" wx:for-index="idx" class="feed-section feed-section--{{section.id}}" data-section-id="{{section.id}}">
+      <!-- AI 头像 -->
+      <view class="feed-ai-avatar">✨</view>
+      <!-- 星座名大字 -->
+      <text class="feed-section-name">{{section.name}}</text>
+      <!-- 字段卡片 (横滑) -->
+      <scroll-view class="feed-fields" scroll-x="true">
+        <view wx:for="{{section.fields}}" wx:key="id" wx:for-item="field" wx:for-index="fIdx" class="feed-field-card {{_isFieldFilled(field.id) ? 'filled' : ''}} {{currentFieldId === field.id ? 'current' : ''}} {{_getFieldIndex(field.id) < currentFieldIndex ? 'done' : ''}}" data-field-id="{{field.id}}" data-section-idx="{{idx}}" bindtap="onFieldCardTap">
+          <text class="feed-field-label">{{field.label}}</text>
+          <text wx:if="{{_isFieldFilled(field.id)}}" class="feed-field-value">{{_getFieldValue(field.id)}}</text>
+          <text wx:elif="{{currentFieldId === field.id}}" class="feed-field-prompt">?</text>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 滑到底部提示 -->
+    <view class="feed-footer">
+      <text class="feed-footer-text">↑ 下滑下一星座</text>
+    </view>
+  </scroll-view>
+
+  <!-- 底部 fixed 大输入框 (R116 T4: 接 AI wizard) -->
+  <view class="feed-input-bar">
+    <input class="feed-input" placeholder="{{currentFieldPrompt || '点击上方字段开始'}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{false}}" bindconfirm="onModalSave" />
+    <view class="feed-send-btn" bindtap="onModalSave">发送</view>
   </view>
 
-  <!-- 5 星座 (R107 T1: 外层加 constellation modifier class, 接 conic-gradient) -->
-  <view wx:for="{{constellations}}" wx:key="id" wx:for-item="con" class="constellation constellation--{{con.id}}">
-    <!-- R108 T1: 嵌套 wrapper, 外层 scale (呼吸), 内层 rotate (R107 T4 spin) -->
-    <view class="constellation-rotate">
-
-      <!-- 星座标签 (中心) -->
-      <view class="const-label" style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; color: {{con.color}};">
-        <text class="const-name">{{con.name}}</text>
-      </view>
-
-      <!-- 星座晕圈 (中心) -->
-      <view class="const-halo" style="left: {{con.cx - 50}}px; top: {{con.cy - 50}}px; border-color: {{con.color}}; box-shadow: 0 0 60rpx {{con.color}}88, 0 0 120rpx {{con.color}}44;"></view>
-
-      <!-- 粒子 (字段) -->
-      <view wx:for="{{con.particles}}" wx:key="id" wx:for-item="particle" class="particle {{particle.filled ? 'filled' : ''}}" style="left: {{particle.x - 30}}px; top: {{particle.y - 30}}px; --pc: {{con.color}}; --pcrgb: {{con.colorRgb}}; transform: translate({{particle.dx || 0}}px, {{particle.dy || 0}}px);" data-field="{{particle.id}}" data-const-id="{{con.id}}" bindtap="onParticleTap">
-        <view class="particle-glow"></view>
-        <view class="particle-core"></view>
-        <text class="particle-label">{{particle.label}}</text>
-      </view>
-    </view>
-  </view>
-
-  <!-- 浮动预览卡 (右下) -->
-  <view class="floating-preview" wx:if="{{completion > 0}}">
-    <view class="fp-header">
-      <text class="fp-title">简历预览</text>
-      <text class="fp-completion">{{completion}}%</text>
-    </view>
-    <text class="fp-name" wx:if="{{form.name}}">{{form.name}}</text>
-    <text class="fp-meta" wx:if="{{form.gender || form.degree}}">
-      {{form.gender === 'male' ? '男' : form.gender === 'female' ? '女' : ''}}{{form.degree ? ' · ' + form.degree : ''}}
-    </text>
-    <text class="fp-line" wx:if="{{form.expected.position}}">🎯 {{form.expected.position}} · {{form.expected.city}}</text>
-    <text class="fp-line" wx:if="{{form.educations[0].school}}">🎓 {{form.educations[0].school}}</text>
-    <text class="fp-line" wx:if="{{form.experiences[0].company}}">💼 {{form.experiences[0].company}}</text>
-    <text class="fp-line" wx:if="{{skillsCount > 0}}">✨ {{form.skills.slice(0, 4).join(' · ')}}</text>
-  </view>
-
-  <!-- 顶部 header -->
-  <view class="space-header">
-    <view class="sh-left">
-      <text class="sh-icon">🌌</text>
-      <view>
-        <text class="sh-title">星空简历</text>
-        <text class="sh-sub">点击星点填写 · {{completion}}%</text>
-      </view>
-    </view>
-    <view class="sh-close" bindtap="goBack">✕</view>
-  </view>
-
-  <!-- 弹窗: 填字段 (R99 加 AI 提示气泡) -->
+  <!-- R99+R114 弹窗 (wizard 模式用, 保留兼容) -->
   <view class="modal-mask" wx:if="{{modalVisible}}" bindtap="onModalCancel">
     <view class="modal-card" catchtap="">
-      <!-- R115: Wizard 模式 (wizardMode=true) -->
       <block wx:if="{{wizardMode}}">
-        <!-- 进度条 -->
         <view class="wizard-progress">
           <text class="wizard-progress-text">{{wizardProgress}} / {{wizardTotal}}</text>
           <view class="wizard-progress-bar">
             <view class="wizard-progress-fill" style="width: {{(wizardProgress / wizardTotal) * 100}}%;"></view>
           </view>
         </view>
-
-        <!-- AI 提问气泡 -->
         <view class="wizard-question">
           <text class="wizard-question-label">✨ 简历助手</text>
           <text class="wizard-question-text">{{wizardNextQuestion || '...'}}</text>
           <text wx:if="{{wizardHint}}" class="wizard-hint">{{wizardHint}}</text>
         </view>
-
-        <!-- input -->
         <block wx:if="{{!modalOptions}}">
           <input class="modal-input" placeholder="{{modalPlaceholder}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{true}}" bindconfirm="onModalSave" />
         </block>
-
-        <!-- chips / picker (复用 R99) -->
         <block wx:if="{{modalOptions && modalOptions[0].label}}">
           <view class="modal-chips">
             <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}" wx:for="{{modalOptions}}" wx:key="value" data-value="{{item.value}}" bindtap="onModalChip">{{item.label}}</view>
           </view>
         </block>
-        <block wx:if="{{modalOptions && !modalOptions[0].label}}">
-          <picker mode="selector" range="{{modalOptions}}" bindchange="onModalPicker">
-            <view class="modal-picker">点击选择 ▾</view>
-          </picker>
-        </block>
-
-        <!-- 下一问按钮 -->
         <view class="wizard-next-btn" bindtap="onModalSave">下一问 →</view>
-
-        <!-- 取消按钮 -->
         <view class="wizard-cancel-btn" bindtap="onModalCancel">取消</view>
       </block>
-
-      <!-- R114 旧模式 (wizardMode=false) - 保留 R99+R114 AI 多轮对话 -->
       <block wx:else>
-        <!-- R114 T2: AI 多轮对话历史 (scroll-view) -->
         <scroll-view class="ai-chat-history" scroll-y="true" scroll-top="{{aiScrollTop}}" wx:if="{{aiHistory.length > 0}}">
           <view wx:for="{{aiHistory}}" wx:key="id" wx:for-item="msg" class="ai-msg ai-msg--{{msg.role}}">
             <view wx:if="{{msg.role === 'assistant'}}" class="ai-msg-avatar" style="background: {{modalConstColor}};">✨</view>
             <view class="ai-msg-text">{{msg.content}}</view>
           </view>
         </scroll-view>
-
-        <!-- R114 T2: AI 追问气泡 -->
         <view class="ai-followup" wx:if="{{aiFollowup}}" style="border-left-color: {{modalConstColor}};">
           <text class="ai-followup-text">{{aiFollowup}}</text>
         </view>
-
-        <!-- R114 T2 fix (Important #1): AI 错误提示 + 重试 -->
-        <view class="ai-error" wx:if="{{aiError}}">
-          <text class="ai-error-text">⚠️ {{aiError}}</text>
-          <view class="ai-error-retry" bindtap="onAIErrorRetry">重试</view>
-        </view>
-
-        <!-- R114 T2: AI 建议 chip -->
         <view class="ai-suggestion-chip" wx:if="{{aiSuggestion}}" bindtap="onAISuggestionTap">
           <text class="ai-suggestion-icon">💡</text>
           <text class="ai-suggestion-text">{{aiSuggestion}}</text>
         </view>
-
-        <!-- AI 提示气泡 (R99 新增; R114 T2 Nit #2: 仅历史为空时显示, 避免与 aiHistory 首条重复) -->
-        <view class="modal-ai-bubble" wx:if="{{modalFieldAi && aiHistory.length === 0}}" style="border-left-color: {{modalConstColor}};">
-          <view class="modal-ai-avatar" style="background: {{modalConstColor}};">✨</view>
-          <view class="modal-ai-content">
-            <text class="modal-ai-name">简历助手</text>
-            <text class="modal-ai-text">{{modalFieldAi}}</text>
-          </view>
+        <view class="ai-error" wx:if="{{aiError}}">
+          <text class="ai-error-text">⚠️ {{aiError}}</text>
+          <view class="ai-error-retry" bindtap="onAIErrorRetry">重试</view>
         </view>
-
         <text class="modal-label">{{modalFieldLabel}}</text>
-
-        <!-- text input -->
         <block wx:if="{{!modalOptions}}">
           <input class="modal-input" placeholder="{{modalPlaceholder}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{true}}" bindconfirm="onModalSave" />
         </block>
-
-        <!-- chips -->
-        <block wx:if="{{modalOptions && modalOptions[0].label}}">
-          <view class="modal-chips">
-            <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}" wx:for="{{modalOptions}}" wx:key="value" data-value="{{item.value}}" bindtap="onModalChip">{{item.label}}</view>
-          </view>
-        </block>
-
-        <!-- picker -->
-        <block wx:if="{{modalOptions && !modalOptions[0].label}}">
-          <picker mode="selector" range="{{modalOptions}}" bindchange="onModalPicker">
-            <view class="modal-picker">点击选择 ▾</view>
-          </picker>
-        </block>
-
         <view class="modal-actions">
           <view class="modal-cancel" bindtap="onModalCancel">取消</view>
           <view class="modal-save" bindtap="onModalSave">保存 ✨</view>
