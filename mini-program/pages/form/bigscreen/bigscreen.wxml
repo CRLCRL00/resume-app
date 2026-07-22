@@ -59,10 +59,10 @@
 
     <!-- 5 星座 section (竖排, 每屏 1 个) -->
     <view wx:for="{{sections}}" wx:key="id" wx:for-item="section" wx:for-index="idx" class="feed-section feed-section--{{section.id}}" data-section-id="{{section.id}}">
-      <!-- AI 头像 -->
-      <view class="feed-ai-avatar {{completion >= 100 ? 'celebrate' : ''}}">✨</view>
-      <!-- 星座名大字 -->
+      <!-- R120: 星座名大字 (主视觉, AI 头像降为配角) -->
       <text class="feed-section-name">{{section.name}}</text>
+      <!-- R120: AI 头像挪到右上角 (60x60 半透明, 不抢主视觉) -->
+      <view class="feed-ai-avatar {{completion >= 100 ? 'celebrate' : ''}}">✨</view>
       <!-- 字段卡片 (横滑) -->
       <scroll-view class="feed-fields" scroll-x="true">
         <view wx:for="{{section.fields}}" wx:key="id" wx:for-item="field" wx:for-index="fIdx" class="feed-field-card {{field.fieldState.filled ? 'filled' : ''}} {{field.fieldState.current ? 'current' : ''}} {{field.fieldState.done ? 'done' : ''}}" data-field-id="{{field.id}}" data-section-idx="{{idx}}" bindtap="onFieldCardTap">
