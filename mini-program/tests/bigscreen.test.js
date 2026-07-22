@@ -193,14 +193,15 @@ test('R99: modal state includes ai + label + placeholder', () => {
   assert.ok(src.includes('modalConstColor'), 'js missing modalConstColor state');
 });
 
-test('R99 → R116: wxml no longer has modal-ai-bubble (wizard 模式替代 R99 AI 提示气泡)', () => {
-  // R116 翻转: R99 modal-ai-bubble / modal-ai-avatar / modal-ai-text 已删 (wizard 模式承担主交互)
+test('R99 → R116: wxml 仍含 modal-ai-bubble (assist 模式静态提示, aiHistory 空时显示)', () => {
+  // R116 fix: 恢复 R99 modal-ai-bubble (R116 T1 implementer 未授权删了)
+  // 条件 wx:if="{{modalFieldAi && aiHistory.length === 0}}" 避免与 ai-chat-history 重复
   const fs = require('node:fs');
   const src = fs.readFileSync('./pages/form/bigscreen/bigscreen.wxml', 'utf8');
-  assert.ok(!src.includes('modal-ai-bubble'),
-    'R99 → R116: 不应再有 modal-ai-bubble (wizard 替代)');
-  assert.ok(!src.includes('modal-ai-text'),
-    'R99 → R116: 不应再有 modal-ai-text');
+  assert.ok(src.includes('modal-ai-bubble'),
+    'R99 → R116: 恢复 modal-ai-bubble (assist 模式)');
+  assert.ok(src.includes('modal-ai-text'),
+    'R99 → R116: 恢复 modal-ai-text 子元素');
 });
 
 test('R99 → R116: wxss no longer has modal-ai-bubble (R116 弹窗改为 wizard 主交互)', () => {
@@ -746,6 +747,21 @@ test('R116: js data 加 currentSection + sections + _wizardStart 触发; 删 R98
     'R116: R98 genBackgroundStars 函数已删 (抖音风不需要)');
   assert.ok(!/constellations\s*:\s*layoutParticles/.test(src),
     'R116: _initLayout 不应再 setData constellations: layoutParticles (改 sections 派生)');
+});
+
+// ─── R116 恢复 R99 modal-ai-bubble (assist 模式) ─────────────
+test('R116 恢复: wxml modal 仍有 modal-ai-bubble (R99 元素, assist 模式 aiHistory 空时显示)', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(src.includes('modal-ai-bubble'),
+    'R116 恢复: R99 modal-ai-bubble 元素必须保留 (assist 模式静态提示)');
+  assert.ok(src.includes('modal-ai-avatar') && src.includes('modal-ai-name'),
+    'R116 恢复: R99 modal-ai-bubble 子元素必须保留 (avatar + name + text)');
+  // R99 条件: aiHistory.length === 0 时显示, 避免与 ai-chat-history 重复
+  assert.ok(/modal-ai-bubble[^>]*aiHistory\.length\s*===\s*0/.test(src) ||
+            /aiHistory\.length\s*===\s*0[^}]*modal-ai-bubble/.test(src),
+    'R116 恢复: R99 modal-ai-bubble 必有 aiHistory.length===0 条件避免重复');
 });
 
 // ─── R116 fix: WXML 不再有 inline function (R106b 教训) ─────────────
