@@ -165,6 +165,10 @@ PageImpl({
     wizardAnswered: [],             // [{fieldId, value}, ...]
     wizardIsComplete: false,        // AI 判当前字段是否完成
     wizardIsLoading: false,         // AI 调用 in-flight
+    // R117: Tinder 划卡 — AI 推荐答案
+    recommendations: [],             // [{value, reason}, ...] AI 给的 3 个推荐
+    currentRecommendationIdx: 0,    // 当前显示的推荐 index
+    currentRecommendation: null,     // 预计算的当前推荐对象 (避免 wxml inline array index, R106b 教训)
   },
 
   onLoad() {
@@ -537,12 +541,18 @@ PageImpl({
     }).then((res) => {
       if (mySeq !== this._aiRequestSeq) return;
       if (res && res.code === 0 && res.data) {
-        this.setData({
-          wizardNextQuestion: res.data.nextQuestion || '',
-          wizardHint: res.data.hint || '',
-          wizardIsComplete: !!res.data.isComplete,
-          wizardIsLoading: false,
-        });
+        this.setData(Object.assign(
+          this._buildTinderState({
+            recommendations: res.data.recommendations || [],
+            currentRecommendationIdx: 0,
+          }),
+          {
+            wizardNextQuestion: res.data.nextQuestion || '',
+            wizardHint: res.data.hint || '',
+            wizardIsComplete: !!res.data.isComplete,
+            wizardIsLoading: false,
+          }
+        ));
       } else {
         this.setData({ wizardIsLoading: false });
       }
@@ -629,12 +639,18 @@ PageImpl({
     }).then((res) => {
       if (mySeq !== this._aiRequestSeq) return;
       if (res && res.code === 0 && res.data) {
-        this.setData({
-          wizardNextQuestion: res.data.nextQuestion || '',
-          wizardHint: res.data.hint || '',
-          wizardIsComplete: !!res.data.isComplete,
-          wizardIsLoading: false,
-        });
+        this.setData(Object.assign(
+          this._buildTinderState({
+            recommendations: res.data.recommendations || [],
+            currentRecommendationIdx: 0,
+          }),
+          {
+            wizardNextQuestion: res.data.nextQuestion || '',
+            wizardHint: res.data.hint || '',
+            wizardIsComplete: !!res.data.isComplete,
+            wizardIsLoading: false,
+          }
+        ));
       } else {
         this.setData({ wizardIsLoading: false });
       }
@@ -680,6 +696,71 @@ PageImpl({
       this._aiSuggest(newVal);
     });
   },
+
+  /**
+   * R117: Tinder 左滑 — 不用当前推荐, 推进到下一个
+   */
+  onSwipeLeft() {
+    this._advanceRecommendation();
+  },
+
+  /**
+   * R117: Tinder 右滑 — 用当前推荐, 直接写 form + 推进下一字段
+   */
+  onSwipeRight() {
+    const cur = (this.data.recommendations || [])[this.data.currentRecommendationIdx];
+    if (!cur) return;
+    // R115 fix: 用 _writeFormAndSideEffects (不关 modal) + 主动推下一字段
+    // R117: recommendations 清空时 currentRecommendation 也置 null (避免 wxml 引用已清空数组)
+    this.setData({
+      modalValue: cur.value,
+      recommendations: [],
+      currentRecommendationIdx: 0,
+      currentRecommendation: null,
+    }, () => {
+      this._writeFormAndSideEffects(cur.value);
+      this._wizardNext();
+    });
+  },
+
+  /**
+   * R117: Tinder 上滑 — 改当前推荐 (填入 input 让用户编辑)
+   */
+  onSwipeUp() {
+    const cur = (this.data.recommendations || [])[this.data.currentRecommendationIdx];
+    if (!cur) return;
+    // 推荐值填入 input, 让用户编辑后保存
+    this.setData({ modalValue: cur.value });
+  },
+
+  /**
+   * R117: 推进到下一个推荐 (3 个用完则清空, 让用户自己输入)
+   */
+  _advanceRecommendation() {
+    const nextIdx = this.data.currentRecommendationIdx + 1;
+    if (nextIdx >= (this.data.recommendations || []).length) {
+      // 推荐用完, 清空让用户自己输入
+      this.setData(this._buildTinderState());
+      return;
+    }
+    this.setData(this._buildTinderState({ currentRecommendationIdx: nextIdx }));
+  },
+
+  /**
+   * R117: 构造 Tinder 状态对象 (含 currentRecommendation, 避免 wxml inline array index)
+   * 调用方: 任何 setData 改 recommendations / currentRecommendationIdx 都应同时算 currentRecommendation
+   */
+  _buildTinderState(overrides = {}) {
+    const recs = overrides.recommendations !== undefined ? overrides.recommendations : (this.data.recommendations || []);
+    const idx = overrides.currentRecommendationIdx !== undefined ? overrides.currentRecommendationIdx : (this.data.currentRecommendationIdx || 0);
+    return {
+      recommendations: recs,
+      currentRecommendationIdx: idx,
+      currentRecommendation: recs[idx] || null,
+      ...overrides,
+    };
+  },
+
 
   onModalChip(e) {
     const value = e.currentTarget.dataset.value;

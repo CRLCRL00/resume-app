@@ -621,14 +621,16 @@ test('R114 T3: wxml 移除流星节点 + starfieldCelebrate class', () => {
 });
 
 // ─── R115: Wizard 模式改造 ─────────────
-test('R115: wxml modal has wizard-progress + wizard-question + wizard-hint + wizard-next-btn', () => {
+test('R117: wxml modal Tinder UI 含 tinder-card + tinder-actions + tinder-input + tinder-question', () => {
   const fs = require('node:fs');
   const path = require('node:path');
   const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
-  assert.ok(src.includes('wizard-progress'), 'R115: wxml 必有 wizard 进度条');
-  assert.ok(src.includes('wizard-question'), 'R115: wxml 必有 wizard AI 提问气泡');
-  assert.ok(src.includes('wizard-hint'), 'R115: wxml 必有 wizard hint 提示');
-  assert.ok(src.includes('wizard-next-btn'), 'R115: wxml 必有 wizard 下一问按钮');
+  assert.ok(src.includes('wizard-progress'), 'R117: wxml modal 仍有 wizard 进度条');
+  assert.ok(src.includes('tinder-card'), 'R117: wxml 必有 tinder-card 卡片');
+  assert.ok(src.includes('tinder-actions'), 'R117: wxml 必有 tinder-actions 三按钮');
+  assert.ok(src.includes('tinder-input'), 'R117: wxml 必有 tinder-input 自己输入');
+  assert.ok(src.includes('tinder-question'), 'R117: wxml 必有 tinder-question AI 提问');
+  assert.ok(src.includes('tinder-next-btn'), 'R117: wxml 必有 tinder-next-btn');
 });
 
 test('R115: js has wizard state fields + _wizardNext function', () => {
@@ -871,5 +873,19 @@ test('R116 fix: js 有 _buildFieldStates helper + sections 派生 fieldState', (
     'R116 fix: js 必有 _buildFieldStates helper (预计算 fieldState)');
   assert.ok(src.includes('fieldState'),
     'R116 fix: js 必有 fieldState 字段 (预计算结果)');
+});
+
+// ─── R117: Tinder 划卡 js handlers ─────────────
+test('R117: js 有 onSwipeLeft / onSwipeRight / onSwipeUp handler + _buildTinderState helper', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(src.includes('onSwipeLeft'), 'R117: js 必有 onSwipeLeft (不用)');
+  assert.ok(src.includes('onSwipeRight'), 'R117: js 必有 onSwipeRight (用)');
+  assert.ok(src.includes('onSwipeUp'), 'R117: js 必有 onSwipeUp (改)');
+  assert.ok(src.includes('_buildTinderState'),
+    'R117: js 必有 _buildTinderState (算 currentRecommendation 避免 wxml inline array index)');
+  assert.ok(src.includes('currentRecommendation'),
+    'R117: js 必有 currentRecommendation data 字段 (预计算)');
 });
 

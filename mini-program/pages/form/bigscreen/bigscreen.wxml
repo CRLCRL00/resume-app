@@ -53,20 +53,45 @@
             <view class="wizard-progress-fill" style="width: {{(wizardProgress / wizardTotal) * 100}}%;"></view>
           </view>
         </view>
-        <view class="wizard-question">
-          <text class="wizard-question-label">✨ 简历助手</text>
-          <text class="wizard-question-text">{{wizardNextQuestion || '...'}}</text>
-          <text wx:if="{{wizardHint}}" class="wizard-hint">{{wizardHint}}</text>
+
+        <!-- R117: Tinder 卡片 (大字推荐) -->
+        <view class="tinder-card" wx:if="{{recommendations.length > 0 && currentRecommendation}}">
+          <text class="tinder-card-counter">{{currentRecommendationIdx + 1}} / {{recommendations.length}}</text>
+          <text class="tinder-card-reason">{{currentRecommendation.reason}}</text>
+          <text class="tinder-card-value">{{currentRecommendation.value}}</text>
         </view>
-        <block wx:if="{{!modalOptions}}">
-          <input class="modal-input" placeholder="{{modalPlaceholder}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{true}}" bindconfirm="onModalSave" />
-        </block>
+
+        <!-- R117: AI 提问 + hint -->
+        <view class="tinder-question">
+          <text class="tinder-question-text">{{wizardNextQuestion || '...'}}</text>
+          <text wx:if="{{wizardHint}}" class="tinder-hint">{{wizardHint}}</text>
+        </view>
+
+        <!-- R117: 三按钮 (Tinder) -->
+        <view class="tinder-actions" wx:if="{{recommendations.length > 0}}">
+          <view class="tinder-btn tinder-btn--left" bindtap="onSwipeLeft">← 不用</view>
+          <view class="tinder-btn tinder-btn--right" bindtap="onSwipeRight">用 →</view>
+          <view class="tinder-btn tinder-btn--up" bindtap="onSwipeUp">改 ↗</view>
+        </view>
+
+        <!-- R117: 或自己输入 (始终可用) -->
+        <view class="tinder-input">
+          <input class="modal-input" placeholder="或自己输入..." value="{{modalValue}}" bindinput="onModalInput" focus="{{false}}" bindconfirm="onModalSave" />
+        </view>
+
+        <!-- chips / picker (复用 R99 wizard 选项) -->
         <block wx:if="{{modalOptions && modalOptions[0].label}}">
           <view class="modal-chips">
             <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}" wx:for="{{modalOptions}}" wx:key="value" data-value="{{item.value}}" bindtap="onModalChip">{{item.label}}</view>
           </view>
         </block>
-        <view class="wizard-next-btn" bindtap="onModalSave">下一问 →</view>
+        <block wx:if="{{modalOptions && !modalOptions[0].label}}">
+          <picker mode="selector" range="{{modalOptions}}" bindchange="onModalPicker">
+            <view class="modal-picker">点击选择 ▾</view>
+          </picker>
+        </block>
+
+        <view class="tinder-next-btn" bindtap="onModalSave">下一问 →</view>
         <view class="wizard-cancel-btn" bindtap="onModalCancel">取消</view>
       </block>
       <block wx:else>
