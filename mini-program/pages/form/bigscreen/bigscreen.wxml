@@ -74,65 +74,109 @@
   <!-- 弹窗: 填字段 (R99 加 AI 提示气泡) -->
   <view class="modal-mask" wx:if="{{modalVisible}}" bindtap="onModalCancel">
     <view class="modal-card" catchtap="">
-      <!-- R114 T2: AI 多轮对话历史 (scroll-view) -->
-      <scroll-view class="ai-chat-history" scroll-y="true" scroll-top="{{aiScrollTop}}" wx:if="{{aiHistory.length > 0}}">
-        <view wx:for="{{aiHistory}}" wx:key="id" wx:for-item="msg" class="ai-msg ai-msg--{{msg.role}}">
-          <view wx:if="{{msg.role === 'assistant'}}" class="ai-msg-avatar" style="background: {{modalConstColor}};">✨</view>
-          <view class="ai-msg-text">{{msg.content}}</view>
+      <!-- R115: Wizard 模式 (wizardMode=true) -->
+      <block wx:if="{{wizardMode}}">
+        <!-- 进度条 -->
+        <view class="wizard-progress">
+          <text class="wizard-progress-text">{{wizardProgress}} / {{wizardTotal}}</text>
+          <view class="wizard-progress-bar">
+            <view class="wizard-progress-fill" style="width: {{(wizardProgress / wizardTotal) * 100}}%;"></view>
+          </view>
         </view>
-      </scroll-view>
 
-      <!-- R114 T2: AI 追问气泡 -->
-      <view class="ai-followup" wx:if="{{aiFollowup}}" style="border-left-color: {{modalConstColor}};">
-        <text class="ai-followup-text">{{aiFollowup}}</text>
-      </view>
-
-      <!-- R114 T2 fix (Important #1): AI 错误提示 + 重试 -->
-      <view class="ai-error" wx:if="{{aiError}}">
-        <text class="ai-error-text">⚠️ {{aiError}}</text>
-        <view class="ai-error-retry" bindtap="onAIErrorRetry">重试</view>
-      </view>
-
-      <!-- R114 T2: AI 建议 chip -->
-      <view class="ai-suggestion-chip" wx:if="{{aiSuggestion}}" bindtap="onAISuggestionTap">
-        <text class="ai-suggestion-icon">💡</text>
-        <text class="ai-suggestion-text">{{aiSuggestion}}</text>
-      </view>
-
-      <!-- AI 提示气泡 (R99 新增; R114 T2 Nit #2: 仅历史为空时显示, 避免与 aiHistory 首条重复) -->
-      <view class="modal-ai-bubble" wx:if="{{modalFieldAi && aiHistory.length === 0}}" style="border-left-color: {{modalConstColor}};">
-        <view class="modal-ai-avatar" style="background: {{modalConstColor}};">✨</view>
-        <view class="modal-ai-content">
-          <text class="modal-ai-name">简历助手</text>
-          <text class="modal-ai-text">{{modalFieldAi}}</text>
+        <!-- AI 提问气泡 -->
+        <view class="wizard-question">
+          <text class="wizard-question-label">✨ 简历助手</text>
+          <text class="wizard-question-text">{{wizardNextQuestion || '...'}}</text>
+          <text wx:if="{{wizardHint}}" class="wizard-hint">{{wizardHint}}</text>
         </view>
-      </view>
 
-      <text class="modal-label">{{modalFieldLabel}}</text>
+        <!-- input -->
+        <block wx:if="{{!modalOptions}}">
+          <input class="modal-input" placeholder="{{modalPlaceholder}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{true}}" bindconfirm="onModalSave" />
+        </block>
 
-      <!-- text input -->
-      <block wx:if="{{!modalOptions}}">
-        <input class="modal-input" placeholder="{{modalPlaceholder}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{true}}" bindconfirm="onModalSave" />
+        <!-- chips / picker (复用 R99) -->
+        <block wx:if="{{modalOptions && modalOptions[0].label}}">
+          <view class="modal-chips">
+            <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}" wx:for="{{modalOptions}}" wx:key="value" data-value="{{item.value}}" bindtap="onModalChip">{{item.label}}</view>
+          </view>
+        </block>
+        <block wx:if="{{modalOptions && !modalOptions[0].label}}">
+          <picker mode="selector" range="{{modalOptions}}" bindchange="onModalPicker">
+            <view class="modal-picker">点击选择 ▾</view>
+          </picker>
+        </block>
+
+        <!-- 下一问按钮 -->
+        <view class="wizard-next-btn" bindtap="onModalSave">下一问 →</view>
+
+        <!-- 取消按钮 -->
+        <view class="wizard-cancel-btn" bindtap="onModalCancel">取消</view>
       </block>
 
-      <!-- chips -->
-      <block wx:if="{{modalOptions && modalOptions[0].label}}">
-        <view class="modal-chips">
-          <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}" wx:for="{{modalOptions}}" wx:key="value" data-value="{{item.value}}" bindtap="onModalChip">{{item.label}}</view>
+      <!-- R114 旧模式 (wizardMode=false) - 保留 R99+R114 AI 多轮对话 -->
+      <block wx:else>
+        <!-- R114 T2: AI 多轮对话历史 (scroll-view) -->
+        <scroll-view class="ai-chat-history" scroll-y="true" scroll-top="{{aiScrollTop}}" wx:if="{{aiHistory.length > 0}}">
+          <view wx:for="{{aiHistory}}" wx:key="id" wx:for-item="msg" class="ai-msg ai-msg--{{msg.role}}">
+            <view wx:if="{{msg.role === 'assistant'}}" class="ai-msg-avatar" style="background: {{modalConstColor}};">✨</view>
+            <view class="ai-msg-text">{{msg.content}}</view>
+          </view>
+        </scroll-view>
+
+        <!-- R114 T2: AI 追问气泡 -->
+        <view class="ai-followup" wx:if="{{aiFollowup}}" style="border-left-color: {{modalConstColor}};">
+          <text class="ai-followup-text">{{aiFollowup}}</text>
+        </view>
+
+        <!-- R114 T2 fix (Important #1): AI 错误提示 + 重试 -->
+        <view class="ai-error" wx:if="{{aiError}}">
+          <text class="ai-error-text">⚠️ {{aiError}}</text>
+          <view class="ai-error-retry" bindtap="onAIErrorRetry">重试</view>
+        </view>
+
+        <!-- R114 T2: AI 建议 chip -->
+        <view class="ai-suggestion-chip" wx:if="{{aiSuggestion}}" bindtap="onAISuggestionTap">
+          <text class="ai-suggestion-icon">💡</text>
+          <text class="ai-suggestion-text">{{aiSuggestion}}</text>
+        </view>
+
+        <!-- AI 提示气泡 (R99 新增; R114 T2 Nit #2: 仅历史为空时显示, 避免与 aiHistory 首条重复) -->
+        <view class="modal-ai-bubble" wx:if="{{modalFieldAi && aiHistory.length === 0}}" style="border-left-color: {{modalConstColor}};">
+          <view class="modal-ai-avatar" style="background: {{modalConstColor}};">✨</view>
+          <view class="modal-ai-content">
+            <text class="modal-ai-name">简历助手</text>
+            <text class="modal-ai-text">{{modalFieldAi}}</text>
+          </view>
+        </view>
+
+        <text class="modal-label">{{modalFieldLabel}}</text>
+
+        <!-- text input -->
+        <block wx:if="{{!modalOptions}}">
+          <input class="modal-input" placeholder="{{modalPlaceholder}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{true}}" bindconfirm="onModalSave" />
+        </block>
+
+        <!-- chips -->
+        <block wx:if="{{modalOptions && modalOptions[0].label}}">
+          <view class="modal-chips">
+            <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}" wx:for="{{modalOptions}}" wx:key="value" data-value="{{item.value}}" bindtap="onModalChip">{{item.label}}</view>
+          </view>
+        </block>
+
+        <!-- picker -->
+        <block wx:if="{{modalOptions && !modalOptions[0].label}}">
+          <picker mode="selector" range="{{modalOptions}}" bindchange="onModalPicker">
+            <view class="modal-picker">点击选择 ▾</view>
+          </picker>
+        </block>
+
+        <view class="modal-actions">
+          <view class="modal-cancel" bindtap="onModalCancel">取消</view>
+          <view class="modal-save" bindtap="onModalSave">保存 ✨</view>
         </view>
       </block>
-
-      <!-- picker -->
-      <block wx:if="{{modalOptions && !modalOptions[0].label}}">
-        <picker mode="selector" range="{{modalOptions}}" bindchange="onModalPicker">
-          <view class="modal-picker">点击选择 ▾</view>
-        </picker>
-      </block>
-
-      <view class="modal-actions">
-        <view class="modal-cancel" bindtap="onModalCancel">取消</view>
-        <view class="modal-save" bindtap="onModalSave">保存 ✨</view>
-      </view>
     </view>
   </view>
 

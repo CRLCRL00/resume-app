@@ -759,3 +759,29 @@ test('R114 T3: wxml 移除流星节点 + starfieldCelebrate class', () => {
   assert.ok(!wxml.includes('starfieldCelebrate'), 'R114 T3: celebrate class 已移除');
 });
 
+// ─── R115: Wizard 模式改造 ─────────────
+test('R115: wxml modal has wizard-progress + wizard-question + wizard-hint + wizard-next-btn', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.wxml'), 'utf8');
+  assert.ok(src.includes('wizard-progress'), 'R115: wxml 必有 wizard 进度条');
+  assert.ok(src.includes('wizard-question'), 'R115: wxml 必有 wizard AI 提问气泡');
+  assert.ok(src.includes('wizard-hint'), 'R115: wxml 必有 wizard hint 提示');
+  assert.ok(src.includes('wizard-next-btn'), 'R115: wxml 必有 wizard 下一问按钮');
+});
+
+test('R115: js has wizard state fields + _wizardNext function', () => {
+  const fs = require('node:fs');
+  const path = require('node:path');
+  const src = fs.readFileSync(path.join(__dirname, '../pages/form/bigscreen/bigscreen.js'), 'utf8');
+  assert.ok(src.includes('wizardMode'),
+    'R115: js 必有 wizardMode data 字段');
+  assert.ok(src.includes('wizardNextQuestion'),
+    'R115: js 必有 wizardNextQuestion data 字段');
+  assert.ok(src.includes('_wizardNext'),
+    'R115: js 必有 _wizardNext() 函数');
+  // R98 步骤顺序保留
+  assert.ok(/CONSTELLATIONS/i.test(src),
+    'R115: CONSTELLATIONS 必须保留 (按步骤顺序遍历)');
+});
+

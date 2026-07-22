@@ -219,6 +219,16 @@ PageImpl({
     starfieldTouching: false,
     // R108 T2: 粒子拖尾 — 手指位置 (x/y=-1 表示未触摸)
     fingerPos: { x: -1, y: -1 },
+    // R115: Wizard 模式状态
+    wizardMode: false,              // 是否在 wizard 模式
+    wizardCurrentField: '',         // 当前正在问的字段 id
+    wizardNextQuestion: '',         // AI 给的提问
+    wizardHint: '',                 // AI 给的提示
+    wizardProgress: 0,              // 已答字段数 (0-14)
+    wizardTotal: 14,                // 总字段数
+    wizardAnswered: [],             // [{fieldId, value}, ...]
+    wizardIsComplete: false,        // AI 判当前字段是否完成
+    wizardIsLoading: false,         // AI 调用 in-flight
   },
 
   onLoad() {
@@ -243,6 +253,16 @@ PageImpl({
     }
     this._aiRequestSeq = (this._aiRequestSeq || 0) + 1;
     try { wx.offWindowResize && wx.offWindowResize(); } catch (_) {}
+    // R115: 清 wizard 状态
+    this.setData({
+      wizardMode: false,
+      wizardCurrentField: '',
+      wizardNextQuestion: '',
+      wizardHint: '',
+      wizardProgress: 0,
+      wizardAnswered: [],
+      wizardIsComplete: false,
+    });
   },
 
   _initLayout(width, height, wide, dpr = 2) {
@@ -363,6 +383,17 @@ PageImpl({
       aiError: '',
       aiRequestSeq: this._aiRequestSeq,
       aiScrollTop: 0,
+      // R115: 进入 wizard 模式 + 重置 wizard 状态
+      wizardMode: true,
+      wizardCurrentField: field,
+      wizardNextQuestion: '',
+      wizardHint: '',
+      wizardProgress: this.data.wizardAnswered ? this.data.wizardAnswered.length : 0,
+      wizardAnswered: this.data.wizardAnswered || [],
+      wizardIsComplete: false,
+      wizardIsLoading: true,
+    }, () => {
+      this._wizardStart();
     });
   },
 
@@ -463,6 +494,133 @@ PageImpl({
   },
 
   /**
+   * R115: Wizard 启动 — 用户点粒子后, 调 /assist-field mode=wizard 拿第 1 问
+   */
+  _wizardStart() {
+    const { modalField, modalFieldLabel } = this.data;
+    if (!modalField) return;
+    this.setData({ wizardIsLoading: true });
+    this._aiRequestSeq++;
+    const mySeq = this._aiRequestSeq;
+    const { request } = require('../../../utils/request');
+    request({
+      url: '/ai/assist-field',
+      method: 'POST',
+      data: {
+        mode: 'wizard',
+        fieldId: modalField,
+        fieldLabel: modalFieldLabel,
+        currentValue: this.data.modalValue || '',
+        answeredFields: this.data.wizardAnswered || [],
+      },
+    }).then((res) => {
+      if (mySeq !== this._aiRequestSeq) return;
+      if (res && res.code === 0 && res.data) {
+        this.setData({
+          wizardNextQuestion: res.data.nextQuestion || '',
+          wizardHint: res.data.hint || '',
+          wizardIsComplete: !!res.data.isComplete,
+          wizardIsLoading: false,
+        });
+      } else {
+        this.setData({ wizardIsLoading: false });
+      }
+    }).catch(() => {
+      if (mySeq !== this._aiRequestSeq) return;
+      this.setData({ wizardIsLoading: false });
+    });
+  },
+
+  /**
+   * R115: Wizard 推进 — 用户答完当前问, 写 form + 拿下一问 (或跳到下一字段)
+   */
+  _wizardNext() {
+    const { modalField, modalFieldLabel, modalValue, wizardAnswered } = this.data;
+    if (!modalValue || !modalValue.trim()) return;
+    if (this.data.aiBusy) return;
+
+    // 1. 写 form (复用 _saveModal)
+    this._saveModal(modalValue.trim());
+
+    // 2. 累加 answeredFields
+    const newAnswered = (wizardAnswered || []).slice();
+    newAnswered.push({ fieldId: modalField, fieldLabel: modalFieldLabel, value: modalValue.trim() });
+
+    // 3. 计算下一字段 (按 R98 步骤顺序)
+    const fieldOrder = CONSTELLATIONS.flatMap((c) => c.fields.map((f) => f.id));
+    const idx = fieldOrder.indexOf(modalField);
+    const nextFieldId = idx >= 0 && idx < fieldOrder.length - 1 ? fieldOrder[idx + 1] : null;
+
+    if (!nextFieldId) {
+      // 全部答完
+      this.setData({
+        wizardProgress: newAnswered.length,
+        wizardAnswered: newAnswered,
+        modalVisible: false,
+        wizardMode: false,
+      });
+      return;
+    }
+
+    // 4. 调 AI 拿下一问
+    const nextLabel = this._getFieldLabelById(nextFieldId);
+    this.setData({
+      wizardCurrentField: nextFieldId,
+      wizardProgress: newAnswered.length,
+      wizardAnswered: newAnswered,
+      modalField: nextFieldId,
+      modalFieldLabel: nextLabel,
+      modalValue: '',
+      modalPlaceholder: `请输入${nextLabel}`,
+      wizardNextQuestion: '',
+      wizardHint: '',
+      wizardIsLoading: true,
+    });
+
+    this._aiRequestSeq++;
+    const mySeq = this._aiRequestSeq;
+    const { request } = require('../../../utils/request');
+    request({
+      url: '/ai/assist-field',
+      method: 'POST',
+      data: {
+        mode: 'wizard',
+        fieldId: nextFieldId,
+        fieldLabel: nextLabel,
+        currentValue: '',
+        answeredFields: newAnswered,
+      },
+    }).then((res) => {
+      if (mySeq !== this._aiRequestSeq) return;
+      if (res && res.code === 0 && res.data) {
+        this.setData({
+          wizardNextQuestion: res.data.nextQuestion || '',
+          wizardHint: res.data.hint || '',
+          wizardIsComplete: !!res.data.isComplete,
+          wizardIsLoading: false,
+        });
+      } else {
+        this.setData({ wizardIsLoading: false });
+      }
+    }).catch(() => {
+      if (mySeq !== this._aiRequestSeq) return;
+      this.setData({ wizardIsLoading: false });
+    });
+  },
+
+  /**
+   * R115: 通过 fieldId 查 label
+   */
+  _getFieldLabelById(fieldId) {
+    for (const c of CONSTELLATIONS) {
+      for (const f of c.fields) {
+        if (f.id === fieldId) return f.label;
+      }
+    }
+    return fieldId;
+  },
+
+  /**
    * R114 T2 fix (Important #1): AI 失败重试 — 清 error 后重触发 _aiSuggest
    */
   onAIErrorRetry() {
@@ -499,8 +657,11 @@ PageImpl({
   },
 
   onModalSave() {
-    const val = (this.data.modalValue || '').trim();
-    this._saveModal(val);
+    if (this.data.wizardMode) {
+      this._wizardNext();
+    } else {
+      this._saveModal((this.data.modalValue || '').trim());
+    }
   },
 
   onModalCancel() {
@@ -528,6 +689,15 @@ PageImpl({
       aiError: '',
       aiRequestSeq: this._aiRequestSeq,
       aiScrollTop: 0,
+      // R115: 重置 wizard 状态
+      wizardMode: false,
+      wizardCurrentField: '',
+      wizardNextQuestion: '',
+      wizardHint: '',
+      wizardProgress: 0,
+      wizardAnswered: [],
+      wizardIsComplete: false,
+      wizardIsLoading: false,
     });
   },
 
