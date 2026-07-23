@@ -520,14 +520,9 @@ PageImpl({
     return null;
   },
 
-  /**
-   * R116: 保留函数兼容 — wxml 不再 bindtap 粒子 (改为 onFieldCardTap)
-   */
-  onParticleTap(e) {
-    // R116: 大屏无粒子, 改为空函数 (wxml 不再触发)
-  },
+  // R121: 删 onParticleTap no-op (R116 已删粒子 + R118 改为 onFieldCardTap, 此函数 dead code 引起混淆)
 
-  // R114 T2 fix (Nit #1): 单调递增 msg id — 避免 Date.now 同毫秒重复
+// R114 T2 fix (Nit #1): 单调递增 msg id — 避免 Date.now 同毫秒重复
   _nextAiMsgId(prefix) {
     this._aiMsgCounter = (this._aiMsgCounter || 0) + 1;
     return prefix + '-' + this._aiMsgCounter;

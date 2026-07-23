@@ -79,9 +79,9 @@
     </view>
   </scroll-view>
 
-  <!-- 底部 fixed 大输入框 (R116 T4: 接 AI wizard) -->
+  <!-- 底部 fixed 大输入框 (R121 修: 条件 focus, modal 打开且无值时自动聚焦, 让用户打名字) -->
   <view class="feed-input-bar">
-    <input class="feed-input" placeholder="{{currentFieldPrompt || '点击上方字段开始'}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{false}}" bindconfirm="onModalSave" />
+    <input class="feed-input" placeholder="{{currentFieldPrompt || '点击上方字段开始'}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{modalVisible && !modalValue && !recommendations.length}}" bindconfirm="onModalSave" />
     <view class="feed-send-btn" bindtap="onModalSave">发送</view>
   </view>
 
@@ -116,9 +116,9 @@
           <view class="tinder-btn tinder-btn--up" bindtap="onSwipeUp">改 ↗</view>
         </view>
 
-        <!-- R117: 或自己输入 (始终可用) -->
+        <!-- R117: 或自己输入 (始终可用) (R121 修: 条件 focus) -->
         <view class="tinder-input">
-          <input class="modal-input" placeholder="或自己输入..." value="{{modalValue}}" bindinput="onModalInput" focus="{{false}}" bindconfirm="onModalSave" />
+          <input class="modal-input" placeholder="或自己输入..." value="{{modalValue}}" bindinput="onModalInput" focus="{{modalVisible && wizardMode && !modalValue && !currentRecommendation}}" bindconfirm="onModalSave" />
         </view>
 
         <!-- chips / picker (复用 R99 wizard 选项) -->

@@ -74,7 +74,7 @@ const assistFieldSchema = Joi.object({
   recommendations: Joi.array().items(Joi.object({
     value: Joi.string().max(200).required(),
     reason: Joi.string().max(100).required(),
-  })).max(3).default([]),
+  })).min(3).max(3).default([]),  // R121: 强制 AI 返 3 个, 避免空推荐
 }).label('AssistFieldRequest');
 
 /**
