@@ -53,6 +53,7 @@
   flex-direction: column;
   align-items: center;
   gap: 32rpx;
+  position: relative;
 }
 .feed-ai-avatar {
   width: 60rpx;
