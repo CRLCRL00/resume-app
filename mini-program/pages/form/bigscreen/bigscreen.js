@@ -293,12 +293,31 @@ PageImpl({
    * 删 R98 粒子布局 (R98 星点生成 + 连线 + 粒子刷新函数 全部变 no-op)
    */
   _initLayout(width, height, wide, dpr = 2) {
+    // R120 critical fix: 初始化时同时打开 modal, 不然 _wizardStart if(!modalField)return 早返回, 用户打不进去字
+    const firstFieldId = FIELD_ORDER[0];
+    const firstFieldLabel = this._getFieldLabelById(firstFieldId);
     this.setData({
       wide,
       currentSection: 0,
       currentFieldIndex: 0,
-      currentFieldId: FIELD_ORDER[0],
+      currentFieldId: firstFieldId,
       currentFieldPrompt: '点击下方输入开始填简历',
+      // R120 critical: 触发 modal 弹出 + wizard 模式
+      modalField: firstFieldId,
+      modalFieldLabel: firstFieldLabel,
+      modalVisible: true,
+      modalFieldAi: this._getFieldAiById(firstFieldId),
+      modalValue: this._getFieldValue(firstFieldId) || '',
+      modalPlaceholder: `请输入${firstFieldLabel}`,
+      modalOptions: this._getFieldOptionsById(firstFieldId),
+      wizardMode: true,
+      wizardCurrentField: firstFieldId,
+      wizardNextQuestion: '',
+      wizardHint: '',
+      wizardProgress: 0,
+      wizardAnswered: [],
+      wizardIsComplete: false,
+      wizardIsLoading: true,
     }, () => {
       this.setData({ sections: this._buildFieldStates() });
       // R118 T1: 初始化简历预览 (空 form)
