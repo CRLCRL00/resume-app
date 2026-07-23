@@ -79,9 +79,9 @@
     </view>
   </scroll-view>
 
-  <!-- 底部 fixed 大输入框 (R121 修: 条件 focus, modal 打开且无值时自动聚焦, 让用户打名字) -->
-  <view class="feed-input-bar">
-    <input class="feed-input" placeholder="{{currentFieldPrompt || '点击上方字段开始'}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{modalVisible && !modalValue && !recommendations.length}}" bindconfirm="onModalSave" />
+  <!-- 底部 fixed 大输入框 (R122 修: modal 打开时不抢焦点, 让 modal 内 tinder input 独家弹键盘) -->
+  <view class="feed-input-bar" wx:if="{{!modalVisible}}">
+    <input class="feed-input" placeholder="{{currentFieldPrompt || '点击上方字段开始'}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{!modalValue && !recommendations.length}}" bindconfirm="onModalSave" />
     <view class="feed-send-btn" bindtap="onModalSave">发送</view>
   </view>
 
