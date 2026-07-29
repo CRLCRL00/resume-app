@@ -1,5 +1,6 @@
 const { build } = require('./resumePrompt');
 const llm = require('./llm');
+const { parseLlmJson } = require('../utils/parseLlmJson');
 
 /**
  * R-JobSearch-Insight-1: 简历生成后,加 STAR 故事点
@@ -46,33 +47,13 @@ async function generate(sourceForm) {
     { maxTokens: 2500, temperature: 0.7 } // 增大 tokens,因为输出更长了
   );
 
-  const content = result.content.trim();
-
-  // 尝试解析 JSON (LLM 输出可能包 ```json ... ``` 或多余字符)
-  try {
-    let jsonStr = content;
-    const m = content.match(/```(?:json)?\s*([\s\S]+?)\s*```/);
-    if (m) jsonStr = m[1];
-    // 找第一个 { 到最后一个 }
-    const start = jsonStr.indexOf('{');
-    const end = jsonStr.lastIndexOf('}');
-    if (start >= 0 && end > start) {
-      jsonStr = jsonStr.slice(start, end + 1);
-    }
-    const parsed = JSON.parse(jsonStr);
-    return {
-      resume: parsed.resume || content,
-      storyPoints: Array.isArray(parsed.storyPoints) ? parsed.storyPoints : [],
-      mode: 'structured',
-    };
-  } catch (e) {
-    // Fallback: LLM 没返 JSON,直接当纯文本简历
-    return {
-      resume: content,
-      storyPoints: [],
-      mode: 'plaintext',
-    };
-  }
+  // R-JobSearch 重构: 用独立 parseLlmJson 工具 (从 resumeGenerator 抽出)
+  const { data, mode } = parseLlmJson(result.content);
+  return {
+    resume: data.resume || result.content.trim(),
+    storyPoints: data.storyPoints || [],
+    mode,
+  };
 }
 
 module.exports = { generate };
