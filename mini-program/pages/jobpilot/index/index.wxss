@@ -1,4 +1,4 @@
-/* R-JobSearch 重构: AI 实习求职助手样式 */
+/* R-JobSearch 重构 v2: AI 实习求职助手样式 (优化版) */
 
 .jobpilot-page {
   min-height: 100vh;
@@ -25,11 +25,25 @@
   font-size: 22rpx;
   border-bottom: 4rpx solid transparent;
   transition: all 0.2s;
+  position: relative;
 }
 
 .tab.active {
   color: #6366f1;
   border-bottom-color: #6366f1;
+}
+
+.tab.completed {
+  background: #f0f9f4;
+}
+
+.tab-check {
+  position: absolute;
+  top: 6rpx;
+  right: 16rpx;
+  font-size: 22rpx;
+  color: #1f7a1f;
+  font-weight: bold;
 }
 
 .tab-icon {
@@ -41,12 +55,35 @@
   font-size: 22rpx;
 }
 
+/* 进度条 */
+.progress-bar {
+  position: relative;
+  height: 8rpx;
+  background: #e5e5e7;
+  margin: 0;
+}
+
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #6366f1, #1f7a1f);
+  transition: width 0.3s;
+}
+
+.progress-text {
+  display: block;
+  text-align: center;
+  font-size: 22rpx;
+  color: #8e8e93;
+  padding: 12rpx;
+  background: #fafafa;
+}
+
 .step-content {
   padding: 40rpx 32rpx;
 }
 
 .step-title {
-  font-size: 40rpx;
+  font-size: 36rpx;
   font-weight: 600;
   color: #1c1c1e;
   margin-bottom: 12rpx;
@@ -88,6 +125,23 @@
   color: #1c1c1e;
 }
 
+.resume-id-display {
+  background: #f9f9fb;
+  padding: 16rpx 20rpx;
+  border-radius: 12rpx;
+  font-size: 24rpx;
+  color: #3a3a3c;
+  margin-bottom: 16rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 8rpx;
+}
+
+.hint {
+  font-size: 22rpx;
+  color: #ff9500;
+}
+
 .btn-primary {
   width: 100%;
   background: #6366f1;
@@ -101,6 +155,7 @@
 
 .btn-primary[disabled] {
   background: #c7c7cc;
+  color: #f5f5f7;
 }
 
 .btn-secondary {
@@ -126,6 +181,13 @@
   color: #1c1c1e;
 }
 
+.result-row {
+  font-size: 26rpx;
+  color: #3a3a3c;
+  margin: 6rpx 0;
+  line-height: 1.5;
+}
+
 .result-sub {
   font-size: 26rpx;
   font-weight: 500;
@@ -140,8 +202,31 @@
   line-height: 1.5;
 }
 
-.recommend-jobs {
+.recommend-jobs,
+.strengths,
+.avoid-jobs,
+.improvements,
+.story-preview,
+.best-for,
+.breakdown,
+.resume-section {
   margin-top: 16rpx;
+}
+
+.breakdown-row {
+  font-size: 24rpx;
+  color: #3a3a3c;
+  padding: 4rpx 0;
+}
+
+.salary-impact {
+  font-size: 26rpx;
+  color: #1f7a1f;
+  font-weight: 500;
+  margin-top: 16rpx;
+  padding: 12rpx;
+  background: #f0f9f4;
+  border-radius: 8rpx;
 }
 
 .job-chip {
@@ -183,6 +268,7 @@
   align-items: center;
   gap: 16rpx;
   margin-bottom: 12rpx;
+  flex-wrap: wrap;
 }
 
 .match-score {
@@ -206,9 +292,14 @@
   color: #1f7a1f;
 }
 
-.match-verify.unverified {
+.match-verify.stale {
   background: #fef3c7;
   color: #92400e;
+}
+
+.match-verify.unverified {
+  background: #f2f2f7;
+  color: #8e8e93;
 }
 
 .match-salary {
@@ -258,6 +349,8 @@
   color: #1c1c1e;
   white-space: pre-wrap;
   word-break: break-word;
+  max-height: 600rpx;
+  overflow-y: auto;
 }
 
 .applications {
@@ -289,6 +382,7 @@
   align-items: center;
   gap: 12rpx;
   margin-bottom: 12rpx;
+  flex-wrap: wrap;
 }
 
 .app-status {
@@ -303,9 +397,19 @@
   color: #1e40af;
 }
 
+.app-status.viewed {
+  background: #e0e7ff;
+  color: #4338ca;
+}
+
 .app-status.interview_scheduled {
   background: #d1f4d1;
   color: #1f7a1f;
+}
+
+.app-status.offered {
+  background: #fef3c7;
+  color: #92400e;
 }
 
 .app-status.rejected {
@@ -313,14 +417,35 @@
   color: #991b1b;
 }
 
+.app-status.withdrawn {
+  background: #e5e5e7;
+  color: #636366;
+}
+
 .app-followup {
   font-size: 22rpx;
   color: #ff9500;
+  font-weight: 500;
+}
+
+.app-note {
+  font-size: 24rpx;
+  color: #3a3a3c;
+  background: #f9f9fb;
+  padding: 12rpx;
+  border-radius: 8rpx;
+  margin-bottom: 12rpx;
 }
 
 .app-buttons {
   display: flex;
   gap: 12rpx;
+  flex-wrap: wrap;
+}
+
+.app-buttons button {
+  font-size: 22rpx;
+  padding: 8rpx 16rpx;
 }
 
 .empty {
@@ -328,4 +453,7 @@
   padding: 80rpx 0;
   color: #8e8e93;
   font-size: 26rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
 }
