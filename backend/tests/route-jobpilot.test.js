@@ -18,7 +18,7 @@ const { getPool, cleanup } = require('./helpers/db');
 const pool = getPool();
 const { mockUserAuth } = require('./helpers/mockAuth');
 
-const TEST_USER_ID = 8002;
+const TEST_USER_ID = 123;  // 必须跟 mockUserAuth.js 的 userId 一致
 const TEST_OPENID = 'route_jobpilot_user';
 
 // 构造带 mock auth 的 mini-app
