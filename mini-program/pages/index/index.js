@@ -25,11 +25,7 @@ Page({
     wx.navigateTo({ url: '/pages/preview/preview' });
   },
 
-  goMatch() {
-    wx.navigateTo({ url: '/pages/match/list' });
-  },
-
-  // R-JobSearch 重构: AI 求职助手入口
+  // R-JobSearch 重构: "找岗位" 改成跳 5 步流 (含 Step 3 岗位匹配 + Step 4 简历生成 + Step 5 投递追踪)
   goJobPilot() {
     wx.navigateTo({ url: '/pages/jobpilot/index/index' });
   },
