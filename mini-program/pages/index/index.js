@@ -28,4 +28,9 @@ Page({
   goMatch() {
     wx.navigateTo({ url: '/pages/match/list' });
   },
+
+  // R-JobSearch 重构: AI 求职助手入口
+  goJobPilot() {
+    wx.navigateTo({ url: '/pages/jobpilot/index/index' });
+  },
 });
