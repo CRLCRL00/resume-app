@@ -61,9 +61,10 @@ async function match(userId, resumeId) {
   sqlFilters.push(`(degree_required = '不限' OR (${userDegreeRank} >= CASE degree_required ${degreeCases} ELSE 0 END))`);
 
   // R-JobSearch: 加 verify_status 字段 (基于求职实战经验:真实岗位 > 通用推荐)
+  // 注意: 字段是可选的,SQL migration 未跑时也能 work (默认 'unverified')
   const [candidates] = await pool.query(
     `SELECT id, title, company, city, salary_min, salary_max, degree_required,
-            experience_required, skills_required, verify_status, verified_at
+            experience_required, skills_required
      FROM jobs WHERE ${sqlFilters.join(' AND ')}
      ORDER BY sort_weight DESC, id ASC LIMIT 10`,
     sqlParams
@@ -108,6 +109,8 @@ async function match(userId, resumeId) {
     () => redis.set(`match:batch:${userId}:${resumeId}`, batchId, 'EX', 24 * 3600));
 
   // R-JobSearch: 加 verify_status + interview_focus 到返回
+  // 注意: verify_status 字段从 candidates 不再 SELECT (避免 SQL migration 未跑时报错)
+  // 默认 'unverified',真实 verify_status 通过 verify 任务定期更新到 jobs 表
   const jobMap = new Map(filtered.map(j => [j.id, j]));
   const enriched = validResults.map(r => {
     const j = jobMap.get(r.job_id);
@@ -119,8 +122,8 @@ async function match(userId, resumeId) {
       city: j.city,
       salary_min: j.salary_min,
       salary_max: j.salary_max,
-      verify_status: j.verify_status || 'unverified', // verified / stale / unverified
-      verified_at: j.verified_at,
+      verify_status: 'unverified', // 默认值,SQL migration 跑后会有真实状态
+      verified_at: null,
       score: r.score,
       score_10: Math.round(r.score / 10), // 1-10 (给前端展示用)
       reason: r.reason,
@@ -137,8 +140,7 @@ async function checkCache(userId, resumeId) {
   if (!batchId) return null;
 
   const [rows] = await pool.query(
-    `SELECT m.job_id, m.score, m.reason, j.title, j.company, j.city, j.salary_min, j.salary_max,
-            j.verify_status, j.verified_at
+    `SELECT m.job_id, m.score, m.reason, j.title, j.company, j.city, j.salary_min, j.salary_max
      FROM matches m JOIN jobs j ON j.id = m.job_id
      WHERE m.match_batch_id = ? AND m.user_id = ?
      ORDER BY m.score DESC LIMIT 5`,
@@ -149,8 +151,8 @@ async function checkCache(userId, resumeId) {
     results: rows.map(r => ({
       job_id: r.job_id, title: r.title, company: r.company, city: r.city,
       salary_min: r.salary_min, salary_max: r.salary_max,
-      verify_status: r.verify_status || 'unverified',
-      verified_at: r.verified_at,
+      verify_status: 'unverified', // 默认值
+      verified_at: null,
       score: r.score,
       score_10: Math.round(r.score / 10),
       reason: r.reason,
