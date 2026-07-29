@@ -140,4 +140,46 @@ router.get('/:matchId/explain', userAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * R-JobSearch-Insight-5: 投递追踪
+ * 用户标记"已投这个岗位",写 jobpilot_applications
+ *
+ * POST /api/match/apply
+ * Body: { job_id, note?, hr_contact? }
+ */
+router.post('/apply', userAuth, async (req, res, next) => {
+  try {
+    const { job_id, note, hr_contact } = req.body;
+    if (!job_id) throw new AppError(1000, 'job_id required', 400);
+
+    const result = await matchService.applyToJob(req.user.userId, job_id, { note, hr_contact });
+    res.json({ code: 0, data: result });
+  } catch (err) { next(err); }
+});
+
+/**
+ * GET /api/match/applications
+ * 返回当前用户的所有投递记录 (含 jobs 详情)
+ */
+router.get('/applications', userAuth, async (req, res, next) => {
+  try {
+    const apps = await matchService.getApplications(req.user.userId);
+    res.json({ code: 0, data: { total: apps.length, applications: apps } });
+  } catch (err) { next(err); }
+});
+
+/**
+ * PATCH /api/match/applications/:id
+ * Body: { status?, note?, hr_contact?, interview_at? }
+ */
+router.patch('/applications/:id', userAuth, async (req, res, next) => {
+  try {
+    const applicationId = Number(req.params.id);
+    if (!Number.isFinite(applicationId)) throw new AppError(1000, 'applicationId must be numeric', 400);
+
+    await matchService.updateApplicationStatus(applicationId, req.user.userId, req.body);
+    res.json({ code: 0, data: { ok: true } });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;

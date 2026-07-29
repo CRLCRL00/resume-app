@@ -68,12 +68,26 @@ async function generateHandler(req, res, next) {
 
     // 4. 真调 LLM — 先 sanitize 用户文本（防 prompt injection）
     const safeForm = sanitizeForLlmDeep(sourceForm);
-    const contentMd = await resumeGenerator.generate(safeForm);
+    const result = await resumeGenerator.generate(safeForm);
+    // R-JobSearch-Insight-4: result 现在是 {resume, storyPoints, mode}
+    // 向后兼容: contentMd 用 result.resume (fallback 到 plaintext)
 
-    // 5. 写 DB
-    await pool.query('UPDATE resumes SET content_md = ? WHERE id = ?', [contentMd, resume_id]);
+    // 5. 写 DB (resume + story_points)
+    await pool.query(
+      'UPDATE resumes SET content_md = ?, story_points = ? WHERE id = ?',
+      [result.resume, JSON.stringify(result.storyPoints || []), resume_id]
+    );
 
-    res.json({ code: 0, data: { resume_id, content_md: contentMd, cached: false } });
+    res.json({
+      code: 0,
+      data: {
+        resume_id,
+        content_md: result.resume,
+        story_points: result.storyPoints || [],
+        mode: result.mode || 'plaintext',
+        cached: false,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -85,7 +99,7 @@ router.get('/current', userAuth, async (req, res, next) => {
   try {
     const userId = req.user.userId;
     const [rows] = await pool.query(
-      'SELECT id, content_md, source_form FROM resumes WHERE user_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1',
+      'SELECT id, content_md, story_points, source_form FROM resumes WHERE user_id = ? AND is_active = 1 ORDER BY id DESC LIMIT 1',
       [userId]
     );
     if (!rows.length) throw new AppError(1005, 'no active resume', 404);
@@ -94,10 +108,45 @@ router.get('/current', userAuth, async (req, res, next) => {
     const sourceForm = typeof row.source_form === 'string'
       ? JSON.parse(row.source_form)
       : row.source_form;
-    res.json({ code: 0, data: { resume_id: row.id, content_md: row.content_md, source_form: sourceForm } });
+    const storyPoints = typeof row.story_points === 'string'
+      ? JSON.parse(row.story_points || '[]')
+      : (row.story_points || []);
+    res.json({
+      code: 0,
+      data: {
+        resume_id: row.id,
+        content_md: row.content_md,
+        story_points: storyPoints,
+        source_form: sourceForm,
+      },
+    });
   } catch (err) {
     next(err);
   }
+});
+
+/**
+ * R-JobSearch-Insight-4: 单独获取 STAR 故事点
+ * GET /api/resume/story-points/:resumeId
+ * 用途: 用户在准备面试时单独调,不用重新生成简历
+ */
+router.get('/story-points/:resumeId', userAuth, async (req, res, next) => {
+  try {
+    const resumeId = Number(req.params.resumeId);
+    if (!Number.isFinite(resumeId)) throw new AppError(1000, 'resumeId must be numeric', 400);
+
+    const [rows] = await pool.query(
+      'SELECT story_points FROM resumes WHERE id = ? AND user_id = ? LIMIT 1',
+      [resumeId, req.user.userId]
+    );
+    if (!rows.length) throw new AppError(1404, 'resume not found', 404);
+
+    const storyPoints = typeof rows[0].story_points === 'string'
+      ? JSON.parse(rows[0].story_points || '[]')
+      : (rows[0].story_points || []);
+
+    res.json({ code: 0, data: { resume_id: resumeId, story_points: storyPoints } });
+  } catch (err) { next(err); }
 });
 
 module.exports = router;

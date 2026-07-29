@@ -436,42 +436,22 @@ PageImpl({
   },
 
   /**
-   * R116 T2: scroll-end 时 snap 到最近 section (弹性反馈)
-   * 单元测试环境无 wx.createSelectorQuery, 加守卫
+   * R-JobSearch 重构: snap-to-section 装饰取消
+   *
+   * 之前 R116 T2: scroll-end 时 snap 到最近 section (抖音式弹性反馈)
+   * 现在: 保留滚动自由,不做硬 snap (用户体验更好,减少误触)
+   *
+   * 函数保留为 no-op,确保调用方不报错
    */
   _snapToSection() {
-    if (typeof wx === 'undefined' || !wx.createSelectorQuery) return;
-    const query = wx.createSelectorQuery().in(this);
-    query.select('.feed-scroll').scrollOffset();
-    query.selectAll('.feed-section').boundingClientRect();
-    query.exec((res) => {
-      if (!res || !res[0] || !res[1] || !res[1].length) return;
-      const scrollTop = res[0].scrollTop || 0;
-      const sectionRects = res[1];
-      // 找最近 section (假设 ideal snap 位置在顶部 + 100rpx)
-      let closestIdx = 0;
-      let minDist = Infinity;
-      sectionRects.forEach((rect, idx) => {
-        const dist = Math.abs(rect.top - 100);
-        if (dist < minDist) {
-          minDist = dist;
-          closestIdx = idx;
-        }
-      });
-      if (closestIdx !== this.data.currentSection) {
-        const targetTop = scrollTop + sectionRects[closestIdx].top - 100;
-        const q2 = wx.createSelectorQuery().in(this);
-        q2.select('.feed-scroll').scrollOffset({ scrollTop: Math.max(0, targetTop) });
-        q2.exec();
-      }
-    });
+    // no-op (R-JobSearch 重构: 取消 snap 装饰)
   },
 
   /**
-   * R116: 滑到底触发 (类似抖音"加载更多"模式, 调 _snapToSection 弹性反馈)
+   * R-JobSearch 重构: 滑到底不触发 snap
    */
   onFeedScrollLower() {
-    this._snapToSection();
+    // no-op (R-JobSearch 重构: 取消抖音式加载更多)
   },
 
   /**

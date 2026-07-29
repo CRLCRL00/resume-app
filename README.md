@@ -3,6 +3,37 @@
 微信小程序：用户填资料 → LLM 自动生成简历 → 语义匹配人工维护的岗位库 → 推荐公司+岗位。
 
 [![Tests](https://github.com/CRLCRL00/resume-app/actions/workflows/backend-test.yml/badge.svg)](https://github.com/CRLCRL00/resume-app/actions/workflows/backend-test.yml)
+[![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Node](https://img.shields.io/badge/node-%E2%89%A522.0.0-green.svg)](package.json)
+[![MySQL](https://img.shields.io/badge/mysql-8.0-orange.svg)](https://www.mysql.com/)
+[![Redis](https://img.shields.io/badge/redis-7.0-red.svg)](https://redis.io/)
+[![DeepSeek](https://img.shields.io/badge/AI-DeepSeek_LLM-blueviolet.svg)](https://platform.deepseek.com/)
+
+> 🎯 **生产级 LLM 应用** · 集成 DeepSeek · 114 单测 + 11 e2e 全绿 · 已在 `43.139.176.199:443` 上线
+
+## 📸 截图 / Demo
+
+> 🎬 **Demo 视频**: [录制中] — 计划放在 `docs/demo/recording-guide.md` 指南下制作
+> 📸 **关键截图**: 见 `docs/作品集/screenshots-needed.md` 清单
+
+### 核心流程 (3 步)
+
+| 步骤 | 截图位 | 说明 |
+|------|--------|------|
+| 1. 用户填资料 | `screenshots/01-input.png` | 用户填写工作经历/项目 |
+| 2. DeepSeek 生成简历 | `screenshots/02-generating.png` + `03-result.png` | AI 生成过程 + 结果 |
+| 3. 岗位匹配推荐 | `screenshots/04-match.png` | 语义匹配 + 岗位推荐 |
+
+### 高光功能
+
+| 功能 | 截图位 | 说明 |
+|------|--------|------|
+| LLM 简历生成 | `screenshots/05-llm-resume.png` | DeepSeek 输出 JSON 结构化简历 |
+| AI 推断推荐 | `screenshots/06-ai-recommend.png` | R117 Tinder 划卡 modal |
+| Wizard 主动提问 | `screenshots/07-wizard.png` | R115 AI 像面试官一样提问 |
+| 数据看板 | `screenshots/08-dashboard.png` | 管理员后台 / 配额监控 |
+
+---
 
 ## 架构
 

@@ -1,0 +1,198 @@
+<!-- R-JobSearch 重构: AI 实习求职助手 5 步流程 -->
+<view class="jobpilot-page">
+
+  <!-- Tab 切换 -->
+  <view class="tabs">
+    <view
+      wx:for="{{steps}}"
+      wx:key="id"
+      class="tab {{currentStep === index ? 'active' : ''}}"
+      data-idx="{{index}}"
+      bindtap="switchStep"
+    >
+      <text class="tab-icon">{{item.icon}}</text>
+      <text class="tab-name">{{item.name}}</text>
+    </view>
+  </view>
+
+  <!-- Step 1: 画像诊断 -->
+  <view wx:if="{{currentStep === 0}}" class="step-content">
+    <view class="step-title">👤 画像诊断</view>
+    <view class="step-desc">填 5 个问题,AI 输出 4 种画像分类 + 推荐岗位池</view>
+
+    <view class="form-group">
+      <text class="label">学历</text>
+      <picker mode="selector" range="{{['高中','大专','本科','硕士','博士']}}" bindchange="onProfileInput" data-field="education">
+        <view class="picker">{{profileForm.education || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <view class="form-group">
+      <text class="label">AI 能力</text>
+      <picker mode="selector" range="{{['不熟','熟工具','AI 协作','开发 AI']}}" bindchange="onProfileInput" data-field="aiAbility">
+        <view class="picker">{{profileForm.aiAbility || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <view class="form-group">
+      <text class="label">项目经验</text>
+      <textarea
+        class="textarea"
+        placeholder="简要描述你的项目经验..."
+        value="{{profileForm.projects}}"
+        bindinput="onProfileInput"
+        data-field="projects"
+      />
+    </view>
+
+    <view class="form-group">
+      <text class="label">求职目标</text>
+      <picker mode="selector" range="{{['实习','应届','转型','社招']}}" bindchange="onProfileInput" data-field="target">
+        <view class="picker">{{profileForm.target || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <view class="form-group">
+      <text class="label">时间窗口</text>
+      <picker mode="selector" range="{{['立刻','1-3 个月','3-6 个月','6+ 个月']}}" bindchange="onProfileInput" data-field="timeline">
+        <view class="picker">{{profileForm.timeline || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <button class="btn-primary" bindtap="submitProfile">AI 诊断</button>
+
+    <view wx:if="{{profileResult}}" class="result">
+      <view class="result-title">诊断结果: {{profileResult.image}}</view>
+      <view>置信度: {{profileResult.confidence}}</view>
+      <view>策略: {{profileResult.resumeStrategy}}</view>
+      <view class="recommend-jobs">推荐岗位:
+        <view wx:for="{{profileResult.recommendedJobs}}" wx:key="category" class="job-chip">
+          {{item.category}} - {{item.reason}}
+        </view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Step 2: 项目提取 -->
+  <view wx:if="{{currentStep === 1}}" class="step-content">
+    <view class="step-title">📦 项目提取</view>
+    <view class="step-desc">AI 评分 1-10 + 提取 STAR 故事点</view>
+
+    <view class="form-group">
+      <text class="label">项目名</text>
+      <input class="input" placeholder="如:简历推荐小程序" value="{{projectForm.name}}" bindinput="onProjectInput" data-field="name" />
+    </view>
+
+    <view class="form-group">
+      <text class="label">技术栈</text>
+      <input class="input" placeholder="如:Express, MySQL, DeepSeek LLM" value="{{projectForm.techStack}}" bindinput="onProjectInput" data-field="techStack" />
+    </view>
+
+    <view class="form-group">
+      <text class="label">AI 协作方式</text>
+      <textarea class="textarea" placeholder="如:用 Claude/DeepSeek 协作完成代码,我负责 review + 测试 + 部署" value="{{projectForm.aiCollaboration}}" bindinput="onProjectInput" data-field="aiCollaboration" />
+    </view>
+
+    <view class="form-group">
+      <text class="label">我的角色</text>
+      <input class="input" placeholder="项目负责人 / 工程师 / 设计师" value="{{projectForm.myRole}}" bindinput="onProjectInput" data-field="myRole" />
+    </view>
+
+    <view class="form-group">
+      <text class="label">项目地址</text>
+      <input class="input" placeholder="https://..." value="{{projectForm.url}}" bindinput="onProjectInput" data-field="url" />
+    </view>
+
+    <button class="btn-primary" bindtap="submitProject">AI 评估</button>
+
+    <view wx:if="{{projectResult}}" class="result">
+      <view class="result-title">评分: {{projectResult.score}} / 10</view>
+      <view wx:if="{{projectResult.improvements}}">
+        <view class="result-sub">改进建议:</view>
+        <view wx:for="{{projectResult.improvements}}" wx:key="*this" class="bullet">• {{item}}</view>
+      </view>
+    </view>
+  </view>
+
+  <!-- Step 3: 岗位匹配 -->
+  <view wx:if="{{currentStep === 2}}" class="step-content">
+    <view class="step-title">🎯 岗位匹配</view>
+    <view class="step-desc">基于简历内容,匹配 verify 过 + 评分 1-10</view>
+
+    <view class="form-group">
+      <text class="label">简历 ID</text>
+      <input class="input" type="number" placeholder="从 /pages/me/me 获取" value="{{matchResumeId}}" bindinput="onMatchResumeIdInput" />
+    </view>
+
+    <button class="btn-primary" bindtap="doMatch" disabled="{{matchLoading}}">{{matchLoading ? '匹配中...' : '开始匹配'}}</button>
+
+    <view wx:if="{{matchResults.length}}" class="match-results">
+      <view wx:for="{{matchResults}}" wx:key="job_id" class="match-card">
+        <view class="match-title">{{item.title}}</view>
+        <view class="match-company">{{item.company}} · {{item.city}}</view>
+        <view class="match-meta">
+          <text class="match-score">{{item.score_10}}/10</text>
+          <text class="match-verify {{item.verify_status}}">{{item.verify_status === 'verified' ? '✓ 已 verify' : item.verify_status}}</text>
+          <text class="match-salary">{{item.salary_min}}-{{item.salary_max}}K</text>
+        </view>
+        <view class="match-reason">{{item.reason}}</view>
+        <button class="btn-secondary" size="mini" data-jobid="{{item.job_id}}" bindtap="applyToJob">标记已投</button>
+      </view>
+    </view>
+  </view>
+
+  <!-- Step 4: 简历生成 -->
+  <view wx:if="{{currentStep === 3}}" class="step-content">
+    <view class="step-title">📄 简历生成</view>
+    <view class="step-desc">AI 生成简历 + 3-5 个 STAR 故事点</view>
+
+    <view class="form-group">
+      <text class="label">简历 ID</text>
+      <input class="input" type="number" placeholder="从 /pages/me/me 获取" value="{{generateResumeId}}" bindinput="onGenerateResumeIdInput" />
+    </view>
+
+    <button class="btn-primary" bindtap="generateResume" disabled="{{generateLoading}}">{{generateLoading ? '生成中...' : 'AI 生成'}}</button>
+
+    <view wx:if="{{generateResult}}" class="result">
+      <view class="result-title">模式: {{generateResult.mode === 'structured' ? '结构化(含 STAR)' : '纯文本'}}</view>
+      <view wx:if="{{generateResult.story_points.length}}" class="story-points">
+        <view class="result-sub">STAR 故事点 ({{generateResult.story_points.length}} 个):</view>
+        <view wx:for="{{generateResult.story_points}}" wx:key="title" class="story-card">
+          <view class="story-title">⭐ {{item.title}}</view>
+          <view class="story-section">📌 背景: {{item.situation}}</view>
+          <view class="story-section">🎯 任务: {{item.task}}</view>
+          <view class="story-section">⚡ 行动: {{item.action}}</view>
+          <view class="story-section">📈 结果: {{item.result}}</view>
+        </view>
+      </view>
+      <view class="resume-preview">{{generateResult.resume}}</view>
+    </view>
+  </view>
+
+  <!-- Step 5: 投递追踪 -->
+  <view wx:if="{{currentStep === 4}}" class="step-content">
+    <view class="step-title">📮 投递追踪</view>
+    <view class="step-desc">管理你的所有投递 (HR 回信 / 面试安排)</view>
+
+    <view wx:if="{{applications.length}}" class="applications">
+      <view wx:for="{{applications}}" wx:key="id" class="app-card">
+        <view class="app-title">{{item.job.title}}</view>
+        <view class="app-company">{{item.job.company}} · {{item.job.city}}</view>
+        <view class="app-meta">
+          <text class="app-status {{item.status}}">{{item.status}}</text>
+          <text wx:if="{{item.needs_follow_up}}" class="app-followup">⚠️ 该跟进了</text>
+        </view>
+        <view class="app-buttons">
+          <button size="mini" data-id="{{item.id}}" data-status="viewed" bindtap="updateAppStatus">HR 已看</button>
+          <button size="mini" data-id="{{item.id}}" data-status="interview_scheduled" bindtap="updateAppStatus">面试</button>
+          <button size="mini" data-id="{{item.id}}" data-status="rejected" bindtap="updateAppStatus">拒绝</button>
+        </view>
+      </view>
+    </view>
+    <view wx:else class="empty">
+      <text>还没有投递</text>
+      <text>从「岗位匹配」tab 标记投递后会显示在这里</text>
+    </view>
+  </view>
+
+</view>
