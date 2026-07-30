@@ -44,6 +44,11 @@ jobs:
     name: 一键 fix prod (deploy + migrate + smoke)
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    # 关键: createCommitStatus API 需要 statuses:write
+    # GH Actions default token 不含此权限 — 不加会 silently fail
+    permissions:
+      contents: read
+      statuses: write
     steps:
       - uses: actions/checkout@v4
         with:
