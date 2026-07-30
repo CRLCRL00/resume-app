@@ -54,7 +54,28 @@ jobs:
         with:
           fetch-depth: 0  # 需要拉 commit history 来写 commit status
 
+      # Pre-check: 确认 3 个 server-related secrets 都设了 (不泄漏值)
+      # 不设的话 SSH step 会 fail 但原因模糊
+      - name: Pre-check secrets
+        id: check_secrets
+        run: |
+          echo "SERVER_HOST length: ${#SERVER_HOST}"
+          echo "SERVER_USER length: ${#SERVER_USER}"
+          echo "SERVER_SSH_KEY length: ${#SERVER_SSH_KEY}"
+          if [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ] || [ -z "$SERVER_SSH_KEY" ]; then
+            echo "::error::MISSING secrets (one of SERVER_HOST / SERVER_USER / SERVER_SSH_KEY is empty)"
+            echo "missing=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "missing=false" >> "$GITHUB_OUTPUT"
+          fi
+        env:
+          SERVER_HOST: ${{ secrets.SERVER_HOST }}
+          SERVER_USER: ${{ secrets.SERVER_USER }}
+          SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
+
       - name: Run one-shot-prod-fix.sh on prod
+        # 如果 secrets 缺失, 这个 step 仍跑,但只会失败 + 给清晰信息
+        if: steps.check_secrets.outputs.missing != 'true'
         id: ssh_run
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -130,17 +151,35 @@ jobs:
             exit $EXIT
 
       # P2: commit status 反馈 — 让用户从 commit page 看 ✅/❌ (无需翻 GH Actions log)
-      - name: Report commit status
+      - name: Report commit status (with diagnostic hint)
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            const ok = '${{ steps.ssh_run.conclusion }}' === 'success';
-            await github.rest.repos.createCommitStatus({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              sha: context.sha,
-              state: ok ? 'success' : 'failure',
-              description: ok ? '✅ prod fix PASS (5 步流能用)' : '❌ prod fix FAIL - 看 GH Actions log',
-              context: 'prod-deploy',
-            });
+            // 智能诊断: SSH step fail 时根据已知信息给精确 hint
+            const sshOk = '${{ steps.ssh_run.conclusion }}' === 'success';
+            const sshSkipped = '${{ steps.check_secrets.outputs.missing }}' === 'true';
+            let desc;
+            let state;
+            if (sshOk) {
+              state = 'success';
+              desc = '✅ prod fix PASS — 5 步流能用';
+            } else if (sshSkipped) {
+              state = 'failure';
+              desc = '❌ GH Actions secret 缺失 (SERVER_HOST/USER/SSH_KEY 任一空)';
+            } else {
+              state = 'failure';
+              desc = '❌ SSH fail。3 步排查: 1) 3 secrets 是否齐 2) server ~/.ssh/authorized_keys 有对应公钥 3) SERVER_HOST 可达';
+            }
+            try {
+              await github.rest.repos.createCommitStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                sha: context.sha,
+                state: state,
+                description: desc,
+                context: 'prod-deploy',
+              });
+            } catch (e) {
+              core.warning('commit status write failed: ' + e.message);
+            }
