@@ -19,6 +19,13 @@ name: Emergency Deploy (One-Shot Prod Fix)
 #   - 或环境变量 MYSQL_ROOT_PASSWORD secret (需先在 repo Secrets 配置)
 
 on:
+  # 推 main 自动触发 — 用户 0 动手就能跑完整 fix
+  # manual 也保留 — 万一自动 trigger 失败可以人工 rerun
+  push:
+    branches: [main]
+    paths:
+      - 'backend/**'
+      - '.github/workflows/emergency-deploy.yml'
   workflow_dispatch:
     inputs:
       mysql_password:
