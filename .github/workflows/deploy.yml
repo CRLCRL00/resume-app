@@ -124,12 +124,32 @@ jobs:
     needs: [resolve-target, package]
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # 给 commit-status feedback 用
+
+      - name: Pre-flight SSH ping
+        # 提前验证 SSH + secret key 配对,失败比 SCP+deploy 阶段失败更早暴露
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ needs.resolve-target.outputs.server_host }}
+          username: ${{ needs.resolve-target.outputs.server_user }}
+          key: ${{ needs.resolve-target.outputs.server_key }}
+          command_timeout: 30s
+          script: |
+            echo "[pre-flight] connected to $(hostname) as $(whoami)"
+            echo "[pre-flight] pm2 status:"
+            pm2 list 2>/dev/null | grep resume || echo "(no resume-app process yet)"
+            echo "[pre-flight] disk:"
+            df -h /opt/resume-app /tmp 2>/dev/null | head -3
+
       - name: Download artifact
         uses: actions/download-artifact@v4
         with:
           name: resume-app-backend
 
       - name: SCP to server
+        id: scp_run
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ needs.resolve-target.outputs.server_host }}
@@ -137,9 +157,10 @@ jobs:
           key: ${{ needs.resolve-target.outputs.server_key }}
           source: 'resume-app-backend.tar.gz'
           target: '/tmp/'
-          command_timeout: '60s'
+          command_timeout: '5m'
 
       - name: Run deploy + post-deploy health probe
+        id: deploy_run
         # R41-Gap-3: deploy.sh 末尾加 health probe；连续 5 次 503 自动回滚
         # 前一版 deploy.sh 由 .deploy-backup/ 保留最近 5 版，rollback = pm2 reload prev
         uses: appleboy/ssh-action@v1.0.3
@@ -147,6 +168,7 @@ jobs:
           host: ${{ needs.resolve-target.outputs.server_host }}
           username: ${{ needs.resolve-target.outputs.server_user }}
           key: ${{ needs.resolve-target.outputs.server_key }}
+          command_timeout: 10m
           script: |
             TARGET_LABEL="${{ needs.resolve-target.outputs.target_label }}"
             DEPLOY_TARBALL=/tmp/resume-app-backend.tar.gz \
@@ -178,3 +200,24 @@ jobs:
               echo '```'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Report commit status (prod-deploy)
+        if: always()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployOk = '${{ steps.deploy_run.conclusion }}' === 'success';
+            const scpOk = '${{ steps.scp_run.conclusion }}' === 'success';
+            const ok = deployOk && scpOk;
+            const label = '${{ needs.resolve-target.outputs.target_label }}';
+            await github.rest.repos.createCommitStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              sha: context.sha,
+              state: ok ? 'success' : 'failure',
+              description: ok
+                ? `✅ ${label} deploy PASS`
+                : `❌ ${label} deploy FAIL (scp=${scpOk?'OK':'FAIL'} deploy=${deployOk?'OK':'FAIL'})`,
+              context: 'prod-deploy',
+            });
+
