@@ -6,6 +6,7 @@ const adminRouter = require('./routes/admin');
 const aiRouter = require('./routes/ai');
 const resumeRouter = require('./routes/resume');
 const matchRouter = require('./routes/match');
+const jobpilotRouter = require('./routes/jobpilot'); // R-JobSearch: 5 步流 (Step 1-2)
 const jobsRouter = require('./routes/jobs');
 const legalRouter = require('./routes/legal');
 const userRouter = require('./routes/user');
@@ -180,6 +181,7 @@ function createApp() {
   app.use('/api/match/generate', matchGenUserLimiter);
   app.use('/api/resume', resumeRouter);
   app.use('/api/match', matchRouter);
+  app.use('/api/jobpilot', jobpilotRouter); // R-JobSearch: 5 步流 mount
   app.use('/api/jobs', jobsRouter);
   app.use('/api/legal', legalRouter);
   app.use('/api/user', userRouter);
