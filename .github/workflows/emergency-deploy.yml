@@ -1,17 +1,23 @@
 name: Emergency Deploy (One-Shot Prod Fix)
 
-# 不用 SSH 也不用手动 git pull — 网页「Run workflow」一键跑完
-# 配套脚本: backend/scripts/one-shot-prod-fix.sh (commit 83b6b52)
+# D4 (2026-07-31): 改成 scp 模式,不再 SSH 进 prod 跑 git pull
+# 原版问题: prod 上 origin/main stale + 无 GitHub SSH key,git pull 会 fail
+#   (有 warning fallback 但脚本可能不是最新)
+# 新版: GH Actions runner checkout → scp one-shot-prod-fix.sh → ssh 跑脚本
+#   完全 self-contained,不依赖 prod git state
+#
+# 配套脚本: backend/scripts/one-shot-prod-fix.sh
 #
 # 用法:
 #   GitHub → Actions → "Emergency Deploy (One-Shot Prod Fix)" → Run workflow →
 #     (可选) 输入 MySQL root password → 绿勾跑完
 #
 # 自动做的事:
-#   1. SSH 进 prod server
-#   2. git pull main 拉最新脚本
-#   3. 跑 one-shot-prod-fix.sh (含 7 phase: env/git/backup/migration/pm2/smoke)
-#   4. 输出 PASS/FAIL + summary
+#   1. GH Actions runner checkout (拿最新 one-shot-prod-fix.sh)
+#   2. SCP 脚本到 prod /tmp/
+#   3. SSH 进 prod 跑 /tmp/one-shot-prod-fix.sh
+#      (含 7 phase: env/git/backup/migration/pm2/smoke)
+#   4. 输出 PASS/FAIL + commit status 反馈
 #
 # 密码方案 (任选):
 #   - 工作流页面填 "mysql_password" input (masked, 一次性)
@@ -73,6 +79,18 @@ jobs:
           SERVER_USER: ${{ secrets.SERVER_USER }}
           SERVER_SSH_KEY: ${{ secrets.SERVER_SSH_KEY }}
 
+      # D4: SCP 替代 git pull — 不依赖 prod git state + SSH key
+      - name: SCP one-shot-prod-fix.sh to prod
+        if: steps.check_secrets.outputs.missing != 'true'
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          source: 'backend/scripts/one-shot-prod-fix.sh'
+          target: '/tmp/'
+          command_timeout: '2m'
+
       - name: Run one-shot-prod-fix.sh on prod
         # 如果 secrets 缺失, 这个 step 仍跑,但只会失败 + 给清晰信息
         if: steps.check_secrets.outputs.missing != 'true'
@@ -95,26 +113,15 @@ jobs:
             date '+%Y-%m-%d %H:%M:%S %Z'
             echo "::endgroup::"
 
-            # ---------- 1. 拉最新代码 ----------
-            echo "::group::git pull (拉 backend/scripts/one-shot-prod-fix.sh)"
-            cd /opt/resume-app || { echo "❌ cd /opt/resume-app 失败"; exit 1; }
-            git remote -v | head -1
-            git log -1 --oneline
-            # ff-only 防止 server 本地有意外 commit 覆盖远端
-            if ! git pull --ff-only origin main 2>&1 | tail -5; then
-              echo "⚠ git pull 失败 — 用现有文件继续 (脚本可能不是最新)"
-            fi
-            echo "after-pull HEAD: $(git rev-parse --short HEAD)"
-            echo "::endgroup::"
-
-            # ---------- 2. 脚本存在? ----------
-            SCRIPT="backend/scripts/one-shot-prod-fix.sh"
+            # ---------- 1. 脚本存在? ----------
+            SCRIPT="/tmp/one-shot-prod-fix.sh"
             if [ ! -f "$SCRIPT" ]; then
-              echo "❌ $SCRIPT 不存在 — git pull 没拉到位"
+              echo "❌ $SCRIPT 不存在 — scp step 失败"
               exit 1
             fi
+            echo "✓ script size: $(wc -c < $SCRIPT) bytes, sha: $(sha256sum $SCRIPT | cut -d' ' -f1)"
 
-            # ---------- 3. MySQL 密码准备 ----------
+            # ---------- 2. MySQL 密码准备 ----------
             # 优先级: workflow input > GH secret $MYSQL_ROOT_PASSWORD (env) > ~/.my.cnf
             if [ -n "${MYSQL_ROOT_PASSWORD:-}" ]; then
               echo "✓ MySQL 密码来自 workflow input"
@@ -125,11 +132,14 @@ jobs:
               exit 2
             fi
 
-            # ---------- 4. 跑一键脚本 ----------
+            # ---------- 3. 跑一键脚本 ----------
             echo "::group::one-shot-prod-fix.sh 开始 (7 phase)"
             bash "$SCRIPT"
             EXIT=$?
             echo "::endgroup::"
+
+            # ---------- 4. 清理上传的脚本 (避免 prod 残留) ----------
+            rm -f "$SCRIPT"
 
             # ---------- 5. 总结到 GH Actions ----------
             echo ""
