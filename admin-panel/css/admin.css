@@ -47,3 +47,28 @@ code { background: var(--bg); padding: 0.1rem 0.3rem; border-radius: 4px; font-s
 .disable input { max-width: 140px; }
 img { max-width: 240px; }
 @media (max-width: 640px) { .cards { grid-template-columns: 1fr 1fr; } nav { flex-wrap: wrap; } }
+
+/* R-JobSearch: applications.html 专用 — stats row + badge colors + row-overdue */
+.stats { display: flex; gap: 1rem; margin-bottom: 1rem; flex-wrap: wrap; }
+.stats .stat { background: var(--card); border: 1px solid var(--border); border-radius: var(--radius); padding: 0.75rem 1rem; min-width: 120px; }
+.stats .stat-label { display: block; color: var(--muted); font-size: 12px; }
+.stats .stat-val { display: block; font-size: 1.75rem; font-weight: 600; }
+.stats .stat.verify-stale { border-color: #f59e0b; }
+.stats .stat.verify-unverified { border-color: #9ca3af; }
+.badge { display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; font-size: 12px; font-weight: 500; background: #f3f4f6; color: var(--fg); }
+.badge.verify-verified { background: #d1f4d1; color: #166534; }
+.badge.verify-stale { background: #fef3c7; color: #92400e; }
+.badge.verify-unverified { background: #f3f4f6; color: #6b7280; }
+.badge.status-submitted { background: #dbeafe; color: #1e40af; }
+.badge.status-viewed { background: #e0e7ff; color: #4338ca; }
+.badge.status-screening { background: #fce7f3; color: #9f1239; }
+.badge.status-interview_scheduled { background: #d1f4d1; color: #166534; }
+.badge.status-interviewed { background: #d1fae5; color: #065f46; }
+.badge.status-offered { background: #fef3c7; color: #92400e; }
+.badge.status-rejected { background: #fee2e2; color: #991b1b; }
+.badge.status-withdrawn { background: #e5e7eb; color: #4b5563; }
+.row-overdue { background: #fff7ed !important; }
+.row-overdue td:first-child { border-left: 3px solid #f59e0b; }
+.muted { color: var(--muted); font-size: 12px; }
+.note { max-width: 200px; word-break: break-word; }
+.overdue { color: #b45309; font-weight: 600; margin-right: 4px; }

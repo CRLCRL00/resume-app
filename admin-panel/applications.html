@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Admin / Applications (Jobpilot)</title>
+  <link rel="stylesheet" href="/admin/css/admin.css">
+  <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body x-data="applicationsPage()" x-init="init()">
+  <header>
+    <h1>投递追踪监控 (Jobpilot)</h1>
+    <a href="/admin/dashboard.html">← Dashboard</a>
+    <button @click="logout()">Logout</button>
+  </header>
+
+  <main>
+    <!-- Stats row -->
+    <section class="stats" x-show="stats">
+      <div class="stat">
+        <span class="stat-label">总投递</span>
+        <span class="stat-val" x-text="stats?.total ?? '—'"></span>
+      </div>
+      <div class="stat" style="color:#92400e;">
+        <span class="stat-label">需跟进 (过期)</span>
+        <span class="stat-val" x-text="stats?.needsFollowUp ?? '—'"></span>
+      </div>
+      <template x-for="s in stats?.byJobVerify || []" :key="s.verify_status">
+        <div class="stat" :class="'verify-' + s.verify_status">
+          <span class="stat-label">岗位 verify=<span x-text="s.verify_status || 'null'"></span></span>
+          <span class="stat-val" x-text="s.cnt"></span>
+        </div>
+      </template>
+    </section>
+
+    <!-- Filters -->
+    <section class="filters">
+      <label>
+        Status:
+        <select x-model="filterStatus" @change="load()">
+          <option value="">(all)</option>
+          <option value="submitted">submitted</option>
+          <option value="viewed">viewed</option>
+          <option value="screening">screening</option>
+          <option value="interview_scheduled">interview_scheduled</option>
+          <option value="interviewed">interviewed</option>
+          <option value="offered">offered</option>
+          <option value="rejected">rejected</option>
+          <option value="withdrawn">withdrawn</option>
+        </select>
+      </label>
+      <label>
+        Job verify:
+        <select x-model="filterVerify" @change="load()">
+          <option value="">(all)</option>
+          <option value="verified">verified</option>
+          <option value="stale">stale</option>
+          <option value="unverified">unverified</option>
+        </select>
+      </label>
+      <button @click="load()">刷新</button>
+    </section>
+
+    <p x-show="errMsg" class="err" x-text="errMsg"></p>
+
+    <!-- Applications table -->
+    <table>
+      <thead>
+        <tr>
+          <th>id</th><th>user</th><th>job</th><th>city</th>
+          <th>salary</th><th>status</th><th>verify</th>
+          <th>applied_at</th><th>follow_up_at</th><th>interview_at</th>
+          <th>note</th>
+        </tr>
+      </thead>
+      <tbody>
+        <template x-for="a in items" :key="a.id">
+          <tr :class="rowClass(a)">
+            <td x-text="a.id"></td>
+            <td x-text="a.user_id"></td>
+            <td>
+              <strong x-text="a.job_title"></strong>
+              <div class="muted" x-text="a.company"></div>
+            </td>
+            <td x-text="a.city"></td>
+            <td x-text="(a.salary_min||0) + '-' + (a.salary_max||0) + 'K'"></td>
+            <td>
+              <span class="badge" :class="'status-' + a.status" x-text="a.status"></span>
+            </td>
+            <td>
+              <span class="badge" :class="'verify-' + a.verify_status" x-text="a.verify_status || '—'"></span>
+            </td>
+            <td x-text="(a.applied_at||'').slice(0,16).replace('T',' ')"></td>
+            <td>
+              <span x-show="isOverdue(a.follow_up_at)" class="overdue">⚠️ 过期</span>
+              <span x-text="(a.follow_up_at||'').slice(0,16).replace('T',' ')"></span>
+            </td>
+            <td x-text="(a.interview_at||'').slice(0,16).replace('T',' ')"></td>
+            <td class="note" x-text="a.note || '—'"></td>
+          </tr>
+        </template>
+        <tr x-show="!items.length">
+          <td colspan="11" style="text-align:center; color:#8e8e93; padding:24rpx;">无数据</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="pager">
+      <button :disabled="page<=1" @click="page--; load()">‹</button>
+      <span x-text="page + ' / ' + Math.max(1, Math.ceil(total/pageSize))"></span>
+      <button :disabled="page*pageSize >= total" @click="page++; load()">›</button>
+    </div>
+  </main>
+
+  <script src="/admin/js/api.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script>
+    function applicationsPage() {
+      return {
+        items: [], total: 0, page: 1, pageSize: 20,
+        filterStatus: '', filterVerify: '', stats: null,
+        errMsg: '',
+        async init() {
+          try { await requireAuth(); } catch (_e) { return; }
+          await this.loadStats();
+          await this.load();
+        },
+        async loadStats() {
+          try {
+            this.stats = await api('/admin/applications/stats');
+          } catch (e) { /* non-fatal */ }
+        },
+        async load() {
+          this.errMsg = '';
+          try {
+            const qs = `?page=${this.page}&pageSize=${this.pageSize}`
+              + (this.filterStatus ? `&status=${this.filterStatus}` : '')
+              + (this.filterVerify ? `&verify_status=${this.filterVerify}` : '');
+            const d = await api('/admin/applications' + qs);
+            this.items = d.items; this.total = d.total;
+          } catch (e) { this.errMsg = e.message; }
+        },
+        isOverdue(fu) {
+          if (!fu) return false;
+          return new Date(fu).getTime() < Date.now();
+        },
+        rowClass(a) {
+          if (this.isOverdue(a.follow_up_at) &&
+              !['rejected','withdrawn','offered'].includes(a.status)) return 'row-overdue';
+          return '';
+        },
+        async logout() { await logout(); },
+      };
+    }
+  </script>
+</body>
+</html>
