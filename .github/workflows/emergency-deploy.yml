@@ -1,0 +1,110 @@
+name: Emergency Deploy (One-Shot Prod Fix)
+
+# 不用 SSH 也不用手动 git pull — 网页「Run workflow」一键跑完
+# 配套脚本: backend/scripts/one-shot-prod-fix.sh (commit 83b6b52)
+#
+# 用法:
+#   GitHub → Actions → "Emergency Deploy (One-Shot Prod Fix)" → Run workflow →
+#     (可选) 输入 MySQL root password → 绿勾跑完
+#
+# 自动做的事:
+#   1. SSH 进 prod server
+#   2. git pull main 拉最新脚本
+#   3. 跑 one-shot-prod-fix.sh (含 7 phase: env/git/backup/migration/pm2/smoke)
+#   4. 输出 PASS/FAIL + summary
+#
+# 密码方案 (任选):
+#   - 工作流页面填 "mysql_password" input (masked, 一次性)
+#   - 或 server 上有 ~/.my.cnf
+#   - 或环境变量 MYSQL_ROOT_PASSWORD secret (需先在 repo Secrets 配置)
+
+on:
+  workflow_dispatch:
+    inputs:
+      mysql_password:
+        description: 'MySQL root password (留空 = 用 ~/.my.cnf 或 GH secret)'
+        required: false
+        sensitive: true
+        default: ''
+
+jobs:
+  fix:
+    name: 一键 fix prod (deploy + migrate + smoke)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Run one-shot-prod-fix.sh on prod
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
+          envs: MYSQL_ROOT_PASSWORD
+          command_timeout: 8m
+          script: |
+            set -uo pipefail
+
+            # ---------- 0. 调试信息 ----------
+            echo "::group::Connect to prod"
+            echo "host=${{ secrets.SERVER_HOST }}"
+            echo "user=${{ secrets.SERVER_USER }}"
+            echo "remote=$(hostname -f 2>/dev/null || hostname)"
+            date '+%Y-%m-%d %H:%M:%S %Z'
+            echo "::endgroup::"
+
+            # ---------- 1. 拉最新代码 ----------
+            echo "::group::git pull (拉 backend/scripts/one-shot-prod-fix.sh)"
+            cd /opt/resume-app || { echo "❌ cd /opt/resume-app 失败"; exit 1; }
+            git remote -v | head -1
+            git log -1 --oneline
+            # ff-only 防止 server 本地有意外 commit 覆盖远端
+            if ! git pull --ff-only origin main 2>&1 | tail -5; then
+              echo "⚠ git pull 失败 — 用现有文件继续 (脚本可能不是最新)"
+            fi
+            echo "after-pull HEAD: $(git rev-parse --short HEAD)"
+            echo "::endgroup::"
+
+            # ---------- 2. 脚本存在? ----------
+            SCRIPT="backend/scripts/one-shot-prod-fix.sh"
+            if [ ! -f "$SCRIPT" ]; then
+              echo "❌ $SCRIPT 不存在 — git pull 没拉到位"
+              exit 1
+            fi
+
+            # ---------- 3. MySQL 密码准备 ----------
+            # 优先级: workflow input > GH secret $MYSQL_ROOT_PASSWORD (env) > ~/.my.cnf
+            if [ -n "${MYSQL_ROOT_PASSWORD:-}" ]; then
+              echo "✓ MySQL 密码来自 workflow input"
+            elif [ -f "$HOME/.my.cnf" ]; then
+              echo "✓ MySQL 密码来自 ~/.my.cnf"
+            else
+              echo "❌ MySQL 密码未配置 (设 input 或写 ~/.my.cnf)"
+              exit 2
+            fi
+
+            # ---------- 4. 跑一键脚本 ----------
+            echo "::group::one-shot-prod-fix.sh 开始 (7 phase)"
+            bash "$SCRIPT"
+            EXIT=$?
+            echo "::endgroup::"
+
+            # ---------- 5. 总结到 GH Actions ----------
+            echo ""
+            echo "## Emergency Deploy Result" >> "$GITHUB_STEP_SUMMARY"
+            echo "" >> "$GITHUB_STEP_SUMMARY"
+            if [ "$EXIT" -eq 0 ]; then
+              echo "✅ **PASS** — 全过" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "Deployment is healthy. 你可以现在重启 WeChat IDE 进 5 步流测试。" >> "$GITHUB_STEP_SUMMARY"
+            else
+              echo "❌ **FAIL** — exit code $EXIT" >> "$GITHUB_STEP_SUMMARY"
+              echo "" >> "$GITHUB_STEP_SUMMARY"
+              echo "把上面 log 贴给 Claude, 我看具体哪个 phase 失败。" >> "$GITHUB_STEP_SUMMARY"
+            fi
+
+            # ---------- 6. 清理 workflow input 痕迹 ----------
+            unset MYSQL_ROOT_PASSWORD
+
+            exit $EXIT
