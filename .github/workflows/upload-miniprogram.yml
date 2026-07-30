@@ -39,6 +39,26 @@ jobs:
           echo "${{ secrets.WX_MINIPROGRAM_KEY_BASE64 }}" | base64 -d > /tmp/wx_private.key
           ls -la /tmp/wx_private.key
 
+      - name: Inject runtime config (prod apiBaseUrl)
+        # config.js 是 gitignored, CI 仓库无此文件 → 注入带 prod URL 的版本,保证体验版连得到后端
+        # 用 secret 覆盖灵活: 默认 https://43.139.176.199:443 (SSH 部署的生产服务器)
+        # overwrite=always 允许 rerun 时覆盖; 末尾 cleanup 防泄露 (虽不入仓)
+        env:
+          API_BASE_URL: ${{ secrets.WX_API_BASE_URL || 'https://43.139.176.199:443' }}
+          APP_VERSION: ${{ github.event.inputs.version || format('1.0.{0}', github.run_number) }}
+        run: |
+          mkdir -p mini-program/src
+          cat > mini-program/src/config.js << EOF
+          module.exports = {
+            sentryDsnMp: '',
+            appVersion: '${APP_VERSION}',
+            environment: 'production',
+            apiBaseUrl: '${API_BASE_URL}',
+          };
+          EOF
+          echo "--- injected config.js ---"
+          cat mini-program/src/config.js
+
       - name: Upload experience version
         working-directory: mini-program
         env:
@@ -55,6 +75,11 @@ jobs:
       - name: Cleanup key
         if: always()
         run: rm -f /tmp/wx_private.key
+
+      - name: Cleanup injected config
+        # 即使 gitignored, 也清掉以确保下次 rerun 用最新 secret 值
+        if: always()
+        run: rm -f mini-program/src/config.js
 
       - name: Summary
         if: success()

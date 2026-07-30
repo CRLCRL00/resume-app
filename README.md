@@ -173,6 +173,29 @@ cat /var/log/resume-app-backup.log
 # CI 自动上传：git push 到 develop（见下方 Mini-Program Auto-Upload）
 ```
 
+## 5 步 AI 求职助手 (Jobpilot) 部署
+
+R-JobSearch 重构交付的"找岗位"功能涉及 server 侧 schema 变化（jobpilot.sql migration），见：
+
+- [docs/operations/rjobsearch-deploy-runbook.md](./docs/operations/rjobsearch-deploy-runbook.md) — 一次性 SSH 操作 + 真机验证 checklist
+- `npm run smoke:jobpilot:prod` — 一键验证 4 个核心 route 是否上线（无需 DB write）
+
+操作 TL;DR（详见 runbook）：
+
+```bash
+# 1. 等 merge + push 触发的 GH Actions deploy/miniprogram upload 变绿
+# 2. ssh 跑 migration（~10s）
+ssh ubuntu@43.139.176.199
+mysqldump -h 127.0.0.1 -uroot -p'$MYSQL_ROOT_PASSWORD' resume_app \
+  > /tmp/before-jobpilot-migration.sql
+mysql -h 127.0.0.1 -uroot -p'$MYSQL_ROOT_PASSWORD' resume_app \
+  < /opt/resume-app/backend/db/migrations/jobpilot.sql
+pm2 reload resume-app-backend --update-env
+
+# 3. 一键验证
+npm run smoke:jobpilot:prod  # 应回 Pass: 4, Fail: 0
+```
+
 ## 关键环境变量
 
 | 变量 | 必填 | 说明 |
@@ -279,6 +302,7 @@ bash /opt/resume-app/backend/scripts/deploy.sh /tmp/release.tar.gz
 | Secret | 来源 | 说明 |
 |--------|------|------|
 | `WX_MINIPROGRAM_KEY_BASE64` | `D:\小程序密钥.key` 的 base64 编码 | 微信小程序代码上传私钥（**绝不入仓**）|
+| `WX_API_BASE_URL`（可选）| 部署用的后端 API base URL | 默认 `https://43.139.176.199:443`，staging 设另值 |
 
 **设置命令**（Git Bash / WSL）
 
@@ -291,6 +315,9 @@ gh secret set WX_MINIPROGRAM_KEY_BASE64 < <(base64 -w 0 "D:/小程序密钥.key"
 
 # PowerShell 用户
 [Convert]::ToBase64String([IO.File]::ReadAllBytes('D:\小程序密钥.key')) | gh secret set WX_MINIPROGRAM_KEY_BASE64 -
+
+# 可选：覆盖默认 prod URL（staging/迁移到新域名时用）
+gh secret set WX_API_BASE_URL --body 'https://staging.example.com'
 ```
 
 **安全注意**

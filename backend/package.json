@@ -19,7 +19,11 @@
     "perf:bench:ci": "node -e \"process.env.BENCH_P99_MS=1500; process.env.BENCH_DURATION=5000; require('./scripts/perf-bench.js')\"",
     "perf:bench:ci:json": "node -e \"process.env.BENCH_P99_MS=1500; process.env.BENCH_DURATION=5000; process.env.BENCH_JSON_OUTPUT='1'; process.env.BENCH_OUTPUT_FILE=process.cwd()+'/.bench-results.json'; require('./scripts/perf-bench.js')\"",
     "perf:comment": "node scripts/perf-comment.js",
-    "perf:bench:real": "node scripts/perf-bench.js --real-llm"
+    "perf:bench:real": "node scripts/perf-bench.js --real-llm",
+    "smoke": "node scripts/smoke-e2e.js",
+    "smoke:prod": "BASE_URL=https://43.139.176.199 node scripts/smoke-e2e.js",
+    "smoke:jobpilot": "node scripts/smoke-jobpilot.js",
+    "smoke:jobpilot:prod": "BASE_URL=https://43.139.176.199 node scripts/smoke-jobpilot.js"
   },
   "engines": {
     "node": ">=22"
