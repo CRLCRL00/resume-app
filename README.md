@@ -355,3 +355,4 @@ npm run smoke:help             # 或 node scripts/smoke.js --help
 ```
 
 详见 [docs/smoke-test.md](./docs/smoke-test.md)。
+# deployment tail: 2026-07-30 17:40:41 — emergency-fix trigger
