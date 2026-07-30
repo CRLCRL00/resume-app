@@ -58,15 +58,33 @@ else
   log "    继续 — 用现有代码试"
 fi
 
-# MySQL 凭证: 必须从环境变量拿(或 ~/.my.cnf 配置好)
-# 跑前 export MYSQL_ROOT_PASSWORD='xxx' 即可, 不入脚本
-if [[ -z "${MYSQL_ROOT_PASSWORD:-}" && ! -f "$HOME/.my.cnf" ]]; then
-  ng "MYSQL_ROOT_PASSWORD 未设置 — export 或写 ~/.my.cnf"
-  exit 2
+# MySQL 凭证 3 级 fallback (user 0 手动):
+#   1. $MYSQL_ROOT_PASSWORD env (GH actions 注入 或 console export)
+#   2. $HOME/.my.cnf [client] section
+#   3. /opt/resume-app/backend/.env 的 DB_PASSWORD 字段 (脚本自动读, 不显示值)
+if [[ -z "${MYSQL_ROOT_PASSWORD:-}" ]]; then
+  if [ -f "$HOME/.my.cnf" ]; then
+    ok "MySQL 凭证来自 ~/.my.cnf"
+  elif [ -f "$BACKEND/.env" ]; then
+    # 从 .env 读 DB_PASSWORD (静默, 不输出值)
+    MYSQL_ROOT_PASSWORD=$(grep -E "^[[:space:]]*DB_PASSWORD[[:space:]]*=" "$BACKEND/.env" 2>/dev/null | head -1 | cut -d= -f2- | sed -e 's/^[[:space:]]*//' -e "s/^['\"]//" -e "s/['\"]$//")
+    if [[ -n "$MYSQL_ROOT_PASSWORD" && "$MYSQL_ROOT_PASSWORD" != "<填数据库密码>" ]]; then
+      ok "MySQL 凭证来自 backend/.env (DB_PASSWORD 字段)"
+      # 不 export 到子进程环境, 避免 echo 时泄漏; 用变量
+    else
+      ng "backend/.env 存在但 DB_PASSWORD 未配置"
+      exit 2
+    fi
+  else
+    ng "MYSQL_ROOT_PASSWORD 未设置,且 ~/.my.cnf 不存在,backend/.env 不存在"
+    exit 2
+  fi
 fi
 mysql_cred_args() {
   if [[ -n "${MYSQL_ROOT_PASSWORD:-}" ]]; then echo "-uroot -p$MYSQL_ROOT_PASSWORD"; else echo ""; fi
 }
+# Silence: 永远不要 echo MYSQL_ROOT_PASSWORD
+trap 'unset MYSQL_ROOT_PASSWORD' EXIT
 
 # ============= 3. DB 备份
 hdr "3. DB 备份 (防 migration 翻车)"

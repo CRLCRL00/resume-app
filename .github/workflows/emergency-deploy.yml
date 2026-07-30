@@ -29,10 +29,15 @@ on:
   workflow_dispatch:
     inputs:
       mysql_password:
-        description: 'MySQL root password (留空 = 用 ~/.my.cnf 或 GH secret)'
+        description: 'MySQL root password (留空 = 用 ~/.my.cnf 或 backend/.env 自动读)'
         required: false
         sensitive: true
         default: ''
+
+# 防 race condition: 多个 push 同时跑时排队
+concurrency:
+  group: prod-fix-emergency
+  cancel-in-progress: false
 
 jobs:
   fix:
