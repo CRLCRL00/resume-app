@@ -1,0 +1,97 @@
+name: WeChat MP Preview (QR)
+
+on:
+  workflow_dispatch:
+    inputs:
+      desc:
+        description: '预览说明 (写入 QR 描述)'
+        required: false
+        default: 'GH Actions auto preview'
+      pagePath:
+        description: '默认启动页 (e.g. pages/index/index, 留空用首页)'
+        required: false
+        default: ''
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mini-program/package-lock.json
+
+      - name: Install miniprogram-ci
+        working-directory: mini-program
+        run: npm ci
+
+      - name: Decode code upload key
+        run: |
+          echo "${{ secrets.WX_MINIPROGRAM_KEY_BASE64 }}" | base64 -d > /tmp/wx_private.key
+          ls -la /tmp/wx_private.key
+
+      - name: Generate preview QR
+        working-directory: mini-program
+        env:
+          DESC: ${{ github.event.inputs.desc || format('GH Actions preview #{0}', github.run_number) }}
+          PAGE: ${{ github.event.inputs.pagePath }}
+        run: |
+          ARGS=(
+            preview
+            --pp ./
+            --pkp /tmp/wx_private.key
+            --appid wx3c0c93a02f5d2356
+            --qrcode-format base64
+            --qrcode-output-destination /tmp/qr.txt
+            --udata "$DESC"
+          )
+          if [ -n "$PAGE" ]; then
+            ARGS+=(--page-path "$PAGE")
+          fi
+          npx miniprogram-ci "${ARGS[@]}"
+
+      - name: Cleanup key
+        if: always()
+        run: rm -f /tmp/wx_private.key
+
+      - name: Upload QR artifact
+        if: success()
+        run: |
+          QR_B64=$(cat /tmp/qr.txt)
+          # miniprogram-ci preview returns data:image/png;base64,xxxx OR raw base64
+          case "$QR_B64" in
+            data:image/png;base64,*) PNG_B64="${QR_B64#data:image/png;base64,}" ;;
+            *) PNG_B64="$QR_B64" ;;
+          esac
+          printf '%s' "$PNG_B64" | base64 -d > /tmp/qr.png
+          ls -la /tmp/qr.png
+
+      - name: Summary
+        if: success()
+        run: |
+          {
+            echo "## WeChat MP Preview QR"
+            echo ""
+            echo "- Commit: \`${{ github.sha }}\`"
+            echo "- Trigger: ${{ github.event_name }}"
+            echo "- Desc: ${{ github.event.inputs.desc }}"
+            echo "- Page: ${{ github.event.inputs.pagePath || '(default)' }}"
+            echo ""
+            echo "### QR Code"
+            echo ""
+            echo "![qr](/tmp/qr.png)"
+            echo ""
+            echo "或下载 artifact \`wx-mp-qr\` (qr.png) 后扫码。"
+          } >> $GITHUB_STEP_SUMMARY
+
+      - name: Upload QR file artifact
+        if: success()
+        uses: actions/upload-artifact@v4
+        with:
+          name: wx-mp-qr
+          path: /tmp/qr.png
+          retention-days: 7

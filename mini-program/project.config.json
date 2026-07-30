@@ -1,0 +1,46 @@
+{
+  "appid": "wx3c0c93a02f5d2356",
+  "projectname": "resume-app",
+  "miniprogramRoot": "./",
+  "compileType": "miniprogram",
+  "setting": {
+    "urlCheck": false,
+    "es6": true,
+    "postcss": true,
+    "compileWorklet": true,
+    "minified": true,
+    "uglifyFileName": true,
+    "uploadWithSourceMap": true,
+    "enhance": true,
+    "packNpmManually": false,
+    "packNpmRelationList": [
+      {
+        "packageName": "sentry-miniapp",
+        "version": "1.13.1",
+        "miniprogramNpmDistDir": "./",
+        "packageJsonPath": "./package.json"
+      }
+    ],
+    "minifyWXSS": true,
+    "minifyWXML": true,
+    "localPlugins": false,
+    "disableUseStrict": false,
+    "useCompilerPlugins": false,
+    "condition": true,
+    "swc": true,
+    "disableSWC": false,
+    "babelSetting": {
+      "ignore": [],
+      "disablePlugins": [],
+      "outputPath": ""
+    }
+  },
+  "simulatorPluginLibVersion": {},
+  "packOptions": {
+    "ignore": [],
+    "include": []
+  },
+  "isGameTourist": false,
+  "editorSetting": {},
+  "libVersion": "3.16.1"
+}

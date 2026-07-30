@@ -1,0 +1,177 @@
+<!--
+  R116 抖音式大屏 — 砍掉 R98 星图, 改竖滑 feed
+  5 星座纵向切换 + 字段卡片横滑 + AI 头像大字
+  R115 wizard + 后端 deepseek 仍工作 (modal 部分保留)
+
+  R109/R113 教训: 所有 opening tag 必须单行 (attribute 不跨行)
+-->
+<view class="feed-page">
+
+  <!-- R118 T2: 技能雷达图 (左下角 fixed 320rpx) -->
+  <view class="feed-radar">
+    <text class="radar-title">📊 能力画像</text>
+    <canvas type="2d" id="radar-canvas" class="radar-canvas"></canvas>
+    <view class="radar-labels">
+      <text wx:for="{{radarLabels}}" wx:key="id" wx:for-item="lbl" class="radar-axis-label">{{lbl.name}} {{radarScores[lbl.id]}}</text>
+    </view>
+  </view>
+
+  <!-- R118 T1: 简历实时预览卡 (右下角 fixed 480rpx) -->
+  <view class="feed-preview-card" wx:if="{{resumeMarkdown}}">
+    <view class="preview-header">
+      <text class="preview-title">📄 简历预览</text>
+      <view class="copy-md-btn" bindtap="onCopyMarkdown">复制</view>
+    </view>
+    <scroll-view class="preview-md-scroll" scroll-y="true">
+      <text class="preview-md">{{resumeMarkdown}}</text>
+    </scroll-view>
+  </view>
+
+  <!-- R119 B4: 完成感弹窗 (100% 完成时弹出) -->
+  <view class="complete-mask" wx:if="{{showComplete}}" bindtap="onDismissComplete">
+    <view class="complete-card">
+      <text class="complete-emoji">🎉</text>
+      <text class="complete-title">完成！</text>
+      <text class="complete-subtitle">你的简历已完整，一键投递</text>
+      <view class="complete-btn" bindtap="onDismissComplete">开始投递</view>
+    </view>
+  </view>
+
+  <!-- R119 A5: 完成度爆花 (100% 时触发的粒子, fixed 顶层) -->
+  <view class="explode-overlay" wx:if="{{showExplode}}">
+    <view wx:for="{{explodeParticles}}" wx:key="id" wx:for-item="p" class="explode-particle" style="--dx: {{p.dx}}rpx; --dy: {{p.dy}}rpx; background: {{p.color}};"></view>
+  </view>
+
+
+  <scroll-view class="feed-scroll" scroll-y="true" bindscroll="onFeedScroll" bindscrolltolower="onFeedScrollLower">
+
+    <!-- 顶部进度点 (5 星座 × 进度数字) -->
+    <view class="feed-progress">
+      <view wx:for="{{sections}}" wx:key="id" wx:for-item="sec" wx:for-index="idx" class="feed-dot {{currentSection === idx ? 'active' : ''}} {{idx < currentSection ? 'done' : ''}}" data-section-idx="{{idx}}"></view>
+      <text class="feed-progress-num">{{currentFieldIndex}} / {{wizardTotal}}</text>
+    </view>
+
+    <!-- R119 B2: 进度提示动态 (按完成度档位给不同鼓励话) -->
+    <view class="progress-prompt" wx:if="{{progressPromptText && !showComplete}}">
+      <text class="progress-prompt-text">{{progressPromptText}}</text>
+      <text wx:if="{{progressPromptHint}}" class="progress-prompt-hint">{{progressPromptHint}}</text>
+    </view>
+
+    <!-- 5 星座 section (竖排, 每屏 1 个) -->
+    <view wx:for="{{sections}}" wx:key="id" wx:for-item="section" wx:for-index="idx" class="feed-section feed-section--{{section.id}}" data-section-id="{{section.id}}">
+      <!-- R120: 星座名大字 (主视觉, AI 头像降为配角) -->
+      <text class="feed-section-name">{{section.name}}</text>
+      <!-- R120: AI 头像挪到右上角 (60x60 半透明, 不抢主视觉) -->
+      <view class="feed-ai-avatar {{completion >= 100 ? 'celebrate' : ''}}">✨</view>
+      <!-- 字段卡片 (横滑) -->
+      <scroll-view class="feed-fields" scroll-x="true">
+        <view wx:for="{{section.fields}}" wx:key="id" wx:for-item="field" wx:for-index="fIdx" class="feed-field-card {{field.fieldState.filled ? 'filled' : ''}} {{field.fieldState.current ? 'current' : ''}} {{field.fieldState.done ? 'done' : ''}}" data-field-id="{{field.id}}" data-section-idx="{{idx}}" bindtap="onFieldCardTap">
+          <text class="feed-field-label">{{field.label}}</text>
+          <text wx:if="{{field.fieldState.filled}}" class="feed-field-value">{{field.fieldState.value}}</text>
+          <text wx:elif="{{field.fieldState.current}}" class="feed-field-prompt">?</text>
+        </view>
+      </scroll-view>
+    </view>
+
+    <!-- 滑到底部提示 -->
+    <view class="feed-footer">
+      <text class="feed-footer-text">↑ 下滑下一星座</text>
+    </view>
+  </scroll-view>
+
+  <!-- 底部 fixed 大输入框 (R122 修: modal 打开时不抢焦点, 让 modal 内 tinder input 独家弹键盘) -->
+  <view class="feed-input-bar" wx:if="{{!modalVisible}}">
+    <input class="feed-input" placeholder="{{currentFieldPrompt || '点击上方字段开始'}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{!modalValue && !recommendations.length}}" bindconfirm="onModalSave" />
+    <view class="feed-send-btn" bindtap="onModalSave">发送</view>
+  </view>
+
+  <!-- R99+R114 弹窗 (wizard 模式用, 保留兼容) -->
+  <view class="modal-mask" wx:if="{{modalVisible}}" bindtap="onModalCancel">
+    <view class="modal-card" catchtap="">
+      <block wx:if="{{wizardMode}}">
+        <view class="wizard-progress">
+          <text class="wizard-progress-text">{{wizardProgress}} / {{wizardTotal}}</text>
+          <view class="wizard-progress-bar">
+            <view class="wizard-progress-fill" style="width: {{(wizardProgress / wizardTotal) * 100}}%;"></view>
+          </view>
+        </view>
+
+        <!-- R117: Tinder 卡片 (大字推荐) -->
+        <view class="tinder-card" wx:if="{{recommendations.length > 0 && currentRecommendation}}">
+          <text class="tinder-card-counter">{{currentRecommendationIdx + 1}} / {{recommendations.length}}</text>
+          <text class="tinder-card-reason">{{currentRecommendation.reason}}</text>
+          <text class="tinder-card-value">{{currentRecommendation.value}}</text>
+        </view>
+
+        <!-- R117: AI 提问 + hint -->
+        <view class="tinder-question">
+          <text class="tinder-question-text">{{wizardNextQuestion || '...'}}</text>
+          <text wx:if="{{wizardHint}}" class="tinder-hint">{{wizardHint}}</text>
+        </view>
+
+        <!-- R117: 三按钮 (Tinder) -->
+        <view class="tinder-actions" wx:if="{{recommendations.length > 0}}">
+          <view class="tinder-btn tinder-btn--left" bindtap="onSwipeLeft">← 不用</view>
+          <view class="tinder-btn tinder-btn--right" bindtap="onSwipeRight">用 →</view>
+          <view class="tinder-btn tinder-btn--up" bindtap="onSwipeUp">改 ↗</view>
+        </view>
+
+        <!-- R117: 或自己输入 (始终可用) (R121 修: 条件 focus) -->
+        <view class="tinder-input">
+          <input class="modal-input" placeholder="或自己输入..." value="{{modalValue}}" bindinput="onModalInput" focus="{{modalVisible && wizardMode && !modalValue && !currentRecommendation}}" bindconfirm="onModalSave" />
+        </view>
+
+        <!-- chips / picker (复用 R99 wizard 选项) -->
+        <block wx:if="{{modalOptions && modalOptions[0].label}}">
+          <view class="modal-chips">
+            <view class="modal-chip {{modalValue === item.value ? 'active' : ''}}" wx:for="{{modalOptions}}" wx:key="value" data-value="{{item.value}}" bindtap="onModalChip">{{item.label}}</view>
+          </view>
+        </block>
+        <block wx:if="{{modalOptions && !modalOptions[0].label}}">
+          <picker mode="selector" range="{{modalOptions}}" bindchange="onModalPicker">
+            <view class="modal-picker">点击选择 ▾</view>
+          </picker>
+        </block>
+
+        <view class="tinder-next-btn" bindtap="onModalSave">下一问 →</view>
+        <view class="wizard-cancel-btn" bindtap="onModalCancel">取消</view>
+      </block>
+      <block wx:else>
+        <scroll-view class="ai-chat-history" scroll-y="true" scroll-top="{{aiScrollTop}}" wx:if="{{aiHistory.length > 0}}">
+          <view wx:for="{{aiHistory}}" wx:key="id" wx:for-item="msg" class="ai-msg ai-msg--{{msg.role}}">
+            <view wx:if="{{msg.role === 'assistant'}}" class="ai-msg-avatar" style="background: {{modalConstColor}};">✨</view>
+            <view class="ai-msg-text">{{msg.content}}</view>
+          </view>
+        </scroll-view>
+        <view class="ai-followup" wx:if="{{aiFollowup}}" style="border-left-color: {{modalConstColor}};">
+          <text class="ai-followup-text">{{aiFollowup}}</text>
+        </view>
+        <view class="ai-suggestion-chip" wx:if="{{aiSuggestion}}" bindtap="onAISuggestionTap">
+          <text class="ai-suggestion-icon">💡</text>
+          <text class="ai-suggestion-text">{{aiSuggestion}}</text>
+        </view>
+        <view class="ai-error" wx:if="{{aiError}}">
+          <text class="ai-error-text">⚠️ {{aiError}}</text>
+          <view class="ai-error-retry" bindtap="onAIErrorRetry">重试</view>
+        </view>
+        <!-- R99 恢复: AI 提示气泡 (assist 模式, aiHistory 为空时显示, 避免与 ai-chat-history 重复) -->
+        <view class="modal-ai-bubble" wx:if="{{modalFieldAi && aiHistory.length === 0}}" style="border-left-color: {{modalConstColor}};">
+          <view class="modal-ai-avatar" style="background: {{modalConstColor}};">✨</view>
+          <view class="modal-ai-content">
+            <text class="modal-ai-name">简历助手</text>
+            <text class="modal-ai-text">{{modalFieldAi}}</text>
+          </view>
+        </view>
+        <text class="modal-label">{{modalFieldLabel}}</text>
+        <block wx:if="{{!modalOptions}}">
+          <input class="modal-input" placeholder="{{modalPlaceholder}}" value="{{modalValue}}" bindinput="onModalInput" focus="{{true}}" bindconfirm="onModalSave" />
+        </block>
+        <view class="modal-actions">
+          <view class="modal-cancel" bindtap="onModalCancel">取消</view>
+          <view class="modal-save" bindtap="onModalSave">保存 ✨</view>
+        </view>
+      </block>
+    </view>
+  </view>
+
+</view>

@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Admin / Audit</title>
+  <link rel="stylesheet" href="/admin/css/admin.css">
+  <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body x-data="auditPage()" x-init="init()">
+  <header><h1>Audit Logs</h1><a href="/admin/dashboard.html">← Dashboard</a><button @click="logout()">Logout</button></header>
+  <main>
+    <div class="filters">
+      <label>action 前缀 <input x-model="action" @input.debounce.300ms="load()"></label>
+      <label>actor <input x-model="openid" @input.debounce.300ms="load()"></label>
+      <label>from <input type="date" x-model="dateFrom" @change="load()"></label>
+      <label>to <input type="date" x-model="dateTo" @change="load()"></label>
+    </div>
+    <p x-show="errMsg" class="err" x-text="errMsg"></p>
+    <table>
+      <thead><tr><th>time</th><th>actor</th><th>action</th><th>target</th><th>detail</th></tr></thead>
+      <tbody>
+        <template x-for="r in rows" :key="r.id">
+          <tr>
+            <td x-text="(r.created_at||'').slice(0,19).replace('T',' ')"></td>
+            <td x-text="r.openid"></td>
+            <td x-text="r.action"></td>
+            <td x-text="(r.target_type||'') + ':' + (r.target_id||'')"></td>
+            <td><code x-text="(r.detail||'').slice(0,80)"></code></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <div class="pager">
+      <button :disabled="offset<=0" @click="offset=Math.max(0,offset-limit); load()">‹</button>
+      <span x-text="(offset+1) + '–' + Math.min(offset+limit,total) + ' / ' + total"></span>
+      <button :disabled="offset+limit >= total" @click="offset+=limit; load()">›</button>
+    </div>
+  </main>
+  <script src="/admin/js/api.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script>
+    function auditPage() {
+      return {
+        action: '', openid: '', dateFrom: '', dateTo: '',
+        limit: 50, offset: 0, total: 0, rows: [], errMsg: '',
+        async init() { try { await requireAuth(); } catch (_e) { return; } this.load(); },
+        async load() {
+          try {
+            const qs = new URLSearchParams({ limit: this.limit, offset: this.offset });
+            if (this.action) qs.set('action', this.action);
+            if (this.openid) qs.set('openid', this.openid);
+            if (this.dateFrom) qs.set('since', this.dateFrom + 'T00:00:00Z');
+            if (this.dateTo) qs.set('until', this.dateTo + 'T23:59:59Z');
+            const d = await api('/admin/audit?' + qs.toString());
+            this.rows = d.rows; this.total = d.total;
+          } catch (e) { this.errMsg = e.message; }
+        },
+        async logout() { await logout(); },
+      };
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Admin Login</title>
+  <link rel="stylesheet" href="/admin/css/admin.css">
+  <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body x-data="loginPage()" x-init="init()">
+  <main class="login-card">
+    <h1>Admin 登录</h1>
+    <p class="hint">生产：需 <code>wx.login()</code> code（cookie 模式下浏览器拿不到 wx code，此入口仅 dev）</p>
+    <form @submit.prevent="submit()">
+      <label>openid <input x-model="openid" placeholder="dev-admin" required></label>
+      <input type="hidden" name="code" value="dev-bypass">
+      <button type="submit" :disabled="loading">
+        <span x-show="!loading">登录</span><span x-show="loading">...</span>
+      </button>
+      <p class="err" x-show="errMsg" x-text="errMsg"></p>
+    </form>
+    <p class="footer">dev-bypass 仅 <code>NODE_ENV !== 'production'</code> 生效</p>
+  </main>
+  <script src="/admin/js/api.js"></script>
+  <script>
+    function loginPage() {
+      return {
+        openid: 'dev-admin',
+        loading: false,
+        errMsg: '',
+        async init() {
+          // 若已有 session → 直跳 dashboard
+          try { await api('/admin/check'); window.location.href = '/admin/dashboard.html'; } catch (_e) {}
+        },
+        async submit() {
+          this.loading = true; this.errMsg = '';
+          try {
+            await api('/auth/login', { method: 'POST', body: JSON.stringify({ code: 'dev-bypass', openid: this.openid }) });
+            window.location.href = '/admin/dashboard.html';
+          } catch (e) { this.errMsg = e.message || 'login failed'; }
+          this.loading = false;
+        },
+      };
+    }
+  </script>
+</body>
+</html>

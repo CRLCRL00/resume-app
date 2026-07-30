@@ -1,0 +1,31 @@
+<view class="container">
+  <view class="card">
+    <view class="section-title">当前版本</view>
+    <view class="row">隐私：{{versions.privacy.version}} ({{versions.privacy.updated_at}})</view>
+    <view class="row">服务条款：{{versions.terms.version}} ({{versions.terms.updated_at}})</view>
+  </view>
+
+  <view class="card">
+    <view class="section-title">bump 新版本</view>
+
+    <view class="label">文档类型</view>
+    <picker mode="selector" range="{{['privacy','terms']}}" bindchange="pickDocType">
+      <view class="input">类型：{{form.doc_type}}</view>
+    </picker>
+
+    <view class="label">版本号（YYYY-MM-DD）</view>
+    <input class="input" placeholder="2026-07-01" value="{{form.version}}" bindinput="setField" data-field="version" />
+
+    <view class="label">备注</view>
+    <input class="input" placeholder="如：v1.1 增强..." value="{{form.note}}" bindinput="setField" data-field="note" />
+
+    <view class="btn-primary" style="margin-top:24rpx;" bindtap="bump">{{saving ? '提交中...' : '提交 bump'}}</view>
+  </view>
+
+  <view class="card notice">
+    <view class="section-title">提示</view>
+    <view>1. 修改 docs/legal/*.md 源文档，再 bump 新版本号</view>
+    <view>2. bump 后所有客户端 mini-program 启动时会自动比对 storage 与最新版本，不一致重弹隐私弹窗</view>
+    <view>3. bump 操作会写入 admin_operation_logs (action='legal-version.bump')</view>
+  </view>
+</view>

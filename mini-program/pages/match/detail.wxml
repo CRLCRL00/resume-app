@@ -1,0 +1,22 @@
+<view class="container">
+  <view wx:if="{{loading}}" class="card">加载中...</view>
+  <view wx:elif="{{!job}}" class="card">岗位不存在</view>
+  <view wx:else>
+    <view class="card">
+      <view style="display:flex; justify-content:space-between; align-items:center;">
+        <view style="font-size:36rpx; font-weight:bold;">{{job.title}}</view>
+        <view wx:if="{{score > 0}}" style="font-size:48rpx; font-weight:bold; color:{{scoreColor}};">{{score}}</view>
+      </view>
+      <view class="label">{{job.company}} · {{job.city}}</view>
+      <view class="label">{{job.salary_min}}-{{job.salary_max}}K · {{job.degree_required}} · {{job.experience_required}}</view>
+      <view wx:if="{{reason}}" class="label" style="margin-top:16rpx; color:#07c160;">💡 {{reason}}</view>
+    </view>
+    <view class="card">
+      <view style="font-weight:bold; margin-bottom:16rpx;">技能要求</view>
+      <view class="label">{{skillsText}}</view>
+    </view>
+    <view class="card resume-body">
+      <rich-text nodes="{{mdHtml}}" />
+    </view>
+  </view>
+</view>

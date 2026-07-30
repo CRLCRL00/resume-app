@@ -1,0 +1,75 @@
+name: Sentry MP Source Map
+
+# 默认 OFF（workflow_dispatch 仅手动触发），避免 dev push 误触发垃圾 release
+# tag 触发：mp-v* 形式，例如 mp-v1.0.0
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: 'Sentry release tag (e.g. my-miniapp@1.0.0)'
+        required: false
+        default: ''
+  push:
+    tags:
+      - 'mp-v*'
+
+jobs:
+  build-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    # secrets 缺失时跳过（默认 OFF 的另一种保险）
+    if: ${{ github.event_name == 'workflow_dispatch' || startsWith(github.ref, 'refs/tags/mp-v') }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mini-program/package-lock.json
+
+      - name: Install dependencies
+        working-directory: mini-program
+        run: npm ci
+
+      - name: Decode WeChat mini-program key
+        run: |
+          echo "${{ secrets.WX_MINIPROGRAM_KEY_BASE64 }}" | base64 -d > /tmp/wx_private.key
+          ls -la /tmp/wx_private.key
+
+      - name: Build mini-program (miniprogram-ci)
+        working-directory: mini-program
+        env:
+          RELEASE: ${{ github.event.inputs.release || format('resume-app-mini-program@mp-{0}', github.run_number) }}
+        run: |
+          mkdir -p dist
+          npx miniprogram-ci build \
+            --pp ./ \
+            --pkp /tmp/wx_private.key \
+            --appid wx3c0c93a02f5d2356 \
+            --uv "$RELEASE" \
+            --output ./dist
+
+      - name: Upload source maps to Sentry
+        if: success()
+        working-directory: mini-program
+        env:
+          SENTRY_AUTH_TOKEN: ${{ secrets.SENTRY_AUTH_TOKEN }}
+          SENTRY_ORG: ${{ secrets.SENTRY_ORG }}
+          SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_MP }}
+          SENTRY_DIST_DIR: ./dist
+          SENTRY_URL_PREFIX: 'app:///'
+          RELEASE: ${{ github.event.inputs.release || format('resume-app-mini-program@mp-{0}', github.run_number) }}
+        run: node scripts/upload-sourcemaps.js "$RELEASE"
+
+      - name: Cleanup key
+        if: always()
+        run: rm -f /tmp/wx_private.key
+
+      - name: Summary
+        if: success()
+        run: |
+          echo "## Sentry MP Source Map" >> $GITHUB_STEP_SUMMARY
+          echo "- Release: \`${{ env.RELEASE }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Commit: \`${{ github.sha }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Trigger: ${{ github.event_name }}" >> $GITHUB_STEP_SUMMARY

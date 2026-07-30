@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <title>Admin / Jobs</title>
+  <link rel="stylesheet" href="/admin/css/admin.css">
+  <script defer src="https://unpkg.com/alpinejs@3.13.5/dist/cdn.min.js"></script>
+</head>
+<body x-data="jobsPage()" x-init="init()">
+  <header><h1>Jobs</h1><a href="/admin/dashboard.html">← Dashboard</a><button @click="logout()">Logout</button></header>
+  <main>
+    <input type="search" x-model="q" @input.debounce.300ms="load()" placeholder="搜 title/company/desc...">
+    <p x-show="errMsg" class="err" x-text="errMsg"></p>
+    <table>
+      <thead><tr><th>id</th><th>title</th><th>company</th><th>city</th><th>salary</th><th>online</th><th>created</th></tr></thead>
+      <tbody>
+        <template x-for="j in items" :key="j.id">
+          <tr>
+            <td x-text="j.id"></td>
+            <td x-text="j.title"></td>
+            <td x-text="j.company"></td>
+            <td x-text="j.city"></td>
+            <td x-text="(j.salary_min||0) + '-' + (j.salary_max||0) + 'K'"></td>
+            <td x-text="j.is_online ? '✓' : '—'"></td>
+            <td x-text="(j.created_at||'').slice(0,16)"></td>
+          </tr>
+        </template>
+      </tbody>
+    </table>
+    <div class="pager">
+      <button :disabled="page<=1" @click="page--; load()">‹</button>
+      <span x-text="page + ' / ' + Math.max(1, Math.ceil(total/pageSize))"></span>
+      <button :disabled="page*pageSize >= total" @click="page++; load()">›</button>
+    </div>
+  </main>
+  <script src="/admin/js/api.js"></script>
+  <script src="/admin/js/auth.js"></script>
+  <script>
+    function jobsPage() {
+      return {
+        q: '', page: 1, pageSize: 20, total: 0, items: [], errMsg: '',
+        async init() { try { await requireAuth(); } catch (_e) { return; } this.load(); },
+        async load() {
+          try {
+            const qs = `?page=${this.page}&pageSize=${this.pageSize}` + (this.q ? `&q=${encodeURIComponent(this.q)}` : '');
+            const d = await api('/admin/jobs' + qs);
+            this.items = d.items; this.total = d.total;
+          } catch (e) { this.errMsg = e.message; }
+        },
+        async logout() { await logout(); },
+      };
+    }
+  </script>
+</body>
+</html>

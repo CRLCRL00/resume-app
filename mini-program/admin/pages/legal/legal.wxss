@@ -1,0 +1,8 @@
+@import "../../styles/admin-common.wxss";
+
+.row { font-size: 28rpx; color: #333; line-height: 1.8; }
+.notice {
+  background: #f7f8fa;
+  color: #666;
+}
+.notice view { font-size: 24rpx; line-height: 1.8; }

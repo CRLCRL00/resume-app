@@ -1,0 +1,2 @@
+.container { padding: 24rpx; padding-bottom: 96rpx; }
+.resume-body { line-height: 1.6; }

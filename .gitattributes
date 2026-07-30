@@ -1,0 +1,9 @@
+# Force LF line endings for shell scripts (server-side bash needs LF).
+# Without this, Windows git autocrlf converts *.sh to CRLF on checkout,
+# which breaks bash parsing on Linux server (^M treated as command).
+*.sh        eol=lf
+*.cron      eol=lf
+*.service   eol=lf
+*.timer     eol=lf
+# Bash heredocs / configs also LF
+infra/**/*.sh  eol=lf

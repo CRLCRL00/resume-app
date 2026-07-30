@@ -1,0 +1,8 @@
+# R53: public IP watchdog — detects server-NAT IP drift (R52 root cause)
+# 每 6 小时一次 + 启动一次 (开机 1 分钟后)
+
+# boot detection (network 起来后)
+@reboot root sleep 60 && /usr/local/bin/public-ip-watchdog.sh >> /var/log/resume-app-public-ip.log 2>&1
+
+# periodic — every 6h
+0 */6 * * * root /usr/local/bin/public-ip-watchdog.sh >> /var/log/resume-app-public-ip.log 2>&1

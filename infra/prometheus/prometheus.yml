@@ -1,0 +1,60 @@
+# R41-Gap-9: Standalone Prometheus config for resume-app backend.
+# 用法：
+#   1. 上 server（或独立 VM）：apt install prometheus
+#   2. cp infra/prometheus/prometheus.yml /etc/prometheus/prometheus.yml
+#   3. cp infra/prometheus/alerts.yml /etc/prometheus/rules/
+#   4. systemctl restart prometheus
+#   5. 验证：curl http://prometheus:9090/api/v1/rules | jq '.data.groups[].rules[].name'
+#
+# 配套：infra/prometheus/alertmanager.yml / docker-compose.yml 也提供。
+# 本文件是 standalone（非 docker）路径。
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 30s
+  external_labels:
+    monitor: 'resume-app-prod'
+    env: '${ENVIRONMENT:-prod}'
+
+# R41-Gap-9: 加载 R40 已有的 alerts.yml
+rule_files:
+  - /etc/prometheus/rules/alerts.yml
+
+# 配套 Alertmanager 路由
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: ['127.0.0.1:9093']
+
+# scrape targets
+scrape_configs:
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['127.0.0.1:9090']
+
+  # R41-Gap-9: backend 直接给 prom-client /metrics 暴露
+  # （已在 R40 nginx 加 /api/internal 白名单，Prom server 应在内网，否则需 SSH tunnel）
+  - job_name: 'resume-app-backend'
+    metrics_path: /api/internal/metrics
+    scheme: http
+    static_configs:
+      - targets: ['127.0.0.1:3003']
+        labels:
+          service: 'resume-app-backend'
+          env: '${ENVIRONMENT:-prod}'
+
+  # R41-Gap-9: blackbox 外探 — 触发 up{job="backend"} 让 alerts.yml RedisDown 可用
+  - job_name: 'backend-blackbox'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+          - http://127.0.0.1:3003/api/health/deep
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: 127.0.0.1:9115  # blackbox_exporter 默认端口

@@ -1,0 +1,16 @@
+-- Migration 001: jobs 表复合索引 — NO-OP（索引已存在）
+-- Date: 2026-06-30
+-- 状态：✅ 已存在于 Phase 1 schema 初始化时
+--
+-- 现状（SHOW INDEX FROM jobs）:
+--   PRIMARY (id)
+--   idx_online_city (is_online, is_deleted, city)  ← 已对应当前 WHERE 路径
+--   idx_salary (salary_min, salary_max)
+--   idx_degree (degree_required)
+--   idx_experience (experience_required)
+--
+-- 不需额外 ALTER。
+-- 当 jobs 行数 > 1000 且查询明显变慢时，再视 EXPLAIN 结果决定是否重建。
+--
+-- 参考用法：
+--   EXPLAIN SELECT id, title FROM jobs WHERE is_online=1 AND is_deleted=0 AND city='深圳';
