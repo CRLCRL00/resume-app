@@ -4,12 +4,18 @@
  * 监听 tasks 表 pending task → 调对应 handler → 更新 status
  */
 
+/**
+ * R133: Task Worker (独立进程, PM2 跑)
+ * 用法: NODE_ENV=production pm2 start backend/scripts/task-worker.js --name resume-app-task-worker
+ * 监听 tasks 表 pending task → 调对应 handler → 更新 status
+ */
+
+// 必须在 require 任何模块前设 NODE_ENV, 否则 logger.js (NODE_ENV=undefined → usePretty=true)
+// 会触发 pino-pretty transport target 找不到 → crash → cascade 导致 require chain 失败 → routes/tasks.js 500
+process.env.NODE_ENV = process.env.NODE_ENV || 'production';
+
 const { runWorker } = require('../src/lib/tasks');
 const { diagnoseProfile, scoreProject } = require('../src/services/jobpilotAi');
-
-// R133 fix: PM2 跑 worker 时 NODE_ENV=production, pino logger 用 pino-pretty
-// 找不到 transport target, 直接 require logger 会 crash.
-// 改成用 console (PM2 自身会 redirect stdout/stderr 到 log file).
 
 // Handlers map: task type → async (payload) => result
 const handlers = {
@@ -30,7 +36,7 @@ const handlers = {
   },
 };
 
-console.log('[task-worker] start, handlers: ' + Object.keys(handlers).join(', '));
+console.log('[task-worker] start, NODE_ENV=' + process.env.NODE_ENV + ', handlers: ' + Object.keys(handlers).join(', '));
 
 // 10s poll 一次
 runWorker(handlers, { intervalMs: 10000 }).catch((err) => {
