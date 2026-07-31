@@ -17,15 +17,12 @@ Page({
     }
   },
 
-  goForm() {
-    wx.navigateTo({ url: '/pages/form/bigscreen/bigscreen' });
-  },
-
   goPreview() {
     wx.navigateTo({ url: '/pages/preview/preview' });
   },
 
-  // R-JobSearch 重构: "找岗位" 改成跳 5 步流 (含 Step 3 岗位匹配 + Step 4 简历生成 + Step 5 投递追踪)
+  // R129 整合: 唯一入口, 跳 6 步流 (jobpilot/index)
+  // Step 0 基本信息 (整合自 BigScreen) → Step 1 画像 → Step 2 项目 → Step 3 匹配 → Step 4 简历 → Step 5 投递
   goJobPilot() {
     wx.navigateTo({ url: '/pages/jobpilot/index/index' });
   },

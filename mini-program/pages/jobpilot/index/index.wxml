@@ -1,4 +1,4 @@
-<!-- R-JobSearch 重构 v2: AI 实习求职助手 5 步流程 (优化版) -->
+<!-- R-JobSearch 重构 v3: AI 求职助手 6 步流程 (整合 BigScreen + 5 步法) -->
 <view class="jobpilot-page">
 
   <!-- Tab 切换 (含完成标记) -->
@@ -16,14 +16,67 @@
     </view>
   </view>
 
-  <!-- 进度条 (1/5) -->
+  <!-- 进度条 (6 步) -->
   <view class="progress-bar">
-    <view class="progress-fill" style="width: {{completedSteps.length * 20}}%"></view>
-    <text class="progress-text">{{completedSteps.length}}/5 已完成</text>
+    <view class="progress-fill" style="width: {{completedSteps.length * 16.67}}%"></view>
+    <text class="progress-text">{{completedSteps.length}}/6 已完成</text>
+  </view>
+
+  <!-- Step 0: 基本信息 (R129 整合自 BigScreen) -->
+  <view wx:if="{{currentStep === 0}}" class="step-content">
+    <view class="step-title">📝 Step 0: 基本信息</view>
+    <view class="step-desc">填 6 项, AI 会用来生成简历 + 匹配岗位</view>
+
+    <view class="form-group">
+      <text class="label">姓名 *</text>
+      <input class="input" placeholder="如:王小明" value="{{basicForm.name}}" bindinput="onBasicInput" data-field="name" />
+    </view>
+
+    <view class="form-group">
+      <text class="label">性别 *</text>
+      <picker mode="selector" range="{{['男','女','其他']}}" value="{{basicForm.genderIndex || 0}}" bindchange="onBasicPickerChange" data-field="gender" data-options="{{['男','女','其他']}}">
+        <view class="picker">{{basicForm.gender || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <view class="form-group">
+      <text class="label">学历 *</text>
+      <picker mode="selector" range="{{['高中','大专','本科','硕士','博士']}}" bindchange="onBasicPickerChange" data-field="education" data-options="{{['高中','大专','本科','硕士','博士']}}">
+        <view class="picker">{{basicForm.education || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <view class="form-group">
+      <text class="label">工作年限 *</text>
+      <picker mode="selector" range="{{['应届','1-3年','3-5年','5-10年','10年+']}}" bindchange="onBasicPickerChange" data-field="workYears" data-options="{{['应届','1-3年','3-5年','5-10年','10年+']}}">
+        <view class="picker">{{basicForm.workYears || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <view class="form-group">
+      <text class="label">期望岗位 *</text>
+      <input class="input" placeholder="如:AI 产品经理 / 全栈工程师" value="{{basicForm.expectedPosition}}" bindinput="onBasicInput" data-field="expectedPosition" />
+    </view>
+
+    <view class="form-group">
+      <text class="label">期望薪资 *</text>
+      <picker mode="selector" range="{{['10K 以下','10-20K','20-30K','30-50K','50K+']}}" bindchange="onBasicPickerChange" data-field="expectedSalary" data-options="{{['10K 以下','10-20K','20-30K','30-50K','50K+']}}">
+        <view class="picker">{{basicForm.expectedSalary || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <button class="btn-primary" bindtap="submitBasic">下一步 → Step 1</button>
+
+    <view wx:if="{{completedSteps.includes(0)}}" class="result">
+      <view class="result-title">✅ 基本信息已保存</view>
+      <view class="result-row">{{basicForm.name}} · {{basicForm.gender}} · {{basicForm.education}}</view>
+      <view class="result-row">{{basicForm.workYears}} · 期望 {{basicForm.expectedPosition}} · {{basicForm.expectedSalary}}</view>
+      <button class="btn-secondary" bindtap="nextStep" style="margin-top:24rpx;">下一步 →</button>
+    </view>
   </view>
 
   <!-- Step 1: 画像诊断 -->
-  <view wx:if="{{currentStep === 0}}" class="step-content">
+  <view wx:if="{{currentStep === 1}}" class="step-content">
     <view class="step-title">👤 Step 1: 画像诊断</view>
     <view class="step-desc">填 5 个问题,AI 输出 4 种画像分类 + 推荐岗位池</view>
 
@@ -91,7 +144,7 @@
   </view>
 
   <!-- Step 2: 项目提取 -->
-  <view wx:if="{{currentStep === 1}}" class="step-content">
+  <view wx:if="{{currentStep === 2}}" class="step-content">
     <view class="step-title">📦 Step 2: 项目提取</view>
     <view class="step-desc">AI 评分 1-10 + 改进建议 + STAR 故事点</view>
 
@@ -153,7 +206,7 @@
   </view>
 
   <!-- Step 3: 岗位匹配 -->
-  <view wx:if="{{currentStep === 2}}" class="step-content">
+  <view wx:if="{{currentStep === 3}}" class="step-content">
     <view class="step-title">🎯 Step 3: 岗位匹配</view>
     <view class="step-desc">基于简历内容,匹配 verify 过 + 评分 1-10 (resume_id 已自动填)</view>
 
@@ -185,7 +238,7 @@
   </view>
 
   <!-- Step 4: 简历生成 -->
-  <view wx:if="{{currentStep === 3}}" class="step-content">
+  <view wx:if="{{currentStep === 4}}" class="step-content">
     <view class="step-title">📄 Step 4: 简历生成</view>
     <view class="step-desc">AI 生成完整简历 + 3-5 个 STAR 故事点 (面试直接用)</view>
 
@@ -216,7 +269,7 @@
   </view>
 
   <!-- Step 5: 投递追踪 -->
-  <view wx:if="{{currentStep === 4}}" class="step-content">
+  <view wx:if="{{currentStep === 5}}" class="step-content">
     <view class="step-title">📮 Step 5: 投递追踪</view>
     <view class="step-desc">管理你的所有投递 (HR 回信 / 面试安排 / 拒绝)</view>
 

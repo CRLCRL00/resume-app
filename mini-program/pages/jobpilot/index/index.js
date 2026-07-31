@@ -1,21 +1,19 @@
 /**
- * R-JobSearch 重构 v2: AI 实习求职助手 - 5 步流程入口页
+ * R-JobSearch 重构 v3: AI 求职助手 - 6 步流程入口页 (整合 BigScreen + 原 5 步)
  *
- * 优化点 (vs v1):
- *   - 修 _api bug: 用 wx.getStorageSync('token') 而不是 app.globalData.userToken
- *   - 修 onLoad bug: 同上 (token 在 storage,不在 globalData)
- *   - 自动从 /resume/current 获取 resume_id (用户不用手动填)
- *   - 完成步骤后自动跳到下一步 (省用户操作)
- *   - 步骤进度指示 (1/5)
- *   - 表单数据持久化 (storage) — 用户切走再回来不丢
- *   - 错误信息更具体 (区分网络错 / API 错 / 字段错)
+ * 优化点 (vs v2):
+ *   - R129: 整合 BigScreen 5 星座填基础资料进 5 步流 — 6 步变 1 流程,user 不再被干扰
+ *   - Step 0: 基本信息 (姓名/性别/学历/工作年限/期望岗位/期望薪资) — 6 字段
+ *   - Step 1-5: 原画像诊断/项目提取/岗位匹配/简历生成/投递追踪
+ *   - 表单持久化 (storage)
  *
  * 步骤:
- *   1. 画像诊断 (5 题 → AI 输出 4 种画像分类)
- *   2. 项目提取 (用户描述项目 → AI 评分 1-10)
- *   3. 岗位匹配 (调用 /api/match,显示 verify_status + score_10)
- *   4. 简历生成 (调用 /api/resume/generate,显示 storyPoints)
- *   5. 投递追踪 (调用 /api/match/applications,管理投递状态)
+ *   0. 基本信息 (姓名/性别/学历/工作年限/期望岗位/期望薪资) [整合自 BigScreen]
+ *   1. 画像诊断 (学历/AI能力/项目经验/求职目标/时间窗口)
+ *   2. 项目提取 (项目名/技术栈/AI协作方式/我的角色/项目地址)
+ *   3. 岗位匹配 (调 /api/match)
+ *   4. 简历生成 (调 /api/resume/generate)
+ *   5. 投递追踪 (调 /api/match/applications)
  */
 
 const { apiBaseUrl } = require('../../../src/config');
@@ -28,8 +26,9 @@ const app = getApp();
 Page({
   data: {
     currentStep: 0,
-    completedSteps: [],  // 已完成的步骤 [0, 1, 2, 3, 4]
+    completedSteps: [],
     steps: [
+      { id: 'basic', name: '基本信息', icon: '📝' },
       { id: 'profile', name: '画像诊断', icon: '👤' },
       { id: 'project', name: '项目提取', icon: '📦' },
       { id: 'match', name: '岗位匹配', icon: '🎯' },
@@ -37,20 +36,28 @@ Page({
       { id: 'tracker', name: '投递追踪', icon: '📮' },
     ],
 
+    // Step 0: 基本信息 (整合自 BigScreen, 6 字段)
+    basicForm: { name: '', gender: '', education: '', workYears: '', expectedPosition: '', expectedSalary: '' },
+
+    // Step 1: 画像诊断
     profileForm: { education: '', aiAbility: '', projects: '', target: '', timeline: '' },
     profileResult: null,
 
+    // Step 2: 项目提取
     projectForm: { name: '', techStack: '', aiCollaboration: '', myRole: '', url: '' },
     projectResult: null,
 
+    // Step 3: 岗位匹配
     matchResumeId: '',
     matchResults: [],
     matchLoading: false,
 
+    // Step 4: 简历生成
     generateResumeId: '',
     generateResult: null,
     generateLoading: false,
 
+    // Step 5: 投递追踪
     applications: [],
     trackerLoading: false,
   },
@@ -70,6 +77,7 @@ Page({
       try {
         const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
         this.setData({
+          basicForm: parsed.basicForm || this.data.basicForm,
           profileForm: parsed.profileForm || this.data.profileForm,
           profileResult: parsed.profileResult || null,
           projectForm: parsed.projectForm || this.data.projectForm,
@@ -111,25 +119,26 @@ Page({
     const idx = Number(e.currentTarget.dataset.idx);
     this.setData({ currentStep: idx });
     // Step 5 自动加载
-    if (idx === 4 && this.data.applications.length === 0) {
+    if (idx === 5 && this.data.applications.length === 0) {
       this.loadApplications();
     }
   },
 
   /**
-   * 自动跳到下一步 (Step 1 完成 → Step 2)
+   * 自动跳到下一步 (R129: 6 步)
    */
   nextStep() {
     const idx = this.data.currentStep;
-    if (idx < 4) {
+    if (idx < 5) {
       this.setData({ currentStep: idx + 1 });
-      if (idx + 1 === 4) this.loadApplications();
+      if (idx + 1 === 5) this.loadApplications();
     }
   },
 
   // ===== State 持久化 =====
   saveState() {
     wx.setStorageSync(STORAGE_KEY, {
+      basicForm: this.data.basicForm,
       profileForm: this.data.profileForm,
       profileResult: this.data.profileResult,
       projectForm: this.data.projectForm,
@@ -143,6 +152,46 @@ Page({
       this.setData({ completedSteps: [...this.data.completedSteps, stepIdx] });
       this.saveState();
     }
+  },
+
+  // ===== Step 0: 基本信息 (R129 整合自 BigScreen) =====
+
+  onBasicInput(e) {
+    const { field } = e.currentTarget.dataset;
+    this.setData({ [`basicForm.${field}`]: e.detail.value });
+  },
+
+  onBasicPickerChange(e) {
+    const { field, options } = e.currentTarget.dataset;
+    const idx = Number(e.detail.value);
+    const value = options[idx];
+    this.setData({ [`basicForm.${field}`]: value });
+  },
+
+  submitBasic() {
+    const { basicForm } = this.data;
+    if (!basicForm.name || basicForm.name.trim().length < 1) {
+      return wx.showToast({ title: '请填姓名', icon: 'none' });
+    }
+    if (!basicForm.gender) {
+      return wx.showToast({ title: '请选择性别', icon: 'none' });
+    }
+    if (!basicForm.education) {
+      return wx.showToast({ title: '请选择学历', icon: 'none' });
+    }
+    if (!basicForm.workYears) {
+      return wx.showToast({ title: '请选择工作年限', icon: 'none' });
+    }
+    if (!basicForm.expectedPosition) {
+      return wx.showToast({ title: '请填期望岗位', icon: 'none' });
+    }
+    if (!basicForm.expectedSalary) {
+      return wx.showToast({ title: '请选择期望薪资', icon: 'none' });
+    }
+    this.markCompleted(0);
+    this.saveState();
+    wx.showToast({ title: '基本信息已保存 → Step 1', icon: 'success' });
+    setTimeout(() => this.nextStep(), 800);
   },
 
   // ===== Step 1: 画像诊断 =====
@@ -165,7 +214,7 @@ Page({
       const res = await this._api('/api/jobpilot/profile-diagnose', 'POST', profileForm);
       if (res.ok) {
         this.setData({ profileResult: res });
-        this.markCompleted(0);
+        this.markCompleted(1);
         this.saveState();
         wx.hideLoading();
         wx.showToast({ title: '诊断完成 → 自动到 Step 2', icon: 'success' });
@@ -196,7 +245,7 @@ Page({
       const res = await this._api('/api/jobpilot/project-score', 'POST', projectForm);
       if (res.ok) {
         this.setData({ projectResult: res });
-        this.markCompleted(1);
+        this.markCompleted(2);
         this.saveState();
         wx.hideLoading();
         wx.showToast({ title: '评估完成 → 自动到 Step 3', icon: 'success' });
@@ -224,7 +273,7 @@ Page({
       });
       if (res.code === 0) {
         this.setData({ matchResults: res.data.results || [] });
-        this.markCompleted(2);
+        this.markCompleted(3);
         wx.hideLoading();
       } else {
         throw new Error(res.error || '匹配失败');
@@ -275,7 +324,7 @@ Page({
             mode: res.data.mode,
           },
         });
-        this.markCompleted(3);
+        this.markCompleted(4);
         wx.hideLoading();
         wx.showToast({ title: '生成完成 → 自动到 Step 5', icon: 'success' });
         setTimeout(() => this.nextStep(), 800);
@@ -297,7 +346,7 @@ Page({
       const res = await this._api('/api/match/applications', 'GET');
       if (res.code === 0) {
         this.setData({ applications: res.data.applications || [], trackerLoading: false });
-        this.markCompleted(4);
+        this.markCompleted(5);
       } else {
         throw new Error(res.error || '加载失败');
       }
