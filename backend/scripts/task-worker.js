@@ -6,8 +6,10 @@
 
 const { runWorker } = require('../src/lib/tasks');
 const { diagnoseProfile, scoreProject } = require('../src/services/jobpilotAi');
-const { request } = require('../src/utils/request');
-const logger = require('../src/utils/logger').default || require('../src/utils/logger');
+
+// R133 fix: PM2 跑 worker 时 NODE_ENV=production, pino logger 用 pino-pretty
+// 找不到 transport target, 直接 require logger 会 crash.
+// 改成用 console (PM2 自身会 redirect stdout/stderr 到 log file).
 
 // Handlers map: task type → async (payload) => result
 const handlers = {
@@ -21,29 +23,17 @@ const handlers = {
     return scoreProject(payload);
   },
 
-  // ai_assist: AI 辅助生成字段 (R114)
-  ai_assist: async (payload) => {
-    // 调 /api/ai/assist-field (worker 是内部调用, 走 request util)
-    const res = await request({
-      url: '/ai/assist-field',
-      method: 'POST',
-      data: payload,
-      internal: true,  // 标记 worker 内调用
-    });
-    return res.data || res;
-  },
-
   // verify_jobs: 批量 verify jobs (cron 跑, 暂未实现具体逻辑)
   verify_jobs: async (payload) => {
-    logger.info({ payload }, '[verify_jobs] 暂未实现');
+    console.log('[verify_jobs] 暂未实现', payload);
     return { status: 'skipped', reason: 'not implemented' };
   },
 };
 
-logger.info('[task-worker] start, handlers: ' + Object.keys(handlers).join(', '));
+console.log('[task-worker] start, handlers: ' + Object.keys(handlers).join(', '));
 
 // 10s poll 一次
 runWorker(handlers, { intervalMs: 10000 }).catch((err) => {
-  logger.error({ err: err.message }, '[task-worker] fatal');
+  console.error('[task-worker] fatal', err);
   process.exit(1);
 });
