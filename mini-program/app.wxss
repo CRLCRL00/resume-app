@@ -1,7 +1,192 @@
-page { background: #f7f8fa; font-family: -apple-system, sans-serif; font-size: 28rpx; }
-.container { padding: 24rpx; }
-.btn-primary { background: #07c160; color: white; border-radius: 8rpx; padding: 24rpx; text-align: center; font-size: 32rpx; }
-.btn-secondary { background: white; color: #333; border: 1rpx solid #ddd; border-radius: 8rpx; padding: 24rpx; text-align: center; font-size: 32rpx; }
-.card { background: white; border-radius: 12rpx; padding: 32rpx; margin: 16rpx 0; }
-.input { border: 1rpx solid #ddd; border-radius: 8rpx; padding: 16rpx; width: 100%; box-sizing: border-box; margin: 8rpx 0; }
-.label { color: #666; font-size: 24rpx; margin-top: 16rpx; }
+/* ===========================================
+ * R131 Design System (2026-07-31) 全 app theme 重做
+ * 风格: Apple HIG + 紫色 #6366f1 (跟 jobpilot 统一)
+ * ===========================================
+ *
+ * Color tokens (comment, wxss 不支持 CSS variables):
+ *   --primary:        #6366f1  (indigo, 主色)
+ *   --primary-hover:  #4f46e5
+ *   --primary-bg:     #ecfeff  (浅紫底, 不冲突!)
+ *   --success:        #1f7a1f  (Apple green)
+ *   --success-bg:     #f0f9f4
+ *   --warning:        #ff9500  (Apple orange)
+ *   --danger:         #dc2626
+ *   --danger-bg:      #fee2e2
+ *
+ *   --bg:             #f5f5f7  (页面背景)
+ *   --surface:        #ffffff  (卡片背景)
+ *   --surface-2:      #f9f9fb  (二级背景 / 输入框)
+ *   --surface-3:      #f2f2f7  (按钮 / 弱背景)
+ *
+ *   --text-primary:   #1c1c1e
+ *   --text-secondary: #3a3a3c
+ *   --text-muted:     #8e8e93
+ *   --text-on-primary:#ffffff
+ *
+ *   --border:         #e5e5e7
+ *   --border-strong:  #c7c7cc
+ *
+ * Spacing scale (rpx):
+ *   xs: 8  sm: 12  md: 16  lg: 24  xl: 32  xxl: 48
+ *
+ * Radius:
+ *   sm: 12rpx  md: 16rpx  lg: 24rpx  pill: 999rpx
+ *
+ * Shadow:
+ *   sm: 0 1rpx 4rpx rgba(15,23,42,0.04)
+ *   md: 0 4rpx 12rpx rgba(15,23,42,0.08)
+ *   lg: 0 12rpx 32rpx rgba(15,23,42,0.12)
+ *
+ * Typography (font-size rpx):
+ *   caption: 22  body-sm: 24  body: 28  body-lg: 32
+ *   h4: 36  h3: 44  h2: 56  h1: 72
+ *
+ * =========================================== */
+
+page {
+  background: #f5f5f7;
+  color: #1c1c1e;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+  font-size: 28rpx;
+  line-height: 1.5;
+}
+
+view, text, button, input, picker, scroll-view {
+  box-sizing: border-box;
+}
+
+/* 全局容器 */
+.container {
+  padding: 24rpx 32rpx;
+  min-height: 100vh;
+}
+
+/* 通用卡片 */
+.card {
+  background: #ffffff;
+  border: 1rpx solid #e5e5e7;
+  border-radius: 16rpx;
+  padding: 32rpx;
+  margin: 16rpx 0;
+  box-shadow: 0 2rpx 8rpx rgba(15,23,42,0.04);
+}
+
+/* 通用按钮 */
+.btn-primary {
+  width: 100%;
+  background: #6366f1;
+  color: #ffffff;
+  border-radius: 12rpx;
+  padding: 24rpx 0;
+  font-size: 30rpx;
+  font-weight: 500;
+  margin-top: 32rpx;
+  border: none;
+  text-align: center;
+  transition: background 0.2s, transform 0.15s;
+}
+
+.btn-primary:active {
+  background: #4f46e5;
+  transform: scale(0.98);
+}
+
+.btn-primary[disabled] {
+  background: #c7c7cc;
+  color: #f5f5f7;
+}
+
+.btn-secondary {
+  background: #f2f2f7;
+  color: #6366f1;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  padding: 16rpx 24rpx;
+  margin-top: 16rpx;
+  text-align: center;
+  border: none;
+  transition: background 0.2s;
+}
+
+.btn-secondary:active {
+  background: #e5e5e7;
+}
+
+/* 通用表单 */
+.form-group {
+  margin-bottom: 24rpx;
+}
+
+.label {
+  display: block;
+  font-size: 26rpx;
+  color: #3a3a3c;
+  font-weight: 500;
+  margin-bottom: 12rpx;
+}
+
+.input, .textarea, .picker {
+  width: 100%;
+  padding: 20rpx 24rpx;
+  background: #ffffff;
+  border: 1rpx solid #e5e5e7;
+  border-radius: 12rpx;
+  font-size: 28rpx;
+  color: #1c1c1e;
+  box-sizing: border-box;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.input:focus, .textarea:focus, .picker:focus {
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4rpx rgba(99,102,241,0.08);
+}
+
+.textarea {
+  min-height: 160rpx;
+}
+
+.picker {
+  color: #1c1c1e;
+}
+
+/* 占位 placeholder 颜色 */
+.input--placeholder, .textarea--placeholder {
+  color: #8e8e93;
+}
+
+/* 通用文字 */
+.text-primary { color: #1c1c1e; }
+.text-secondary { color: #3a3a3c; }
+.text-muted { color: #8e8e93; }
+.text-brand { color: #6366f1; }
+.text-success { color: #1f7a1f; }
+.text-danger { color: #dc2626; }
+
+/* Empty / Loading */
+.empty {
+  text-align: center;
+  padding: 80rpx 0;
+  color: #8e8e93;
+  font-size: 26rpx;
+  display: flex;
+  flex-direction: column;
+  gap: 12rpx;
+}
+
+.loading {
+  text-align: center;
+  padding: 32rpx 0;
+  color: #8e8e93;
+  font-size: 24rpx;
+}
+
+/* 全局过渡 */
+.fade-in {
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}

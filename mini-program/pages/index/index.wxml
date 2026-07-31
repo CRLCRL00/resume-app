@@ -1,7 +1,7 @@
 <view class="container">
-  <view class="card">
-    <view style="font-size:44rpx; font-weight:bold;">你想进入哪个行业?</view>
-    <view class="label" style="margin-top:16rpx;">AI 帮你从岗位库挑匹配度最高的 {{industries.length}} 个行业,近期较好推荐置顶</view>
+  <view class="hero-card">
+    <view class="hero-title">你想进入哪个行业?</view>
+    <view class="hero-subtitle">AI 帮你从岗位库挑 {{industries.length}} 个行业,近期较好推荐置顶</view>
   </view>
 
   <view class="industries-list">
@@ -12,21 +12,27 @@
       data-industry="{{item.industry}}"
       bindtap="onSelectIndustry"
     >
-      <view class="industry-header">
-        <text class="industry-name">{{item.industry}}</text>
-        <view wx:if="{{item.recent_verified > 0}}" class="hot-badge">
-          <text class="hot-badge-text">🔥 近期较好</text>
+      <view class="industry-left">
+        <view class="industry-header">
+          <text class="industry-name">{{item.industry}}</text>
+          <view wx:if="{{item.recent_verified > 0}}" class="hot-badge">
+            <text class="hot-badge-text">🔥 近期较好</text>
+          </view>
+        </view>
+        <view class="industry-stats">
+          <text class="stat-item">📊 {{item.job_count}} 个岗位</text>
+          <text wx:if="{{item.recent_verified > 0}}" class="stat-item">✓ {{item.recent_verified}} 近 7 天已 verify</text>
         </view>
       </view>
-      <view class="industry-stats">
-        <text class="stat-item">📊 {{item.job_count}} 个岗位</text>
-        <text wx:if="{{item.recent_verified > 0}}" class="stat-item">✓ {{item.recent_verified}} 近 7 天已 verify</text>
-      </view>
+      <text class="industry-arrow">›</text>
     </view>
     <view wx:if="{{loading}}" class="loading">加载中...</view>
-    <view wx:elif="{{industries.length === 0}}" class="empty">暂无可推荐行业</view>
+    <view wx:elif="{{industries.length === 0}}" class="empty">
+      <text class="empty-emoji">📭</text>
+      <text>暂无可推荐行业</text>
+    </view>
   </view>
 
-  <view wx:if="{{hasResume}}" class="btn-secondary" bindtap="goPreview" style="margin-top:32rpx;">查看我的简历</view>
+  <view wx:if="{{hasResume}}" class="preview-btn" bindtap="goPreview">查看我的简历</view>
 </view>
 <privacy-popup id="privacy-popup"></privacy-popup>
