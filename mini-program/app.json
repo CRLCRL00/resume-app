@@ -1,7 +1,6 @@
 {
   "pages": [
     "pages/index/index",
-    "pages/form/bigscreen/bigscreen",
     "pages/jobpilot/index/index",
     "pages/preview/preview",
     "pages/match/list",

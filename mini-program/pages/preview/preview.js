@@ -68,7 +68,7 @@ Page({
   },
 
   goForm() {
-    wx.navigateTo({ url: '/pages/form/form' });
+    wx.navigateTo({ url: '/pages/jobpilot/index/index' });
   },
 
   goMatch() {

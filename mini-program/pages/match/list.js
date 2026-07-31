@@ -46,5 +46,5 @@ Page({
     wx.navigateTo({ url: `/pages/match/detail?id=${id}&score=${score}&reason=${encodeURIComponent(reason || '')}` });
   },
 
-  goForm() { wx.navigateTo({ url: '/pages/form/form' }); },
+  goForm() { wx.navigateTo({ url: '/pages/jobpilot/index/index' }); },
 });
