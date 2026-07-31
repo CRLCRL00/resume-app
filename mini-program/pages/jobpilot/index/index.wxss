@@ -506,3 +506,294 @@
   flex-direction: column;
   gap: 12rpx;
 }
+
+/* ========== R140: A 顶部 tabs + 进度条 + 完成态 polish ========== */
+
+/* A1: sticky tabs 滚动阴影 (滚动时显示更明显边界) */
+.tabs {
+  box-shadow: 0 1rpx 0 rgba(15, 23, 42, 0.04);
+  transition: box-shadow 0.2s;
+}
+
+/* A2: tab.active 紫光晕 + checkmark 缩放 (完成态视觉强化) */
+.tab.active {
+  box-shadow: 0 4rpx 12rpx rgba(99, 102, 241, 0.15);
+}
+
+.tab-check {
+  animation: checkPop 0.3s ease-out;
+}
+
+@keyframes checkPop {
+  0% { transform: scale(0); opacity: 0; }
+  60% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+/* A3: 进度条 fill pulsing + 平滑过渡 */
+.progress-fill {
+  position: relative;
+  transition: width 0.5s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.progress-fill::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 40rpx;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4));
+  animation: fillShine 1.5s ease-in-out infinite;
+}
+
+@keyframes fillShine {
+  0%, 100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+
+/* A4: 进度文字加完成 emoji (达成感) */
+.progress-text {
+  font-weight: 500;
+  letter-spacing: 0.5rpx;
+}
+
+/* A5: 切换 step 时整 step-content 淡入 */
+.step-content {
+  animation: stepIn 0.35s ease-out;
+}
+
+@keyframes stepIn {
+  from { opacity: 0; transform: translateY(12rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ========== R140: B Step 1-2 结果展示 polish ========== */
+
+/* B1: result 统一卡片感 (padding + 边框 + 阴影) */
+.result {
+  background: #ffffff;
+  border: 1rpx solid #e5e5e7;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  animation: resultIn 0.4s ease-out;
+}
+
+@keyframes resultIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+/* B2: result-sub 左侧 accent bar (紫色块标识小标题) */
+.result-sub {
+  position: relative;
+  padding-left: 20rpx;
+  letter-spacing: 0.3rpx;
+}
+
+.result-sub::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 6rpx;
+  height: 28rpx;
+  background: linear-gradient(180deg, #6366f1, #8b5cf6);
+  border-radius: 3rpx;
+}
+
+/* B3: bullet 列表项逐项错位入场 */
+.bullet {
+  animation: bulletIn 0.3s ease-out backwards;
+}
+
+.bullet:nth-child(1) { animation-delay: 0.05s; }
+.bullet:nth-child(2) { animation-delay: 0.10s; }
+.bullet:nth-child(3) { animation-delay: 0.15s; }
+.bullet:nth-child(4) { animation-delay: 0.20s; }
+.bullet:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes bulletIn {
+  from { opacity: 0; transform: translateX(-8rpx); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+/* B4: story-card 错位入场 + active 反馈 */
+.story-card {
+  border: 1rpx solid transparent;
+  transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+  animation: storyIn 0.35s ease-out backwards;
+}
+
+.story-card:nth-child(1) { animation-delay: 0.05s; }
+.story-card:nth-child(2) { animation-delay: 0.12s; }
+.story-card:nth-child(3) { animation-delay: 0.19s; }
+.story-card:nth-child(4) { animation-delay: 0.26s; }
+.story-card:nth-child(5) { animation-delay: 0.33s; }
+
+@keyframes storyIn {
+  from { opacity: 0; transform: translateY(6rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.story-card:active {
+  transform: scale(0.99);
+  border-color: #6366f1;
+  box-shadow: 0 2rpx 8rpx rgba(99, 102, 241, 0.12);
+}
+
+/* B5: breakdown-row 进度条化 (左 label + 右 score + 背景条) */
+.breakdown-row {
+  position: relative;
+  padding: 10rpx 16rpx;
+  background: #f9f9fb;
+  border-radius: 8rpx;
+  margin: 6rpx 0;
+  overflow: hidden;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.breakdown-row::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: var(--score-pct, 0%);
+  background: linear-gradient(90deg, rgba(99, 102, 241, 0.08), rgba(139, 92, 246, 0.04));
+  z-index: 0;
+  transition: width 0.5s ease-out;
+}
+
+.breakdown-row > * {
+  position: relative;
+  z-index: 1;
+}
+
+/* B6: job-chip active 反馈 */
+.job-chip {
+  transition: transform 0.15s, background 0.2s, color 0.2s;
+}
+
+.job-chip:active {
+  transform: scale(0.96);
+  background: #6366f1;
+  color: #ffffff;
+}
+
+/* B7: result-title 加强 (完成态更突出) */
+.result-title {
+  letter-spacing: 0.5rpx;
+  padding-bottom: 12rpx;
+  border-bottom: 1rpx solid #f2f2f7;
+}
+
+/* ========== R140: C Step 4 简历预览 polish ========== */
+
+/* C1: resume-preview markdown 渲染美化 */
+.resume-preview {
+  border: 1rpx solid #e5e5e7;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  font-size: 26rpx;
+  line-height: 1.7;
+}
+
+.resume-preview h1,
+.resume-preview h2,
+.resume-preview h3 {
+  color: #1c1c1e;
+  font-weight: 600;
+  margin: 16rpx 0 8rpx;
+}
+
+.resume-preview h1 { font-size: 32rpx; }
+.resume-preview h2 { font-size: 28rpx; }
+.resume-preview h3 { font-size: 26rpx; }
+
+.resume-preview ul,
+.resume-preview ol {
+  padding-left: 32rpx;
+  margin: 8rpx 0;
+}
+
+.resume-preview li {
+  margin: 4rpx 0;
+}
+
+.resume-preview code {
+  background: #f2f2f7;
+  padding: 2rpx 8rpx;
+  border-radius: 4rpx;
+  font-size: 22rpx;
+  color: #6366f1;
+}
+
+.resume-preview pre {
+  background: #f2f2f7;
+  padding: 16rpx;
+  border-radius: 8rpx;
+  overflow-x: auto;
+}
+
+.resume-preview strong {
+  color: #1c1c1e;
+  font-weight: 600;
+}
+
+/* C2: story-points sticky 顶部 (用户滚动 resume 时 STAR 点保持可见) */
+.story-points {
+  position: sticky;
+  top: 0;
+  z-index: 5;
+  background: #f5f5f7;
+  padding: 16rpx 0;
+}
+
+/* C3: copy-md-btn 复制反馈 (active 时变绿) */
+.copy-md-btn {
+  transition: background 0.2s, color 0.2s, transform 0.1s;
+}
+
+.copy-md-btn.copied {
+  background: #1f7a1f !important;
+  color: #ffffff !important;
+}
+
+.copy-md-btn:active {
+  transform: scale(0.96);
+}
+
+/* C4: resume-section sticky header (resume preview 顶部标题 sticky) */
+.resume-section {
+  position: relative;
+}
+
+.resume-section .result-sub {
+  position: sticky;
+  top: 16rpx;
+  z-index: 4;
+  background: rgba(245, 245, 247, 0.92);
+  backdrop-filter: blur(8rpx);
+  padding: 8rpx 20rpx;
+  border-radius: 8rpx;
+  margin-bottom: 12rpx;
+}
+
+/* salary-impact 加左 accent (B 一致性) */
+.salary-impact {
+  position: relative;
+  padding-left: 24rpx;
+  border-left: 6rpx solid #1f7a1f;
+}
+
+.salary-impact::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 6rpx;
+  background: linear-gradient(180deg, #1f7a1f, #10b981);
+}

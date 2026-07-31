@@ -268,7 +268,12 @@
         </view>
       </view>
       <view wx:if="{{generateResult.resume}}" class="resume-section">
-        <view class="result-sub">📄 简历内容:</view>
+        <view style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8rpx;">
+          <text class="result-sub">📄 简历内容:</text>
+          <button class="btn-secondary copy-md-btn {{copied ? 'copied' : ''}}" bindtap="copyResumeMarkdown" size="mini">
+            {{copied ? '✓ 已复制' : '📋 复制 markdown'}}
+          </button>
+        </view>
         <view class="resume-preview">{{generateResult.resume}}</view>
       </view>
       <button class="btn-secondary" bindtap="nextStep" style="margin-top:24rpx;">下一步 →</button>

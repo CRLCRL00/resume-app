@@ -56,6 +56,7 @@ Page({
     generateResumeId: '',
     generateResult: null,
     generateLoading: false,
+    copied: false, // R140: 复制 markdown 按钮反馈状态
 
     // Step 5: 投递追踪
     applications: [],
@@ -385,6 +386,29 @@ Page({
       wx.showToast({ title: this._errMsg(err, '生成失败'), icon: 'none' });
     }
     this.setData({ generateLoading: false });
+  },
+
+  /**
+   * R140: 复制简历 markdown 到剪贴板 (用户可贴到 Notion/邮箱/招聘网站)
+   */
+  copyResumeMarkdown() {
+    const resume = this.data.generateResult && this.data.generateResult.resume;
+    if (!resume) {
+      return wx.showToast({ title: '没有简历内容', icon: 'none' });
+    }
+    wx.setClipboardData({
+      data: resume,
+      success: () => {
+        // 按钮状态变 "已复制" + 绿色 (CSS .copy-md-btn.copied)
+        this.setData({ copied: true });
+        wx.showToast({ title: '已复制到剪贴板', icon: 'success' });
+        // 2 秒后恢复
+        setTimeout(() => this.setData({ copied: false }), 2000);
+      },
+      fail: () => {
+        wx.showToast({ title: '复制失败,请手动选择', icon: 'none' });
+      },
+    });
   },
 
   // ===== Step 5: 投递追踪 =====
