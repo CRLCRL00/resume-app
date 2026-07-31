@@ -8,6 +8,7 @@ const resumeRouter = require('./routes/resume');
 const matchRouter = require('./routes/match');
 const jobpilotRouter = require('./routes/jobpilot'); // R-JobSearch: 5 步流 (Step 1-2)
 const jobsRouter = require('./routes/jobs');
+const industriesRouter = require('./routes/industries'); // R130: 首页推荐行业
 const legalRouter = require('./routes/legal');
 const userRouter = require('./routes/user');
 const alertsRouter = require('./routes/alerts');
@@ -183,6 +184,7 @@ function createApp() {
   app.use('/api/match', matchRouter);
   app.use('/api/jobpilot', jobpilotRouter); // R-JobSearch: 5 步流 mount
   app.use('/api/jobs', jobsRouter);
+  app.use('/api/industries', industriesRouter); // R130: 首页行业推荐
   app.use('/api/legal', legalRouter);
   app.use('/api/user', userRouter);
   app.use('/api/internal', alertsRouter);
