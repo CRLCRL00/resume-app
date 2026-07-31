@@ -1,11 +1,33 @@
 <view class="container">
   <view class="card">
-    <view style="font-size:48rpx; font-weight:bold;">简历助手</view>
-    <view class="label" style="margin-top:16rpx;">AI 求职助手 6 步流程: 基本信息 → 画像 → 项目 → 匹配 → 简历 → 投递</view>
+    <view style="font-size:44rpx; font-weight:bold;">你想进入哪个行业?</view>
+    <view class="label" style="margin-top:16rpx;">AI 帮你从岗位库挑匹配度最高的 {{industries.length}} 个行业,近期较好推荐置顶</view>
   </view>
 
-  <view wx:if="{{hasResume}}" class="btn-secondary" bindtap="goPreview" style="margin-bottom:16rpx;">查看我的简历</view>
-  <!-- R129 整合: 单一入口, 跳 jobpilot/index (6 步流) -->
-  <view class="btn-primary" bindtap="goJobPilot">🚀 开始 AI 求职 ({{hasResume ? '继续' : '从基本信息开始'}})</view>
+  <view class="industries-list">
+    <view
+      wx:for="{{industries}}"
+      wx:key="industry"
+      class="industry-card {{item.recent_verified > 0 ? 'hot' : ''}}"
+      data-industry="{{item.industry}}"
+      bindtap="onSelectIndustry"
+    >
+      <view class="industry-header">
+        <text class="industry-name">{{item.industry}}</text>
+        <view wx:if="{{item.recent_verified > 0}}" class="hot-badge">
+          <text class="hot-badge-text">🔥 近期较好</text>
+        </view>
+      </view>
+      <view class="industry-stats">
+        <text class="stat-item">📊 {{item.job_count}} 个岗位</text>
+        <text wx:if="{{item.recent_verified > 0}}" class="stat-item">✓ {{item.recent_verified}} 近 7 天已 verify</text>
+        <text wx:if="{{item.avg_salary_max > 0}}" class="stat-item">💰 平均 {{item.avg_salary_max}}K</text>
+      </view>
+    </view>
+    <view wx:if="{{loading}}" class="loading">加载中...</view>
+    <view wx:elif="{{industries.length === 0}}" class="empty">暂无可推荐行业</view>
+  </view>
+
+  <view wx:if="{{hasResume}}" class="btn-secondary" bindtap="goPreview" style="margin-top:32rpx;">查看我的简历</view>
 </view>
 <privacy-popup id="privacy-popup"></privacy-popup>

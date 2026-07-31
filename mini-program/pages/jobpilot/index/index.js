@@ -62,7 +62,7 @@ Page({
     trackerLoading: false,
   },
 
-  onLoad() {
+  onLoad(options) {
     // 修复: token 在 wx.storage,不在 globalData
     const token = wx.getStorageSync('token');
     if (!token) {
@@ -73,6 +73,7 @@ Page({
 
     // 恢复上次的 state (持久化)
     const saved = wx.getStorageSync(STORAGE_KEY);
+    let prefill = {};
     if (saved) {
       try {
         const parsed = typeof saved === 'string' ? JSON.parse(saved) : saved;
@@ -87,6 +88,12 @@ Page({
       } catch (e) {
         // 损坏 state 忽略
       }
+    }
+
+    // R130: 从首页带 query 来的行业, 预填 Step 0 expectedPosition (只在 storage 没值时填)
+    if (options && options.industry && !this.data.basicForm.expectedPosition) {
+      prefill.expectedPosition = decodeURIComponent(options.industry);
+      this.setData({ 'basicForm.expectedPosition': prefill.expectedPosition });
     }
 
     // 自动 fetch 当前简历 ID (用户不用手动填)
