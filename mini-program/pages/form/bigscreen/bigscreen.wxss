@@ -593,18 +593,19 @@
 }
 
 /* ─── Tinder 卡 (跟 jobpilot .match-card 同结构) ───────────────────────── */
+/* R128: tinder-card 改小 + 横排, 不挡 input 视野 */
 .tinder-card {
-  margin: 20rpx 0;
-  padding: 32rpx 24rpx;
-  background: #fff;
+  margin: 16rpx 0;
+  padding: 16rpx 20rpx;
+  background: #f9f9fb;
   border: 2rpx solid #6366f1;
-  border-radius: 16rpx;
+  border-radius: 12rpx;
   display: flex;
-  flex-direction: column;
+  flex-direction: row;
   align-items: center;
-  gap: 16rpx;
-  min-height: 200rpx;
-  justify-content: center;
+  gap: 12rpx;
+  max-height: 120rpx;
+  justify-content: flex-start;
 }
 
 .tinder-card-counter {
