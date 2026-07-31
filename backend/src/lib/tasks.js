@@ -46,38 +46,31 @@ async function getTask(taskId, userId = null) {
 }
 
 /**
- * Worker: 取一个 pending task, mark running (FOR UPDATE 防并发)
- * @returns {Promise<Object|null>} task row, or null if none
+ * Worker: 取一个 pending task, mark running
+ * R134 fix: 简化 (去掉 getConnection + transaction),避免 mysql2 pool.getConnection
+ * 返回 undefined 的边界 bug
+ *
+ * 用乐观锁: SELECT LIMIT 1 → UPDATE WHERE status='pending' → check affectedRows
+ * 如果 affectedRows=0 说明被别的 worker 抢走, 返回 null 重试
  */
 async function pollPendingTask(type = null) {
-  const conn = await pool.getConnection();
-  try {
-    await conn.beginTransaction();
-    const where = type ? 'WHERE type = ? AND status = ?' : 'WHERE status = ?';
-    const params = type ? [type, 'pending'] : ['pending'];
-    const [rows] = await conn.query(
-      `SELECT id, type, payload, retry_count, max_retry
-       FROM tasks ${where}
-       ORDER BY created_at ASC LIMIT 1 FOR UPDATE`,
-      params
-    );
-    if (rows.length === 0) {
-      await conn.commit();
-      return null;
-    }
-    const task = rows[0];
-    await conn.query(
-      `UPDATE tasks SET status = 'running', started_at = NOW() WHERE id = ?`,
-      [task.id]
-    );
-    await conn.commit();
-    return task;
-  } catch (err) {
-    await conn.rollback();
-    throw err;
-  } finally {
-    conn.release();
-  }
+  const where = type ? 'type = ? AND status = ?' : 'status = ?';
+  const params = type ? [type, 'pending'] : ['pending'];
+  const [rows] = await pool.query(
+    `SELECT id, type, payload, retry_count, max_retry
+     FROM tasks WHERE ${where}
+     ORDER BY created_at ASC LIMIT 1`,
+    params
+  );
+  if (rows.length === 0) return null;
+  const task = rows[0];
+  // 乐观锁: 只有 status 还是 pending 的 task 才能 mark running (防并发抢同 task)
+  const [r] = await pool.query(
+    `UPDATE tasks SET status = 'running', started_at = NOW()
+     WHERE id = ? AND status = 'pending'`,
+    [task.id]
+  );
+  return r.affectedRows > 0 ? task : null;
 }
 
 /**
