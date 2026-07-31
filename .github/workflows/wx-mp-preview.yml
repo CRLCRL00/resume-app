@@ -14,6 +14,10 @@ on:
 
 jobs:
   preview:
+    # R131 fix: GH Actions 对每个 workflow 在 push event 创建 validation run,
+    # 但 wx-mp-preview 只在 workflow_dispatch (manual) 触发, 没匹配 push → jobs=[] → failure.
+    # 加 if 限制 jobs 仅手动 trigger 时跑 → push run 立刻 skipped → conclusion=success.
+    if: github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
