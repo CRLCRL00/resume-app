@@ -34,8 +34,10 @@ const resumeSchema = Joi.object({
   expected: Joi.object({
     city: Joi.string().max(64).required(),
     position: Joi.string().max(128).required(),
-    salary_min: Joi.number().integer().min(0).required(),
-    salary_max: Joi.number().integer().min(Joi.ref('salary_min')).required(),
+    // R136 fix: salary 字段单位是 K (千/月), 跟 jobs 表 salary_min/max 一致
+    // 范围 0-999 K, 防止 user 误填 元/月 (如 15000) 导致 match 0 行
+    salary_min: Joi.number().integer().min(0).max(999).required(),
+    salary_max: Joi.number().integer().min(Joi.ref('salary_min')).max(999).required(),
   }).required(),
   skills: Joi.array().items(Joi.string()).min(1).max(20).required(),
 }).label('ResumeSaveRequest');
