@@ -9,6 +9,7 @@ const matchRouter = require('./routes/match');
 const jobpilotRouter = require('./routes/jobpilot'); // R-JobSearch: 5 步流 (Step 1-2)
 const jobsRouter = require('./routes/jobs');
 const industriesRouter = require('./routes/industries'); // R130: 首页推荐行业
+const tasksRouter = require('./routes/tasks'); // R133: 异步任务队列 (借鉴 EdgeCareer/Inngest)
 const legalRouter = require('./routes/legal');
 const userRouter = require('./routes/user');
 const alertsRouter = require('./routes/alerts');
@@ -185,6 +186,7 @@ function createApp() {
   app.use('/api/jobpilot', jobpilotRouter); // R-JobSearch: 5 步流 mount
   app.use('/api/jobs', jobsRouter);
   app.use('/api/industries', industriesRouter); // R130: 首页行业推荐
+  app.use('/api/tasks', tasksRouter); // R133: 异步任务队列 (EdgeCareer/Inngest 借鉴)
   app.use('/api/legal', legalRouter);
   app.use('/api/user', userRouter);
   app.use('/api/internal', alertsRouter);

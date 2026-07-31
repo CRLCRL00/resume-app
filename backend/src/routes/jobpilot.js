@@ -47,4 +47,24 @@ router.post('/project-score', userAuth, async (req, res, next) => {
   } catch (err) { next(err); }
 });
 
+/**
+ * R133: POST /api/jobpilot/project-score-async
+ * 异步版本: 写 task queue → 返回 task_id (202 Accepted)
+ * Client 后续 GET /api/tasks/:id poll 查 status + result
+ * 借鉴 EdgeCareer/Inngest 异步任务架构
+ */
+router.post('/project-score-async', userAuth, async (req, res, next) => {
+  try {
+    const project = req.body || {};
+    if (!project.name) {
+      throw new AppError(1000, 'project.name required', 400);
+    }
+    const { createTask } = require('../lib/tasks');
+    const taskId = await createTask('ai_project_score', project, {
+      userId: req.user?.userId || null,
+    });
+    res.status(202).json({ ok: true, task_id: taskId, status: 'pending' });
+  } catch (err) { next(err); }
+});
+
 module.exports = router;
