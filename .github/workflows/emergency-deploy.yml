@@ -6,11 +6,6 @@ name: Emergency Deploy (One-Shot Prod Fix)
 # 新版: GH Actions runner checkout → scp one-shot-prod-fix.sh → ssh 跑脚本
 #   完全 self-contained,不依赖 prod git state
 #
-# R132: GitHub Flow — 此 workflow 由 main merge 自动触发 (D4 scp 模式).
-#   F1+R131: push trigger 不跑 SSH step (避免无密码 exit 2),
-#            手动 Run workflow (workflow_dispatch) 才跑 SSH step 跑 7-phase fix.
-#   详见 CONTRIBUTING.md.
-#
 # 配套脚本: backend/scripts/one-shot-prod-fix.sh
 #
 # 用法:
@@ -40,9 +35,9 @@ on:
   workflow_dispatch:
     inputs:
       mysql_password:
-        description: 'MySQL root password (留空 = 用 ~/.my.cnf 或 backend/.env 自动读)。secret 已自动 mask (workflow input 默认 sensitive)'
+        description: 'MySQL root password (留空 = 用 ~/.my.cnf 或 backend/.env 自动读)'
         required: false
-        type: string
+        sensitive: true
         default: ''
 
 # 防 race condition: 多个 push 同时跑时排队
