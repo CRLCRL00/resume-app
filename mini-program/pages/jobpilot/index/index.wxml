@@ -59,6 +59,13 @@
     </view>
 
     <view class="form-group">
+      <text class="label">期望城市 *</text>
+      <picker mode="selector" range="{{['北京','上海','深圳','广州','杭州','成都','其他']}}" bindchange="onBasicPickerChange" data-field="expectedCity" data-options="{{['北京','上海','深圳','广州','杭州','成都','其他']}}">
+        <view class="picker">{{basicForm.expectedCity || '请选择'}}</view>
+      </picker>
+    </view>
+
+    <view class="form-group">
       <text class="label">期望薪资 *</text>
       <picker mode="selector" range="{{['10K 以下','10-20K','20-30K','30-50K','50K+']}}" bindchange="onBasicPickerChange" data-field="expectedSalary" data-options="{{['10K 以下','10-20K','20-30K','30-50K','50K+']}}">
         <view class="picker">{{basicForm.expectedSalary || '请选择'}}</view>

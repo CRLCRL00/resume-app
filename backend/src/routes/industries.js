@@ -1,10 +1,11 @@
 /**
  * R130: 行业路由 — 首页推荐用
- * GET /api/industries 返回 [{industry, job_count, recent_verified, avg_salary_max}]
- * 数据源: jobs 表 title DISTINCT + 统计 (verify_status + verified_at + salary_max)
+ * R139: 扩 top_city + common_degree (R139 用来预填 jobpilot Step 0 city + salary 字段)
+ * GET /api/industries 返回 [{industry, job_count, recent_verified, avg_salary_max, top_city, common_degree}]
+ *
+ * 数据源: jobs 表 title DISTINCT + 统计 (verify_status + verified_at + salary_max + city + degree_required)
  *
  * 注: jobs 表没有 industry 字段,用 title 作为类目。
- * 等以后 jobs 加 industry 字段后,可升级 SQL。
  */
 
 const express = require('express');
@@ -13,8 +14,8 @@ const pool = require('../config/db');
 
 router.get('/', async (req, res, next) => {
   try {
-    // 取每个 title (行业) 的统计
-    // recent_verified: 最近 7 天 verify_status='verified' 且 verified_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    // R139: 主查询 + 子查询并行 (top_city / common_degree)
+    // 主: 每个 title 统计
     const [rows] = await pool.query(`
       SELECT
         title AS industry,
@@ -34,6 +35,41 @@ router.get('/', async (req, res, next) => {
       LIMIT 30
     `);
 
+    // R139: 对每个行业单独算 top_city (出现最多的城市) 和 common_degree (出现最多的学历)
+    // 用 IN (...) 一次性查, 避免 N+1
+    const titles = rows.map(r => r.industry);
+    let cityMap = new Map();
+    let degreeMap = new Map();
+
+    if (titles.length > 0) {
+      const placeholders = titles.map(() => '?').join(',');
+      const [cityRows] = await pool.query(
+        `SELECT title, city, COUNT(*) AS cnt
+         FROM jobs
+         WHERE is_online = 1 AND is_deleted = 0 AND title IN (${placeholders})
+         GROUP BY title, city
+         ORDER BY title, cnt DESC`,
+        titles
+      );
+      for (const r of cityRows) {
+        // 每个 title 只取 cnt 最大的 city
+        if (!cityMap.has(r.title)) cityMap.set(r.title, r.city);
+      }
+
+      const [degreeRows] = await pool.query(
+        `SELECT title, degree_required, COUNT(*) AS cnt
+         FROM jobs
+         WHERE is_online = 1 AND is_deleted = 0 AND title IN (${placeholders})
+           AND degree_required != '不限'
+         GROUP BY title, degree_required
+         ORDER BY title, cnt DESC`,
+        titles
+      );
+      for (const r of degreeRows) {
+        if (!degreeMap.has(r.title)) degreeMap.set(r.title, r.degree_required);
+      }
+    }
+
     // 算热度分 (recent_verified × 100 + job_count × 10 + (avg_salary_max / 100))
     const result = rows.map((r) => ({
       industry: r.industry,
@@ -41,6 +77,9 @@ router.get('/', async (req, res, next) => {
       recent_verified: Number(r.recent_verified) || 0,
       avg_salary_max: Math.round(Number(r.avg_salary_max) || 0),
       best_status: r.best_status,
+      // R139: 新加 top_city + common_degree (前端用于预填 jobpilot Step 0)
+      top_city: cityMap.get(r.industry) || '',
+      common_degree: degreeMap.get(r.industry) || '不限',
       hot_score: (Number(r.recent_verified) || 0) * 100
                  + (Number(r.job_count) || 0) * 10
                  + Math.round((Number(r.avg_salary_max) || 0) / 100),

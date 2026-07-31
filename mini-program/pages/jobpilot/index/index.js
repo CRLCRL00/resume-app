@@ -36,8 +36,8 @@ Page({
       { id: 'tracker', name: '投递追踪', icon: '📮' },
     ],
 
-    // Step 0: 基本信息 (整合自 BigScreen, 6 字段)
-    basicForm: { name: '', gender: '', education: '', workYears: '', expectedPosition: '', expectedSalary: '' },
+    // Step 0: 基本信息 (整合自 BigScreen, R139 加 expectedCity 共 7 字段)
+    basicForm: { name: '', gender: '', education: '', workYears: '', expectedPosition: '', expectedCity: '', expectedSalary: '' },
 
     // Step 1: 画像诊断
     profileForm: { education: '', aiAbility: '', projects: '', target: '', timeline: '' },
@@ -63,9 +63,13 @@ Page({
   },
 
   onLoad(options) {
+    // R139: 加载 AI 助手 loading 提示 (用户从首页跳转过来有感知)
+    wx.showLoading({ title: '加载 AI 助手...', mask: true });
+
     // 修复: token 在 wx.storage,不在 globalData
     const token = wx.getStorageSync('token');
     if (!token) {
+      wx.hideLoading();
       wx.showToast({ title: '请先登录', icon: 'none' });
       setTimeout(() => wx.navigateBack({ delta: 1 }), 1000);
       return;
@@ -90,14 +94,31 @@ Page({
       }
     }
 
-    // R130: 从首页带 query 来的行业, 预填 Step 0 expectedPosition (只在 storage 没值时填)
-    if (options && options.industry && !this.data.basicForm.expectedPosition) {
-      prefill.expectedPosition = decodeURIComponent(options.industry);
-      this.setData({ 'basicForm.expectedPosition': prefill.expectedPosition });
+    // R130 + R139: 从首页带 query 来的行业, 预填 Step 0 expectedPosition + city + salary
+    if (options) {
+      if (options.industry && !this.data.basicForm.expectedPosition) {
+        this.setData({ 'basicForm.expectedPosition': decodeURIComponent(options.industry) });
+      }
+      // R139: 新加 city + salary 预填 (来自 industries API 统计)
+      if (options.city && !this.data.basicForm.expectedCity) {
+        this.setData({ 'basicForm.expectedCity': decodeURIComponent(options.city) });
+      }
+      if (options.salary && !this.data.basicForm.expectedSalary) {
+        // avg_salary_max 数字 → picker range 标签
+        const salary = Number(options.salary);
+        const range = salary <= 15 ? '10-20K'
+          : salary <= 25 ? '20-30K'
+          : salary <= 40 ? '30-50K'
+          : '50K+';
+        this.setData({ 'basicForm.expectedSalary': range });
+      }
     }
 
     // 自动 fetch 当前简历 ID (用户不用手动填)
-    this.fetchResumeId();
+    this.fetchResumeId().finally(() => {
+      // R139: fetchResumeId 完成后才 hideLoading (无论成功失败)
+      wx.hideLoading();
+    });
   },
 
   /**
@@ -191,6 +212,10 @@ Page({
     }
     if (!basicForm.expectedPosition) {
       return wx.showToast({ title: '请填期望岗位', icon: 'none' });
+    }
+    // R139: 加期望城市校验 (Step 0 加了 picker)
+    if (!basicForm.expectedCity) {
+      return wx.showToast({ title: '请选择期望城市', icon: 'none' });
     }
     if (!basicForm.expectedSalary) {
       return wx.showToast({ title: '请选择期望薪资', icon: 'none' });

@@ -52,7 +52,8 @@
 }
 
 .tab-name {
-  font-size: 22rpx;
+  /* R139: 22rpx → 24rpx (跟首页 industry-name 32rpx / 卡片 28rpx 视觉更一致) */
+  font-size: 24rpx;
 }
 
 /* 进度条 */
