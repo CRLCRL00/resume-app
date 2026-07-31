@@ -116,9 +116,9 @@
           <view class="tinder-btn tinder-btn--up" bindtap="onSwipeUp">改 ↗</view>
         </view>
 
-        <!-- R117: 或自己输入 (始终可用) (R121+R128 修: 条件 focus, 去 !currentRecommendation 让 LLM 推荐时 user 仍能打字) -->
+        <!-- R117: 或自己输入 (始终可用) (R121+R128+R129 修: 条件 focus, 只看 modal 状态不看 modalValue, 让 user 连续打字) -->
         <view class="tinder-input">
-          <input class="modal-input" placeholder="或自己输入..." value="{{modalValue}}" bindinput="onModalInput" focus="{{modalVisible && wizardMode && !modalValue}}" bindconfirm="onModalSave" />
+          <input class="modal-input" placeholder="或自己输入..." value="{{modalValue}}" bindinput="onModalInput" focus="{{modalVisible && wizardMode}}" bindconfirm="onModalSave" />
         </view>
 
         <!-- chips / picker (复用 R99 wizard 选项) -->
