@@ -21,7 +21,6 @@
       <view class="industry-stats">
         <text class="stat-item">📊 {{item.job_count}} 个岗位</text>
         <text wx:if="{{item.recent_verified > 0}}" class="stat-item">✓ {{item.recent_verified}} 近 7 天已 verify</text>
-        <text wx:if="{{item.avg_salary_max > 0}}" class="stat-item">💰 平均 {{item.avg_salary_max}}K</text>
       </view>
     </view>
     <view wx:if="{{loading}}" class="loading">加载中...</view>
