@@ -242,6 +242,7 @@ Page({
     this.setData({ [`projectForm.${field}`]: e.detail.value });
   },
 
+  // R134: project-score 改 async (POST → 写 task + poll status + 读 result)
   async submitProject() {
     const { projectForm } = this.data;
     if (!projectForm.name || projectForm.name.length < 2) {
@@ -249,17 +250,33 @@ Page({
     }
     wx.showLoading({ title: 'AI 评估中...' });
     try {
-      const res = await this._api('/api/jobpilot/project-score', 'POST', projectForm);
-      if (res.ok) {
-        this.setData({ projectResult: res });
-        this.markCompleted(2);
-        this.saveState();
-        wx.hideLoading();
-        wx.showToast({ title: '评估完成 → 自动到 Step 3', icon: 'success' });
-        setTimeout(() => this.nextStep(), 800);
-      } else {
-        throw new Error(res.error || '评估失败');
+      // 1. POST async → 返 task_id
+      const createRes = await this._api('/api/jobpilot/project-score-async', 'POST', projectForm);
+      if (!createRes.ok || !createRes.task_id) {
+        throw new Error(createRes.error || '提交失败');
       }
+      const taskId = createRes.task_id;
+
+      // 2. poll 查 status (每 2s 一次, 最多 60s)
+      let task = null;
+      for (let i = 0; i < 30; i++) {
+        await new Promise((r) => setTimeout(r, 2000));
+        task = await this._api(`/api/tasks/${taskId}`, 'GET');
+        if (task?.code === 0 && (task.data.status === 'done' || task.data.status === 'failed')) break;
+      }
+
+      if (!task || task.code !== 0 || task.data.status !== 'done') {
+        throw new Error(task?.data?.error || 'AI 评估超时,稍后看 5 步追踪');
+      }
+
+      // 3. task.result 含完整 AI 评分, 转成原 sync 格式 (字段名匹配)
+      const result = { ok: true, ...task.data.result };
+      this.setData({ projectResult: result });
+      this.markCompleted(2);
+      this.saveState();
+      wx.hideLoading();
+      wx.showToast({ title: '评估完成 → 自动到 Step 3', icon: 'success' });
+      setTimeout(() => this.nextStep(), 800);
     } catch (err) {
       wx.hideLoading();
       wx.showToast({ title: this._errMsg(err, '评估失败'), icon: 'none' });
