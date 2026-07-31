@@ -2,6 +2,12 @@ name: Deploy
 # R41-Gap-1: 触发方式 — push main 自动部署 prod + 保留手动 workflow_dispatch
 # push develop 自动部署 staging（如已配置 STAGING_* secrets）
 # 手动可覆盖 env 选择 prod / staging
+#
+# R132: GitHub Flow — 此 workflow 由 main 分支 merge 自动触发
+#   - PR 必须经过 pr-check.yml (test + lint + docs) 绿 + CODEOWNERS review 通过才能 merge
+#   - merge 后自动 deploy prod (本 workflow)
+#   - 手动 Run workflow 用于 hotfix / rollback / staging test
+# 详见 CONTRIBUTING.md
 on:
   push:
     branches:

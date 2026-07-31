@@ -1,0 +1,32 @@
+# CODEOWNERS - R132 GitHub Flow 强制 review 规则
+# GitHub 自动给 PR 分配 reviewer, 修改这些路径的文件 PR 必须 review 通过才能 merge.
+#
+# 格式: <path>    <@owner>
+#  路径支持 * 通配,  @owner 是 GitHub username/team
+#  文档: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+#
+# 当前 repo owner: @CRLCRL00
+# 建议加 2nd reviewer: 团队成员 / 外部 reviewer
+
+# === 全局默认: backend / mini-program 改任何代码需要 owner review ===
+/backend/**              @CRLCRL00
+/mini-program/**         @CRLCRL00
+/.github/workflows/      @CRLCRL00
+
+# === 高敏感路径: 部署 / 数据库 / 安全 ===
+/backend/db/migrations/  @CRLCRL00
+/backend/.env.example   @CRLCRL00
+/.github/workflows/emergency-deploy.yml  @CRLCRL00
+/.github/workflows/deploy.yml            @CRLCRL00
+/backend/src/config/    @CRLCRL00
+/backend/src/middleware/auth.js          @CRLCRL00
+/backend/src/middleware/adminAuth.js     @CRLCRL00
+
+# === docs / README 可宽松 review ===
+/docs/                   @CRLCRL00
+/*.md                    @CRLCRL00
+/devlog/                 @CRLCRL00
+
+# === 最后一行兜底: 任何路径都要 owner review ===
+# (注释掉这条避免 noise — 上面已分类)
+/*                       @CRLCRL00
