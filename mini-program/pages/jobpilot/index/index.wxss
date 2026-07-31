@@ -244,17 +244,41 @@
 }
 
 .match-card {
-  background: #fff;
-  padding: 24rpx;
+  background: #ffffff;
+  border: 1rpx solid #e5e5e7;
   border-radius: 16rpx;
+  padding: 28rpx 32rpx;
   margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+  animation: matchCardIn 0.3s ease-out backwards;
+}
+
+/* 错位入场 */
+.match-card:nth-child(1) { animation-delay: 0.05s; }
+.match-card:nth-child(2) { animation-delay: 0.10s; }
+.match-card:nth-child(3) { animation-delay: 0.15s; }
+.match-card:nth-child(4) { animation-delay: 0.20s; }
+.match-card:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes matchCardIn {
+  from { opacity: 0; transform: translateY(8rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.match-card:active {
+  transform: scale(0.99);
+  background: #f9f9fb;
+  border-color: #6366f1;
+  box-shadow: 0 4rpx 16rpx rgba(99, 102, 241, 0.12);
 }
 
 .match-title {
-  font-size: 30rpx;
+  font-size: 32rpx;
   font-weight: 600;
   color: #1c1c1e;
   margin-bottom: 8rpx;
+  letter-spacing: 0.5rpx;
 }
 
 .match-company {
@@ -272,12 +296,13 @@
 }
 
 .match-score {
-  background: #6366f1;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
   color: #fff;
-  padding: 4rpx 16rpx;
+  padding: 6rpx 16rpx;
   border-radius: 16rpx;
-  font-size: 22rpx;
+  font-size: 24rpx;
   font-weight: 600;
+  box-shadow: 0 2rpx 6rpx rgba(99, 102, 241, 0.3);
 }
 
 .match-verify {
@@ -358,17 +383,40 @@
 }
 
 .app-card {
-  background: #fff;
-  padding: 24rpx;
+  background: #ffffff;
+  border: 1rpx solid #e5e5e7;
   border-radius: 16rpx;
+  padding: 28rpx 32rpx;
   margin-bottom: 16rpx;
+  box-shadow: 0 2rpx 8rpx rgba(15, 23, 42, 0.04);
+  transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+  animation: appCardIn 0.3s ease-out backwards;
+}
+
+.app-card:nth-child(1) { animation-delay: 0.05s; }
+.app-card:nth-child(2) { animation-delay: 0.10s; }
+.app-card:nth-child(3) { animation-delay: 0.15s; }
+.app-card:nth-child(4) { animation-delay: 0.20s; }
+.app-card:nth-child(5) { animation-delay: 0.25s; }
+
+@keyframes appCardIn {
+  from { opacity: 0; transform: translateY(8rpx); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.app-card:active {
+  transform: scale(0.99);
+  background: #f9f9fb;
+  border-color: #6366f1;
+  box-shadow: 0 4rpx 16rpx rgba(99, 102, 241, 0.12);
 }
 
 .app-title {
-  font-size: 30rpx;
+  font-size: 32rpx;
   font-weight: 600;
   color: #1c1c1e;
   margin-bottom: 8rpx;
+  letter-spacing: 0.5rpx;
 }
 
 .app-company {
