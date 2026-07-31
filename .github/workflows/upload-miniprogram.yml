@@ -45,7 +45,7 @@ jobs:
         # overwrite=always 允许 rerun 时覆盖; 末尾 cleanup 防泄露 (虽不入仓)
         env:
           API_BASE_URL: ${{ secrets.WX_API_BASE_URL || 'https://43.139.176.199:443' }}
-          APP_VERSION: ${{ github.event.inputs.version || format('1.0.{0}', github.run_number) }}
+          APP_VERSION: "${{ github.event.inputs.version || format('1.0.{0}', github.run_number) }}"
         run: |
           mkdir -p mini-program/src
           cat > mini-program/src/config.js << EOF
@@ -62,8 +62,8 @@ jobs:
       - name: Upload experience version
         working-directory: mini-program
         env:
-          VERSION: ${{ github.event.inputs.version || format('1.0.{0}', github.run_number) }}
-          DESC: ${{ github.event.inputs.desc || format('GH Actions auto upload #{0}', github.run_number) }}
+          VERSION: "${{ github.event.inputs.version || format('1.0.{0}', github.run_number) }}"
+          DESC: "${{ github.event.inputs.desc || format('GH Actions auto upload #{0}', github.run_number) }}"
         run: |
           npx miniprogram-ci upload \
             --pp ./ \

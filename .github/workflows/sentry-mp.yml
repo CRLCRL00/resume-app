@@ -40,7 +40,7 @@ jobs:
       - name: Build mini-program (miniprogram-ci)
         working-directory: mini-program
         env:
-          RELEASE: ${{ github.event.inputs.release || format('resume-app-mini-program@mp-{0}', github.run_number) }}
+          RELEASE: "${{ github.event.inputs.release || format('resume-app-mini-program@mp-{0}', github.run_number) }}"
         run: |
           mkdir -p dist
           npx miniprogram-ci build \
@@ -59,7 +59,7 @@ jobs:
           SENTRY_PROJECT: ${{ secrets.SENTRY_PROJECT_MP }}
           SENTRY_DIST_DIR: ./dist
           SENTRY_URL_PREFIX: 'app:///'
-          RELEASE: ${{ github.event.inputs.release || format('resume-app-mini-program@mp-{0}', github.run_number) }}
+          RELEASE: "${{ github.event.inputs.release || format('resume-app-mini-program@mp-{0}', github.run_number) }}"
         run: node scripts/upload-sourcemaps.js "$RELEASE"
 
       - name: Cleanup key

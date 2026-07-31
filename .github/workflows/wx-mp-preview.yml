@@ -41,7 +41,7 @@ jobs:
       - name: Generate preview QR
         working-directory: mini-program
         env:
-          DESC: ${{ github.event.inputs.desc || format('GH Actions preview #{0}', github.run_number) }}
+          DESC: "${{ github.event.inputs.desc || format('GH Actions preview #{0}', github.run_number) }}"
           PAGE: ${{ github.event.inputs.pagePath }}
         run: |
           ARGS=(
