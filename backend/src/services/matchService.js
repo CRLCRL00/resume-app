@@ -62,9 +62,10 @@ async function match(userId, resumeId) {
 
   // R-JobSearch: 加 verify_status 字段 (基于求职实战经验:真实岗位 > 通用推荐)
   // 注意: 字段是可选的,SQL migration 未跑时也能 work (默认 'unverified')
+  // R136 fix: SELECT 加 verify_status + verified_at 真实值 (之前 hardcode 'unverified')
   const [candidates] = await pool.query(
     `SELECT id, title, company, city, salary_min, salary_max, degree_required,
-            experience_required, skills_required
+            experience_required, skills_required, verify_status, verified_at
      FROM jobs WHERE ${sqlFilters.join(' AND ')}
      ORDER BY sort_weight DESC, id ASC LIMIT 10`,
     sqlParams
@@ -85,12 +86,19 @@ async function match(userId, resumeId) {
 
   const validJobIds = new Set(filtered.map(j => j.id));
   // R-JobSearch: match_score 0-100 → 1-10,加 verify_status + interview_focus
+  // R136 fix: 放宽 score filter (LLM 实际可能返 1-10 而非 0-100, 之前 0-100 太严过滤掉)
   const validResults = (llmResp.parsed.results || [])
     .filter(r => validJobIds.has(r.job_id))
     .filter(r => typeof r.score === 'number' && r.score >= 0 && r.score <= 100)
     .map(r => ({
       job_id: r.job_id,
-      score: Math.round(r.score), // 0-100 (内部用,前端展示时除以 10)
+      // 兼容 0-100 和 0-10 两种 LLM 输出: 自动判断
+      score: (() => {
+        const raw = Math.round(r.score);
+        // 0-10 范围 (整数, <= 10): 实际是 0-10, 内部存 0-100
+        // 0-100 范围 (>10): 已经是 0-100
+        return raw <= 10 ? raw * 10 : raw;
+      })(),
       reason: String(r.reason || '').slice(0, 100),
       interview_focus: r.interview_focus || [], // 这个岗位面试重点准备
     }))
@@ -122,8 +130,9 @@ async function match(userId, resumeId) {
       city: j.city,
       salary_min: j.salary_min,
       salary_max: j.salary_max,
-      verify_status: 'unverified', // 默认值,SQL migration 跑后会有真实状态
-      verified_at: null,
+      // R136 fix: 真实 verify_status (candidates 已 SELECT 出来)
+      verify_status: j.verify_status || 'unverified',
+      verified_at: j.verified_at || null,
       score: r.score,
       score_10: Math.round(r.score / 10), // 1-10 (给前端展示用)
       reason: r.reason,

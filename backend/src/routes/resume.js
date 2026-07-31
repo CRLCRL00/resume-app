@@ -15,13 +15,16 @@ router.post('/save', userAuth, async (req, res, next) => {
     if (error) throw new AppError(1000, error.message, 400);
 
     const userId = req.user.userId;
+    // R136 fix: save 时同步生成 content_md (从 source_form 拼 markdown, 给 matchService LLM 评分用)
+    // 不再 INSERT 空 content_md (LLM 评分时 '无简历内容,无法评估')
+    const contentMd = buildContentMd(value);
     const conn = await pool.getConnection();
     try {
       await conn.beginTransaction();
       await conn.query('UPDATE resumes SET is_active = 0 WHERE user_id = ?', [userId]);
       const [r] = await conn.query(
         'INSERT INTO resumes (user_id, source_form, content_md, is_active) VALUES (?, ?, ?, 1)',
-        [userId, JSON.stringify(value), '']
+        [userId, JSON.stringify(value), contentMd]
       );
       await conn.commit();
       res.json({ code: 0, data: { resume_id: r.insertId, created_at: new Date().toISOString() } });
@@ -35,6 +38,39 @@ router.post('/save', userAuth, async (req, res, next) => {
     next(err);
   }
 });
+
+/**
+ * R136 fix: 从 source_form 拼 markdown content_md, 给 matchService LLM 评分用
+ * 之前 save 时 content_md=空, LLM 评分返 score=0 "无简历内容,无法评估"
+ */
+function buildContentMd(form) {
+  const lines = [];
+  if (form.name) lines.push(`# ${form.name}`);
+  if (form.expected) {
+    lines.push(`## 期望`);
+    lines.push(`- 城市: ${form.expected.city || ''}`);
+    lines.push(`- 岗位: ${form.expected.position || ''}`);
+    lines.push(`- 薪资: ${form.expected.salary_min || 0}-${form.expected.salary_max || 0} K/月`);
+  }
+  if (form.educations && form.educations.length) {
+    lines.push(`## 教育背景`);
+    for (const e of form.educations) {
+      lines.push(`- ${e.school} | ${e.major || ''} | ${e.degree || ''} (${e.start || ''} - ${e.end || ''})`);
+    }
+  }
+  if (form.experiences && form.experiences.length) {
+    lines.push(`## 工作经历`);
+    for (const x of form.experiences) {
+      lines.push(`- **${x.company} | ${x.title}** (${x.start || ''} - ${x.end || ''})`);
+      if (x.desc) lines.push(`  - ${x.desc}`);
+    }
+  }
+  if (form.skills && form.skills.length) {
+    lines.push(`## 技能: ${form.skills.join(', ')}`);
+  }
+  if (form.degree) lines.push(`## 学历: ${form.degree}`);
+  return lines.join('\n');
+}
 
 async function generateHandler(req, res, next) {
   try {
