@@ -14,7 +14,7 @@
  *   3. Client GET /api/tasks/:id → poll status
  */
 
-const { pool } = require('../config/db');
+const pool = require('../config/db');
 
 /**
  * 创建任务 (status=pending, user_id 可选)
