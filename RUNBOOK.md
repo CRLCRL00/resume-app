@@ -42,6 +42,82 @@ pm2 restart resume-app-backend --update-env
 
 > ⚠️ Server `.env` 不要从 local 覆盖 — 单独维护。
 
+## 一·五、GitHub Actions Secrets 配置 (R-JobPilot-v2)
+
+> **为什么这节很重要**：Deploy workflow (`deploy.yml`) 和 Emergency Deploy workflow (`emergency-deploy.yml`)
+> 都依赖 `SERVER_HOST` / `SERVER_USER` / `SERVER_SSH_KEY` 三个 secrets。
+> 如果 secrets 缺失，**Deploy 会失败但 Emergency Deploy 看起来 success（commit status 显示绿勾）**—— 这是 Pre-check 的设计 bug，会误导你。
+
+### 1. 检查 secrets 是否配齐
+
+**最直接的方式**：在 GitHub Actions 跑一次 `Deploy` workflow（validate_only=true），看 fail log：
+
+```bash
+# 需要 gh CLI 已认证 (gh auth login)
+gh workflow run deploy.yml \
+  --repo CRLCRL00/resume-app \
+  --ref main \
+  --field env=prod \
+  --field validate_only=true \
+  --field ref=main
+```
+
+然后开 https://github.com/CRLCRL00/resume-app/actions 看 `validate` job 输出：
+- 成功 → secrets 配齐
+- 失败 → 看 `::error::Deploy secrets 缺失: SERVER_XXX` 具体缺哪个
+
+### 2. 配 / 改 Secrets
+
+**导航**：https://github.com/CRLCRL00/resume-app/settings/secrets/actions
+
+点击 **"New repository secret"** 或编辑现有 secret：
+
+| Secret | 值 | 来源 |
+|--------|-----|------|
+| `SERVER_HOST` | `43.139.176.199` | prod server IP（已有） |
+| `SERVER_USER` | `ubuntu` | 看 RUNBOOK "ssh ubuntu@43.139.176.199" |
+| `SERVER_SSH_KEY` | (完整内容) | 你本地 `~/.ssh/id_ed25519` 或 `~/.ssh/id_rsa` **private** key（不是 public） |
+
+**如何拿 SSH private key**：
+
+```bash
+# macOS / Linux
+cat ~/.ssh/id_ed25519
+# 或
+cat ~/.ssh/id_rsa
+
+# Windows (PowerShell)
+Get-Content $env:USERPROFILE\.ssh\id_ed25519
+```
+
+复制整个内容（`-----BEGIN OPENSSH PRIVATE KEY-----` 到 `-----END OPENSSH PRIVATE KEY-----`）。
+
+> ⚠️ **重要**：
+> - 这个 secret 是 **private key**，**绝对不能 commit 到 repo** 或粘贴到公开地方
+> - 用 GitHub Actions secrets 加密保存
+> - 如果泄露，立刻去 prod server `vim ~/.ssh/authorized_keys` 删除对应 public key
+
+### 3. 验证配齐后
+
+```bash
+# 触发一次 push (空 commit)
+git commit --allow-empty -m "chore: trigger deploy after secrets config"
+git push origin main
+```
+
+开 https://github.com/CRLCRL00/resume-app/actions 看 Deploy 状态：
+- ✅ Deploy success → 完整 prod deploy 跑通
+- ❌ 仍 fail → 看 log，可能 secrets 写错了
+
+### 4. 常见坑
+
+| 坑 | 排查 |
+|-----|------|
+| SSH private key 包含 trailing newline | 用 `pbcopy < ~/.ssh/id_ed25519` 整段复制 |
+| Server 上 authorized_keys 没对应 public key | `ssh ubuntu@43.139.176.199 "cat ~/.ssh/authorized_keys"` 确认有 |
+| Server firewall 拦 SSH | `nc -zv 43.139.176.199 22` 测端口连通 |
+| secret name 大小写错 | 必须 `SERVER_HOST` / `SERVER_USER` / `SERVER_SSH_KEY` 完全一致 |
+
 ## 二、监控
 
 ### 关键 URL

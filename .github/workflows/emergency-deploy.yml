@@ -62,17 +62,24 @@ jobs:
 
       # Pre-check: 确认 3 个 server-related secrets 都设了 (不泄漏值)
       # 不设的话 SSH step 会 fail 但原因模糊
+      # R-JobPilot-v2: 用 [[ -z ]] 严格检查 (旧版用 ${#VAR} length 不可靠, 空字符串也 success)
       - name: Pre-check secrets
         id: check_secrets
         run: |
           echo "SERVER_HOST length: ${#SERVER_HOST}"
           echo "SERVER_USER length: ${#SERVER_USER}"
           echo "SERVER_SSH_KEY length: ${#SERVER_SSH_KEY}"
-          if [ -z "$SERVER_HOST" ] || [ -z "$SERVER_USER" ] || [ -z "$SERVER_SSH_KEY" ]; then
-            echo "::error::MISSING secrets (one of SERVER_HOST / SERVER_USER / SERVER_SSH_KEY is empty)"
-            echo "missing=true" >> "$GITHUB_OUTPUT"
-          else
+          # 严格检查: 长度必须 > 0 才算配齐
+          if [ "${#SERVER_HOST}" -gt 0 ] && [ "${#SERVER_USER}" -gt 0 ] && [ "${#SERVER_SSH_KEY}" -gt 0 ]; then
             echo "missing=false" >> "$GITHUB_OUTPUT"
+          else
+            MISSING=""
+            [ "${#SERVER_HOST}" -eq 0 ] && MISSING="$MISSING SERVER_HOST"
+            [ "${#SERVER_USER}" -eq 0 ] && MISSING="$MISSING SERVER_USER"
+            [ "${#SERVER_SSH_KEY}" -eq 0 ] && MISSING="$MISSING SERVER_SSH_KEY"
+            echo "::error::MISSING secrets:$MISSING"
+            echo "::error::配置: GitHub repo Settings → Secrets and variables → Actions"
+            echo "missing=true" >> "$GITHUB_OUTPUT"
           fi
         env:
           SERVER_HOST: ${{ secrets.SERVER_HOST }}
@@ -165,12 +172,14 @@ jobs:
 
       # P2: commit status 反馈 — 让用户从 commit page 看 ✅/❌ (无需翻 GH Actions log)
       # F2 (2026-07-31): 区分 push trigger (skip SSH) vs workflow_dispatch (跑 SSH) vs 各 fail 场景
+      # R-JobPilot-v2: push trigger 用 'neutral' (不是 success) — 因为 SSH 跳过 ≠ 真 deploy
+      #                   避免 commit page 显示绿勾误导用户以为已 deploy
       - name: Report commit status (with diagnostic hint)
         if: always()
         uses: actions/github-script@v7
         with:
           script: |
-            // 4 个 sub-status + event 区分,精确诊断 fail 原因
+            // 5 个 sub-status + event 区分,精确诊断 fail 原因 + 避免 push trigger 误报 success
             const scpOk = '${{ steps.scp_run.conclusion }}' === 'success';
             const sshOk = '${{ steps.ssh_run.conclusion }}' === 'success';
             const sshConcl = '${{ steps.ssh_run.conclusion }}' || 'unknown';
@@ -180,13 +189,14 @@ jobs:
             let state;
             if (secretsMissing) {
               state = 'failure';
-              desc = '❌ GH Actions secret 缺失 (SERVER_HOST/USER/SSH_KEY 任一空)';
+              desc = '❌ GH Actions secrets 缺失 (SERVER_HOST/USER/SSH_KEY 任一空)';
             } else if (event === 'push') {
               // push trigger: SSH step 故意 skipped (需 MySQL 密码,只有手动 trigger 才能填)
-              // scp OK = workflow self-test PASS
-              state = scpOk ? 'success' : 'failure';
+              // scp OK = workflow self-test PASS,但 NOT actual deploy
+              // 用 'neutral' 而不是 'success' — commit page 显示灰圈,不是误导绿勾
+              state = scpOk ? 'neutral' : 'failure';
               desc = scpOk
-                ? '✅ workflow self-test PASS (scp ok, ssh 跳过)。需手动 Run workflow 跑完整 fix'
+                ? '🟡 self-test PASS (scp ok, ssh 跳过)。需手动 Run workflow 才真 deploy'
                 : '❌ SCP fail。检查 SERVER_SSH_KEY 跟 prod authorized_keys 配对';
             } else if (sshOk) {
               // workflow_dispatch + ssh ok = 全 PASS
