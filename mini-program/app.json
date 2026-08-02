@@ -2,6 +2,7 @@
   "pages": [
     "pages/index/index",
     "pages/jobpilot/index/index",
+    "pages/jobpilot/chat-build/index",
     "pages/preview/preview",
     "pages/match/list",
     "pages/match/detail",

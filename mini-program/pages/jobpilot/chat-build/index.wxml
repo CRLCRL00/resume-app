@@ -1,0 +1,99 @@
+<!-- R-JobPilot-v2 W3: 对话建简历 UI (5-8 轮 AI 面试官追问) -->
+<view class="chat-page">
+
+  <!-- 顶部画像标签 + 进度条 -->
+  <view class="header">
+    <view class="image-badge" wx:if="{{image}}">
+      <text class="badge-icon">{{imageIcon}}</text>
+      <text class="badge-text">{{imageLabel}}</text>
+    </view>
+    <view class="progress">
+      <view class="progress-bar">
+        <view class="progress-fill" style="width: {{(currentRound / recommendedRounds) * 100}}%"></view>
+      </view>
+      <text class="progress-text">{{currentRound}} / {{recommendedRounds}} 轮</text>
+    </view>
+  </view>
+
+  <!-- 对话历史 (倒序滚动, 最新消息在底部) -->
+  <scroll-view class="chat-history" scroll-y scroll-into-view="{{lastMessageId}}">
+    <block wx:for="{{messages}}" wx:key="id" wx:for-item="msg">
+      <view id="{{msg.id}}" class="message {{msg.role}}">
+        <!-- AI 消息 -->
+        <view wx:if="{{msg.role === 'assistant'}}" class="bubble assistant-bubble">
+          <view class="avatar assistant-avatar">🤖</view>
+          <view class="content">
+            <text class="role-tag">AI 面试官</text>
+            <text class="text">{{msg.content}}</text>
+            <text wx:if="{{msg.hint}}" class="hint">💡 {{msg.hint}}</text>
+          </view>
+        </view>
+        <!-- 用户消息 -->
+        <view wx:else class="bubble user-bubble">
+          <view class="content">
+            <text class="role-tag">我</text>
+            <text class="text">{{msg.content}}</text>
+          </view>
+          <view class="avatar user-avatar">👤</view>
+        </view>
+      </view>
+    </block>
+
+    <!-- 加载中 -->
+    <view wx:if="{{loading}}" class="message assistant">
+      <view class="bubble assistant-bubble">
+        <view class="avatar assistant-avatar">🤖</view>
+        <view class="content">
+          <text class="role-tag">AI 面试官</text>
+          <text class="text loading-text">思考中<span class="dot">.</span><span class="dot">.</span><span class="dot">.</span></text>
+        </view>
+      </view>
+    </view>
+  </scroll-view>
+
+  <!-- 完成态 -->
+  <view wx:if="{{completed}}" class="completed-banner">
+    <text class="completed-title">✅ 对话完成</text>
+    <text class="completed-desc">AI 已生成简历 JSON + STAR 故事点</text>
+    <view wx:if="{{storyPoints.length}}" class="story-points">
+      <view wx:for="{{storyPoints}}" wx:key="title" wx:for-item="sp" class="story-card">
+        <text class="story-title">⭐ {{sp.title}}</text>
+        <text class="story-section">📌 {{sp.situation}}</text>
+        <text class="story-section">⚡ {{sp.action}}</text>
+      </view>
+    </view>
+    <button class="btn-primary" bindtap="goBack">回到求职助手</button>
+  </view>
+
+  <!-- 输入区 (对话中) -->
+  <view wx:elif="{{started}}" class="input-bar">
+    <textarea
+      class="input"
+      placeholder="回答 AI 的追问..."
+      value="{{userAnswer}}"
+      bindinput="onInputChange"
+      bindconfirm="onSubmit"
+      auto-height
+      maxlength="-1"
+    />
+    <button class="btn-send" bindtap="onSubmit" disabled="{{!userAnswer.trim() || loading}}">
+      {{loading ? '发送中...' : '发送'}}
+    </button>
+  </view>
+
+  <!-- 启动态 (选画像) -->
+  <view wx:elif="{{!started}}" class="start-screen">
+    <view class="start-card">
+      <text class="start-title">🤖 AI 面试官</text>
+      <text class="start-desc">选画像,AI 会基于你的背景追问 5-8 轮,生成简历 JSON + STAR 故事点</text>
+      <view class="image-picker">
+        <view wx:for="{{imageOptions}}" wx:key="value" wx:for-item="opt" class="image-option {{selectedImage === opt.value ? 'selected' : ''}}" data-value="{{opt.value}}" bindtap="onPickImage">
+          <text class="opt-icon">{{opt.icon}}</text>
+          <text class="opt-name">{{opt.label}}</text>
+        </view>
+      </view>
+      <button class="btn-primary" bindtap="onStart" disabled="{{!selectedImage || loading}}">{{loading ? '启动中...' : '开始对话'}}</button>
+    </view>
+  </view>
+
+</view>

@@ -1,6 +1,16 @@
 <!-- R-JobSearch 重构 v3: AI 求职助手 6 步流程 (整合 BigScreen + 5 步法) -->
 <view class="jobpilot-page">
 
+  <!-- R-JobPilot-v2 W3: 对话建简历入口 (banner) -->
+  <view class="chat-build-entry" bindtap="goChatBuild">
+    <view class="entry-icon">🤖</view>
+    <view class="entry-content">
+      <text class="entry-title">AI 对话建简历</text>
+      <text class="entry-desc">跟 AI 聊聊, 5-8 轮生成简历 JSON + STAR 故事点</text>
+    </view>
+    <view class="entry-arrow">→</view>
+  </view>
+
   <!-- Tab 切换 (含完成标记) -->
   <view class="tabs">
     <view

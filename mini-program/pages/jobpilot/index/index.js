@@ -144,6 +144,20 @@ Page({
   },
 
   // ===== 通用:tab 切换 =====
+
+  /**
+   * R-JobPilot-v2 W3: 跳到 chat-build 对话建简历页面
+   * 把当前 profileResult.image 传给 chat-build (如果已有画像诊断, 直接预选)
+   */
+  goChatBuild() {
+    const image = (this.data.profileResult && this.data.profileResult.image) || '';
+    const url = image
+      ? `/pages/jobpilot/chat-build/index?image=${encodeURIComponent(image)}`
+      : '/pages/jobpilot/chat-build/index';
+    wx.navigateTo({ url });
+  },
+
+  // ===== 通用:tab 切换 =====
   switchStep(e) {
     const idx = Number(e.currentTarget.dataset.idx);
     this.setData({ currentStep: idx });
