@@ -1,9 +1,13 @@
 /**
- * JobPilot API Routes (R-JobSearch 重构 - Step 1/2)
+ * JobPilot API Routes (R-JobSearch + R-JobPilot-v2)
  *
  * 提供:
  *   POST /api/jobpilot/profile-diagnose    5 题 → 画像分类
  *   POST /api/jobpilot/project-score       项目评分
+ *   POST /api/jobpilot/project-score-async 异步项目评分 (R133)
+ *
+ * 子路由:
+ *   /v1/*  → jobpilotV1Router (R-JobPilot-v2: 对话建简历)
  *
  * 不需要 DB (纯逻辑 + 规则),响应快 (< 100ms)
  */
@@ -15,6 +19,10 @@ const router = express.Router();
 const { userAuth } = require('../middleware/auth');
 const { AppError } = require('../middleware/errorHandler');
 const { diagnoseProfile, scoreProject } = require('../services/jobpilotAi');
+
+// R-JobPilot-v2: mount v1 子路由
+const jobpilotV1Router = require('./jobpilotV1');
+router.use('/v1', jobpilotV1Router);
 
 /**
  * POST /api/jobpilot/profile-diagnose
