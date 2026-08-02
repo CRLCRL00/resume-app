@@ -71,6 +71,47 @@ else
   echo "[deploy] WARN: pm2 not in PATH"
 fi
 
+# 4.5. R-JobPilot-v2: migration runner + seed (保证 DB schema 最新 + chat_build prompt 存在)
+echo "[deploy] running migration runner (idempotent)..."
+if [ -d src/db/migrations ]; then
+  node -e "
+    const m = require('mysql2/promise');
+    const fs = require('fs');
+    const path = require('path');
+    const c = require('./src/config');
+    (async () => {
+      const conn = await m.createConnection({
+        host: c.DB.host, port: c.DB.port, user: c.DB.user,
+        password: c.DB.password, database: c.DB.database, multipleStatements: true,
+      });
+      const dir = './src/db/migrations';
+      const files = fs.readdirSync(dir).filter(f => f.endsWith('.sql')).sort();
+      for (const f of files) {
+        const sql = fs.readFileSync(path.join(dir, f), 'utf8');
+        try {
+          await conn.query(sql);
+          console.log('[migrate] applied:', f);
+        } catch (e) {
+          // CREATE TABLE IF NOT EXISTS 等幂等操作可能 warn, 但不是 fatal
+          console.log('[migrate] skip:', f, '(' + e.code + ')');
+        }
+      }
+      // seed.sql (prompts + jobs)
+      if (fs.existsSync('./src/db/seed.sql')) {
+        try {
+          await conn.query(fs.readFileSync('./src/db/seed.sql', 'utf8'));
+          console.log('[migrate] seed.sql applied');
+        } catch (e) {
+          console.log('[migrate] seed skip:', e.code);
+        }
+      }
+      await conn.end();
+    })().catch(e => { console.error('[migrate] FATAL:', e.message); process.exit(1); });
+  " 2>&1 | tail -10
+else
+  echo "[deploy] WARN: src/db/migrations not found, skip migration"
+fi
+
 # 5. R41-Gap-3: 健康探测 — 持续 N 次失败则自动 rollback
 echo "[deploy] waiting for healthy at $HEALTH_URL..."
 END=$(( $(date +%s) + HEALTH_PROBE_TIMEOUT ))
