@@ -93,6 +93,25 @@ jobs:
             USER="${{ secrets.SERVER_USER }}"
             KEY="${{ secrets.SERVER_SSH_KEY }}"
           fi
+
+          # R-JobPilot-v2: 显式校验 secrets 完整性, 缺则 fail 早 + actionable error
+          # 避免 SSH 阶段空 host 失败时 debug 困难
+          MISSING=""
+          [ -z "$HOST" ] && MISSING="$MISSING SERVER_HOST"
+          [ -z "$USER" ] && MISSING="$MISSING SERVER_USER"
+          [ -z "$KEY" ] && MISSING="$MISSING SERVER_SSH_KEY"
+          if [ -n "$MISSING" ]; then
+            echo "::error::Deploy secrets 缺失:$MISSING"
+            echo "::error::TARGET=$TARGET 需要配置:"
+            if [ "$TARGET" = "staging" ]; then
+              echo "::error::  GitHub repo Settings → Secrets → STAGING_HOST / STAGING_USER / STAGING_SSH_KEY"
+            else
+              echo "::error::  GitHub repo Settings → Secrets → SERVER_HOST / SERVER_USER / SERVER_SSH_KEY"
+            fi
+            echo "::error::  或用 workflow_dispatch 手动 trigger, 选 validate_only=true 只做连通性测试"
+            exit 1
+          fi
+
           echo "server_host=$HOST" >> "$GITHUB_OUTPUT"
           echo "server_user=$USER" >> "$GITHUB_OUTPUT"
           echo "server_key=$KEY" >> "$GITHUB_OUTPUT"
