@@ -81,40 +81,39 @@ jobs:
             esac
           fi
           echo "TARGET=$TARGET"
-          if [ "$TARGET" = "staging" ]; then
-            HOST="${{ secrets.STAGING_HOST || secrets.SERVER_HOST }}"
-            USER="${{ secrets.STAGING_USER || secrets.SERVER_USER }}"
-            KEY="${{ secrets.STAGING_SSH_KEY || secrets.SERVER_SSH_KEY }}"
-            if [ -z "${{ secrets.STAGING_SSH_KEY }}" ]; then
-              echo "::warning::STAGING_SSH_KEY 未配置,fallback 到 SERVER_SSH_KEY (prod)";
-            fi
-          else
-            HOST="${{ secrets.SERVER_HOST }}"
-            USER="${{ secrets.SERVER_USER }}"
-            KEY="${{ secrets.SERVER_SSH_KEY }}"
-          fi
 
-          # R-JobPilot-v2: 显式校验 secrets 完整性, 缺则 fail 早 + actionable error
-          # 避免 SSH 阶段空 host 失败时 debug 困难
+          # R-JobPilot-v2: secrets 完整性检查用 gh CLI
+          # 原因: secret 值在 shell 被 GitHub 替换成 ***, [[ -z "$HOST" ]] 永远 false 触发不到,
+          #        且 echo "server_host=$HOST" 报 Invalid format '***' (GitHub 阻止 echo 掩盖值)
+          # 改用 gh secret list 检查 secret 是否存在 (不显示值)
+          if [ "$TARGET" = "staging" ]; then
+            EXPECTED=("STAGING_HOST" "STAGING_USER" "STAGING_SSH_KEY")
+          else
+            EXPECTED=("SERVER_HOST" "SERVER_USER" "SERVER_SSH_KEY")
+          fi
           MISSING=""
-          [ -z "$HOST" ] && MISSING="$MISSING SERVER_HOST"
-          [ -z "$USER" ] && MISSING="$MISSING SERVER_USER"
-          [ -z "$KEY" ] && MISSING="$MISSING SERVER_SSH_KEY"
+          for sec in "${EXPECTED[@]}"; do
+            if ! gh secret list 2>/dev/null | grep -q "^${sec}\b"; then
+              MISSING="$MISSING $sec"
+            fi
+          done
           if [ -n "$MISSING" ]; then
             echo "::error::Deploy secrets 缺失:$MISSING"
-            echo "::error::TARGET=$TARGET 需要配置:"
-            if [ "$TARGET" = "staging" ]; then
-              echo "::error::  GitHub repo Settings → Secrets → STAGING_HOST / STAGING_USER / STAGING_SSH_KEY"
-            else
-              echo "::error::  GitHub repo Settings → Secrets → SERVER_HOST / SERVER_USER / SERVER_SSH_KEY"
-            fi
-            echo "::error::  或用 workflow_dispatch 手动 trigger, 选 validate_only=true 只做连通性测试"
+            echo "::error::TARGET=$TARGET 需要配置 GitHub repo Settings → Secrets"
             exit 1
           fi
+          echo "all secrets present: ${EXPECTED[*]}"
 
-          echo "server_host=$HOST" >> "$GITHUB_OUTPUT"
-          echo "server_user=$USER" >> "$GITHUB_OUTPUT"
-          echo "server_key=$KEY" >> "$GITHUB_OUTPUT"
+          # secrets 不通过 shell 变量传递 (掩盖触发错误) — 直接用 ${{ secrets.* }} 在 GITHUB_OUTPUT
+          if [ "$TARGET" = "staging" ]; then
+            echo "server_host=${{ secrets.STAGING_HOST || secrets.SERVER_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "server_user=${{ secrets.STAGING_USER || secrets.SERVER_USER }}" >> "$GITHUB_OUTPUT"
+            echo "server_key=${{ secrets.STAGING_SSH_KEY || secrets.SERVER_SSH_KEY }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "server_host=${{ secrets.SERVER_HOST }}" >> "$GITHUB_OUTPUT"
+            echo "server_user=${{ secrets.SERVER_USER }}" >> "$GITHUB_OUTPUT"
+            echo "server_key=${{ secrets.SERVER_SSH_KEY }}" >> "$GITHUB_OUTPUT"
+          fi
           echo "target_label=$TARGET" >> "$GITHUB_OUTPUT"
 
   package:
