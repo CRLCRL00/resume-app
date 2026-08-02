@@ -666,11 +666,8 @@
   z-index: 0;
   transition: width 0.5s ease-out;
 }
-
-.breakdown-row > * {
-  position: relative;
-  z-index: 1;
-}
+/* 删除 .breakdown-row > * { z-index: 1 } — WXSS 不支持 '> *' 组合 selector,
+   但 children 默认就在 ::before 之上（绘制顺序: background → ::before → content） */
 
 /* B6: job-chip active 反馈 */
 .job-chip {
