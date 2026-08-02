@@ -6,6 +6,59 @@
   padding-bottom: 40rpx;
 }
 
+/* R-JobPilot-v2 W3: 对话建简历入口 banner */
+.chat-build-entry {
+  display: flex;
+  align-items: center;
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #fff;
+  padding: 28rpx 32rpx;
+  margin: 24rpx 32rpx 16rpx;
+  border-radius: 16rpx;
+  box-shadow: 0 4rpx 16rpx rgba(99, 102, 241, 0.25);
+  transition: transform 0.15s, box-shadow 0.2s;
+  animation: entryPulse 2s ease-in-out infinite;
+}
+
+.chat-build-entry:active {
+  transform: scale(0.98);
+  box-shadow: 0 2rpx 8rpx rgba(99, 102, 241, 0.3);
+}
+
+.entry-icon {
+  font-size: 56rpx;
+  margin-right: 24rpx;
+}
+
+.entry-content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 4rpx;
+}
+
+.entry-title {
+  font-size: 32rpx;
+  font-weight: 600;
+  color: #fff;
+}
+
+.entry-desc {
+  font-size: 22rpx;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.entry-arrow {
+  font-size: 40rpx;
+  color: rgba(255, 255, 255, 0.7);
+  margin-left: 16rpx;
+}
+
+@keyframes entryPulse {
+  0%, 100% { box-shadow: 0 4rpx 16rpx rgba(99, 102, 241, 0.25); }
+  50% { box-shadow: 0 6rpx 24rpx rgba(99, 102, 241, 0.4); }
+}
+
 .tabs {
   display: flex;
   background: #fff;
