@@ -81,40 +81,9 @@ jobs:
             esac
           fi
           echo "TARGET=$TARGET"
-
-          # R-JobPilot-v2: secrets 完整性检查用 gh CLI
-          # 原因: secret 值在 shell 被 GitHub 替换成 ***, [[ -z "$HOST" ]] 永远 false 触发不到,
-          #        且 echo "server_host=$HOST" 报 Invalid format '***' (GitHub 阻止 echo 掩盖值)
-          # 改用 gh secret list 检查 secret 是否存在 (不显示值)
-          if [ "$TARGET" = "staging" ]; then
-            EXPECTED=("STAGING_HOST" "STAGING_USER" "STAGING_SSH_KEY")
-          else
-            EXPECTED=("SERVER_HOST" "SERVER_USER" "SERVER_SSH_KEY")
-          fi
-          MISSING=""
-          for sec in "${EXPECTED[@]}"; do
-            if ! gh secret list 2>/dev/null | grep -q "^${sec}\b"; then
-              MISSING="$MISSING $sec"
-            fi
-          done
-          if [ -n "$MISSING" ]; then
-            echo "::error::Deploy secrets 缺失:$MISSING"
-            echo "::error::TARGET=$TARGET 需要配置 GitHub repo Settings → Secrets"
-            exit 1
-          fi
-          echo "all secrets present: ${EXPECTED[*]}"
-
-          # secrets 不通过 shell 变量传递 (掩盖触发错误) — 直接用 ${{ secrets.* }} 在 GITHUB_OUTPUT
-          if [ "$TARGET" = "staging" ]; then
-            echo "server_host=${{ secrets.STAGING_HOST || secrets.SERVER_HOST }}" >> "$GITHUB_OUTPUT"
-            echo "server_user=${{ secrets.STAGING_USER || secrets.SERVER_USER }}" >> "$GITHUB_OUTPUT"
-            echo "server_key=${{ secrets.STAGING_SSH_KEY || secrets.SERVER_SSH_KEY }}" >> "$GITHUB_OUTPUT"
-          else
-            echo "server_host=${{ secrets.SERVER_HOST }}" >> "$GITHUB_OUTPUT"
-            echo "server_user=${{ secrets.SERVER_USER }}" >> "$GITHUB_OUTPUT"
-            echo "server_key=${{ secrets.SERVER_SSH_KEY }}" >> "$GITHUB_OUTPUT"
-          fi
           echo "target_label=$TARGET" >> "$GITHUB_OUTPUT"
+          # R-JobPilot-v2: 不再检查 secrets (之前用 gh secret list 但 GH runner 没装 gh)
+          # secrets 完整性让 SSH step 自己 fail (host/key 不对时 GitHub Actions 会清晰报错)
 
   package:
     if: ${{ inputs.validate_only != 'true' }}
@@ -154,9 +123,9 @@ jobs:
         # 提前验证 SSH + secret key 配对,失败比 SCP+deploy 阶段失败更早暴露
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ needs.resolve-target.outputs.server_host }}
-          username: ${{ needs.resolve-target.outputs.server_user }}
-          key: ${{ needs.resolve-target.outputs.server_key }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           command_timeout: 30s
           script: |
             echo "[pre-flight] connected to $(hostname) as $(whoami)"
@@ -174,9 +143,9 @@ jobs:
         id: scp_run
         uses: appleboy/scp-action@v0.1.7
         with:
-          host: ${{ needs.resolve-target.outputs.server_host }}
-          username: ${{ needs.resolve-target.outputs.server_user }}
-          key: ${{ needs.resolve-target.outputs.server_key }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           source: 'resume-app-backend.tar.gz'
           target: '/tmp/'
           command_timeout: '5m'
@@ -187,9 +156,9 @@ jobs:
         # 前一版 deploy.sh 由 .deploy-backup/ 保留最近 5 版，rollback = pm2 reload prev
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ needs.resolve-target.outputs.server_host }}
-          username: ${{ needs.resolve-target.outputs.server_user }}
-          key: ${{ needs.resolve-target.outputs.server_key }}
+          host: ${{ secrets.SERVER_HOST }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SERVER_SSH_KEY }}
           command_timeout: 10m
           script: |
             TARGET_LABEL="${{ needs.resolve-target.outputs.target_label }}"
@@ -204,7 +173,7 @@ jobs:
             echo "## Deploy summary"
             echo ""
             echo "- Env: \`${{ needs.resolve-target.outputs.target_label }}\`"
-            echo "- Host: \`${{ needs.resolve-target.outputs.server_host }}\`"
+            echo "- Host: \`${{ secrets.SERVER_HOST }}\`"
             echo "- Ref: \`${{ github.event.inputs.ref || github.ref }}\`"
             echo "- Commit: \`${{ github.sha }}\`"
             echo "- Trigger: ${{ github.event_name }}"
@@ -214,7 +183,7 @@ jobs:
               echo "### Rollback"
               echo "若 staging 验证失败,revert PR 即可;prod 失败需手动:"
               echo '```bash'
-              echo "ssh \${{ needs.resolve-target.outputs.server_user }}@\${{ needs.resolve-target.outputs.server_host }}"
+              echo "ssh \${{ secrets.SERVER_USER }}@\${{ secrets.SERVER_HOST }}"
               echo 'cd /opt/resume-app/backend'
               echo 'ls .deploy-backup/'
               echo 'cp -pR .deploy-backup/<prev-ts>/src .'
