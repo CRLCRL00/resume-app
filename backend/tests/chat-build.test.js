@@ -66,7 +66,6 @@ const jobpilotV1RouterForTest = require('express').Router();
 jobpilotV1RouterForTest.use('/chat-build', chatBuildRouterForTest);
 
 // ============== 测试数据 setup/teardown ==============
-const MOCK_PROMPT_CODE = 'chat_build_next_question';
 
 test.before(async () => {
   // 准备 users 表 (跟 mockUserAuth 一致)
@@ -77,20 +76,11 @@ test.before(async () => {
   );
   // 清理该用户的所有 chat_build_sessions
   await pool.query('DELETE FROM chat_build_sessions WHERE user_id = ?', [TEST_USER_ID]);
-  // seed mock prompt (让 chatBuildPrompt.build() 走真实 DB 查询, 不需要 mock chatBuildPrompt 模块)
-  await pool.query(
-    `INSERT INTO prompts (code, name, content, version, is_active)
-     VALUES (?, 'mock chat_build', 'mock system prompt for test {{image}}', 1, 1)
-     ON DUPLICATE KEY UPDATE content=VALUES(content), is_active=1`,
-    [MOCK_PROMPT_CODE]
-  );
 });
 
 test.after(async () => {
   await pool.query('DELETE FROM chat_build_sessions WHERE user_id = ?', [TEST_USER_ID]);
   await pool.query("DELETE FROM users WHERE openid = ?", [TEST_OPENID]);
-  // 清理 mock prompt
-  await pool.query("DELETE FROM prompts WHERE code = ?", [MOCK_PROMPT_CODE]);
   restoreLlm();
   await cleanup();
 });
@@ -221,7 +211,7 @@ test('POST next: 完整 start → next → next 流程', async () => {
 
 // ============== POST /api/jobpilot/v1/chat-build/complete ==============
 
-test('POST complete: 强制完成 + 输出简历 JSON', async () => {
+test('POST complete: 强制完成 + 输出简历 JSON + STAR 故事点', async () => {
   installMockLlm([
     '{"nextQuestion":"Q1","hint":"H1","isComplete":false,"nextFieldId":"name"}',
   ]);
@@ -244,7 +234,16 @@ test('POST complete: 强制完成 + 输出简历 JSON', async () => {
     .post('/api/jobpilot/v1/chat-build/next')
     .send({ sessionId, userAnswer: '张三' });
 
-  // complete
+  // R-JobPilot-v2 W2 T3: complete 调 resumeGenerator 拿 STAR 故事点
+  // mock LLM 返 {resume, storyPoints} JSON
+  installMockLlm([
+    JSON.stringify({
+      resume: '# 张三\n## 工作经历\n...',
+      storyPoints: [
+        { title: 'AI 协作开发', situation: '需要快速产出生产级 AI 应用', task: '通过 Claude 协作完成代码 + 我做 review', action: '设计 Prompt 模板 + review + 测试 + 部署', result: '114 单测全绿 + 公网可访问' },
+      ],
+    }),
+  ]);
   const completeRes = await request(app)
     .post('/api/jobpilot/v1/chat-build/complete')
     .send({ sessionId });
@@ -254,6 +253,10 @@ test('POST complete: 强制完成 + 输出简历 JSON', async () => {
   assert.ok(completeRes.body.resumeJson);
   assert.equal(completeRes.body.resumeJson.name, '张三', 'assembleResume should map name 字段');
   assert.equal(completeRes.body.nextStep, 'project_score');
+  // W2 T3: 联调产出 STAR
+  assert.ok(Array.isArray(completeRes.body.storyPoints), 'storyPoints 应为数组');
+  assert.ok(completeRes.body.storyPoints.length >= 1, 'resumeGenerator 应产出至少 1 个 storyPoint');
+  assert.equal(completeRes.body.storyPoints[0].title, 'AI 协作开发');
 
   // 验证数据库 status + completed_at
   const [rows] = await pool.query(
@@ -304,4 +307,66 @@ test('chatBuildService._safeParse: 解析 markdown 包裹的 JSON', async () => 
 
   const out4 = _safeParse(null);
   assert.equal(out4, null);
+});
+
+// ============== R-JobPilot-v2 W2 T2: 追问深度规则引擎 ==============
+
+test('chatBuildPrompt.analyzeUserAnswer: 触发标志识别', () => {
+  const { analyzeUserAnswer } = require('../src/services/chatBuildPrompt');
+
+  // 太短
+  const t1 = analyzeUserAnswer('好');
+  assert.equal(t1.tooShort, true);
+  assert.equal(t1.hasNumber, false);
+
+  // 有数字 (30% / 5倍 / 100万)
+  assert.equal(analyzeUserAnswer('提升了 30%').hasNumber, true);
+  assert.equal(analyzeUserAnswer('用户涨了 5 倍').hasNumber, true);
+  assert.equal(analyzeUserAnswer('100 万用户').hasNumber, true);
+
+  // AI 工具
+  assert.equal(analyzeUserAnswer('用 Claude 协作').hasAITool, true);
+  assert.equal(analyzeUserAnswer('DeepSeek 生成').hasAITool, true);
+  assert.equal(analyzeUserAnswer('Coze 搭了个 agent').hasAITool, true);
+
+  // 模糊
+  assert.equal(analyzeUserAnswer('大概是这样').isVague, true);
+  assert.equal(analyzeUserAnswer('可能行吧').isVague, true);
+
+  // 不知道
+  assert.equal(analyzeUserAnswer('不知道').isUnknown, true);
+  assert.equal(analyzeUserAnswer('不清楚').isUnknown, true);
+});
+
+test('chatBuildPrompt.pickNextField: 4 种画像推荐字段', () => {
+  const { pickNextField, IMAGE_STRATEGY } = require('../src/services/chatBuildPrompt');
+
+  // AI 协作画像 + 无 trigger: 按 priorityFields[0]
+  const f1 = pickNextField('ai_collaboration_project_lead', [], {});
+  assert.equal(f1, IMAGE_STRATEGY.ai_collaboration_project_lead.priorityFields[0]);
+
+  // hasNumber 触发: 跳到 .result 字段
+  const f2 = pickNextField(
+    'ai_collaboration_project_lead',
+    [{ fieldId: 'projects[0].aiCollaboration' }],  // 已答一个
+    { hasNumber: true }
+  );
+  assert.ok(f2 && f2.endsWith('.result'), `expected .result field, got ${f2}`);
+
+  // hasAITool 触发: 跳到 aiCollaboration 字段
+  const f3 = pickNextField(
+    'ai_collaboration_project_lead',
+    [],
+    { hasAITool: true }
+  );
+  assert.ok(f3 && f3.includes('aiCollaboration'), `expected aiCollaboration, got ${f3}`);
+
+  // 全部填完: 返 null
+  const allAnswered = IMAGE_STRATEGY.ai_collaboration_project_lead.priorityFields.map(
+    (f) => ({ fieldId: f })
+  );
+  assert.equal(pickNextField('ai_collaboration_project_lead', allAnswered, {}), null);
+
+  // 未知 image: 返 null
+  assert.equal(pickNextField('unknown_image', [], {}), null);
 });

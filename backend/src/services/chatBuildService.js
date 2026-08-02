@@ -209,9 +209,18 @@ async function next({ sessionId, userAnswer, llm }) {
     (f) => !answeredFields.some((a) => a.fieldId === f)
   );
 
+  // R-JobPilot-v2 W2 T2: 用追问深度规则引擎辅助选下一字段
+  const triggers = chatBuildPrompt.analyzeUserAnswer(userAnswer);
+  const ruleNextField = chatBuildPrompt.pickNextField(
+    session.image,
+    answeredFields,
+    triggers
+  );
+
   const isComplete = isRoundLimit || remainingFields.length === 0;
+  // 优先级: LLM 解析出的 nextFieldId > 规则引擎 > remaining[0] > 兜底
   const nextFieldId = !isComplete
-    ? (parsed?.nextFieldId || remainingFields[0] || strategy.priorityFields[0])
+    ? (parsed?.nextFieldId || ruleNextField || remainingFields[0] || strategy.priorityFields[0])
     : null;
   const nextQuestion = parsed?.nextQuestion || (isComplete ? '(对话完成)' : '继续聊聊?');
   const hint = parsed?.hint || '';
@@ -250,13 +259,13 @@ async function next({ sessionId, userAnswer, llm }) {
 }
 
 /**
- * complete - 强制完成会话 + 输出简历 JSON
+ * complete - 强制完成会话 + 输出简历 JSON + 调 resumeGenerator 拿 STAR 故事点
  *
  * @param {Object} params
  * @param {string} params.sessionId - 会话 ID
  * @returns {Promise<{status: string, resumeJson: Object, storyPoints: Array, nextStep: string}>}
  */
-async function complete({ sessionId }) {
+async function complete({ sessionId, llm }) {
   if (!sessionId) throw new AppError(1000, 'sessionId required', 400);
 
   const [rows] = await pool.query(
@@ -271,18 +280,31 @@ async function complete({ sessionId }) {
   // 从 answeredFields 组装简历 JSON (跟 resumeTemplate.js 字段对齐)
   const resumeJson = assembleResume(answeredFields);
 
-  // 标记 completed
+  // R-JobPilot-v2 W2 T3: 联调 resumeGenerator 拿 STAR 故事点
+  let storyPoints = [];
+  try {
+    const resumeGenerator = require('./resumeGenerator');
+    const llmToUse = llm || getDefaultLlm();
+    const { storyPoints: pts } = await resumeGenerator.generate(resumeJson);
+    storyPoints = pts || [];
+  } catch (err) {
+    logger.warn({ err: err.message, sessionId }, 'chatBuild complete: resumeGenerator failed, skip storyPoints');
+    storyPoints = [];
+  }
+
+  // 标记 completed (把 storyPoints 也存进 result JSON)
+  const resultWithStory = { ...resumeJson, storyPoints };
   await pool.query(
     `UPDATE chat_build_sessions
      SET status = 'completed', completed_at = NOW(), result = ?
      WHERE id = ?`,
-    [JSON.stringify(resumeJson), sessionId]
+    [JSON.stringify(resultWithStory), sessionId]
   );
 
   return {
     status: 'completed',
     resumeJson,
-    storyPoints: [], // Week 2 调 resumeGenerator.generate 拿 STAR 故事点
+    storyPoints,
     nextStep: 'project_score', // 触发 Step 2 (jobpilotAi.scoreProject)
   };
 }

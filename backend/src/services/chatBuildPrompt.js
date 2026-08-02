@@ -162,6 +162,79 @@ async function build(params) {
 }
 
 /**
+ * R-JobPilot-v2 W2 T2: 追问深度规则引擎
+ *
+ * 分析用户回答 + 画像, 输出触发标志 + 推荐的下一字段
+ *
+ * Triggers:
+ *   - tooShort: 用户回答 < 10 字 (追问 "能具体说说吗?")
+ *   - hasNumber: 提到 % / 倍 / 万 / 千 (追问 "数字怎么算出来的")
+ *   - hasAITool: 提到 Claude / DeepSeek / Coze / Dify (追问 "Prompt 怎么设计")
+ *   - isVague: 模糊回答 (大概/可能/差不多) (追问 "给个具体例子")
+ *   - isUnknown: 不知道/不清楚 (给示例回答帮用户开口)
+ *
+ * @param {string} userAnswer - 用户回答
+ * @returns {Object} triggers
+ */
+function analyzeUserAnswer(userAnswer) {
+  if (!userAnswer || typeof userAnswer !== 'string') return {};
+  return {
+    tooShort: userAnswer.length < 10,
+    hasNumber: /\d+\s*[%％]|\d+\s*倍|\d+\s*[万千百]/.test(userAnswer),
+    hasAITool: /(Claude|DeepSeek|Coze|Dify|GPT|LLM|智能体|Agent)/i.test(userAnswer),
+    isVague: /(大概|差不多|可能|应该|也许|或许)/.test(userAnswer),
+    isUnknown: /^(不知道|不清楚|没\s|无)/.test(userAnswer.trim()),
+  };
+}
+
+/**
+ * 智能选下一字段 (基于画像 + triggers)
+ *
+ * 规则:
+ *   1. 优先填画像 priorityFields (required 顺序)
+ *   2. 触发 hasNumber 后, 跳到 "量化结果" 字段
+ *   3. 触发 hasAITool 后, 跳到 "AI 协作细节" 字段
+ *   4. 否则按 priorityFields 顺序
+ *
+ * @param {string} image - 画像分类
+ * @param {Array} answeredFields - 已答字段 [{fieldId, ...}]
+ * @param {Object} triggers - analyzeUserAnswer 返的触发标志
+ * @returns {string|null} nextFieldId (无则 null = 完成)
+ */
+function pickNextField(image, answeredFields = [], triggers = {}) {
+  const strategy = IMAGE_STRATEGY[image];
+  if (!strategy) return null;
+
+  const answered = new Set(answeredFields.map((a) => a.fieldId));
+  const remaining = strategy.priorityFields.filter((f) => !answered.has(f));
+
+  if (remaining.length === 0) return null;
+
+  // 触发 hasNumber: 优先追问"量化结果"字段
+  if (triggers.hasNumber) {
+    const quantField = remaining.find((f) => f.endsWith('.result') || f.includes('量化'));
+    if (quantField) return quantField;
+  }
+
+  // 触发 hasAITool: 优先追问"AI 协作细节"字段
+  if (triggers.hasAITool) {
+    const aiField = remaining.find((f) => f.includes('aiCollaboration') || f.includes('prompt'));
+    if (aiField) return aiField;
+  }
+
+  // 触发 tooShort: 跳过"基础字段" (name/phone), 优先"项目细节"
+  if (triggers.tooShort) {
+    const detailField = remaining.find(
+      (f) => f.startsWith('projects[0].') || f.startsWith('work[0].')
+    );
+    if (detailField) return detailField;
+  }
+
+  // 默认: 顺序第一个
+  return remaining[0];
+}
+
+/**
  * 字段 ID → 中文标签
  */
 function humanLabel(fieldId) {
@@ -188,6 +261,8 @@ function humanLabel(fieldId) {
 
 module.exports = {
   build,
+  analyzeUserAnswer,
+  pickNextField,
   IMAGE_STRATEGY,
   PROMPT_CODE,
 };
