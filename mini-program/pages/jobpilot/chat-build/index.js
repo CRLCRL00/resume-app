@@ -87,7 +87,7 @@ Page({
 
     // 兜底超时: 8 秒后强制清 loading + 提示用户 (避免 utils/request 的 401 refresh hang)
     const timeoutPromise = new Promise((_, reject) => {
-      setTimeout(() => reject(new Error('请求超时, 请检查网络或重新登录后重试')), 8000);
+      setTimeout(() => reject(new Error('请求超时, 请检查网络')), 8000);
     });
 
     try {
