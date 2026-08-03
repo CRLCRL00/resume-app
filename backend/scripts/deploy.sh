@@ -20,7 +20,9 @@ set -euo pipefail
 
 TARBALL="${1:-${DEPLOY_TARBALL:-/tmp/resume-app-backend.tar.gz}}"
 ROOT="${DEPLOY_ROOT:-/opt/resume-app}"
-cd "$ROOT"
+# R-JobPilot-v2 fix: cd 到 backend 子目录 — 脚本内 package.json / src / scripts 都是相对路径
+# tarball 含 backend/..., 解 tar 时仍指 ROOT (parent), 文件落到 $ROOT/backend/...
+cd "$ROOT/backend"
 
 TS=$(date +%s)
 BACKUP_DIR=".deploy-backup/$TS"
@@ -37,7 +39,8 @@ HEALTH_FAIL_THRESHOLD="${DEPLOY_HEALTH_FAIL_THRESHOLD:-10}"
 # can legitimately return 503 in prod (e.g. Redis AOF enforce fires when
 # appendonly=no) — that's not a deploy failure. Set HEALTH_URL=...ready
 # explicitly if you want stricter checks.
-HEALTH_URL="${DEPLOY_HEALTH_URL:-http://127.0.0.1:3000/api/health/live}"
+# R-JobPilot-v2 fix: backend 实际跑在 3003 (PORT=3003 in .env), 不是 3000
+HEALTH_URL="${DEPLOY_HEALTH_URL:-http://127.0.0.1:3003/api/health/live}"
 SKIP_ROLLBACK="${DEPLOY_SKIP_ROLLBACK:-false}"
 IGNORE_READY_FAIL="${DEPLOY_IGNORE_READY_FAIL:-true}"
 
