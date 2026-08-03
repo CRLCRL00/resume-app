@@ -58,20 +58,7 @@ if [ -f package.json ]; then
   npm ci --omit=dev --no-audit --no-fund 2>&1 | tail -5 || npm install --omit=dev --no-audit --no-fund 2>&1 | tail -5
 fi
 
-# 4. pm2 reload
-if command -v pm2 >/dev/null 2>&1; then
-  PM2_NAME="${PM2_NAME:-resume-app-backend}"
-  if pm2 show "$PM2_NAME" >/dev/null 2>&1; then
-    pm2 reload "$PM2_NAME" 2>&1 | tail -3 || pm2 restart "$PM2_NAME" 2>&1 | tail -3
-    echo "[deploy] pm2 reloaded: $PM2_NAME"
-  else
-    echo "[deploy] WARN: pm2 process $PM2_NAME not found"
-  fi
-else
-  echo "[deploy] WARN: pm2 not in PATH"
-fi
-
-# 4.5. R-JobPilot-v2: migration runner + seed (保证 DB schema 最新 + chat_build prompt 存在)
+# 3.5. R-JobPilot-v2: migration runner + seed (必须在 pm2 reload 之前! 否则新代码启 backend 找不到 chat_build_sessions 表 → 500)
 echo "[deploy] running migration runner (idempotent)..."
 if [ -d src/db/migrations ]; then
   node -e "
@@ -107,9 +94,22 @@ if [ -d src/db/migrations ]; then
       }
       await conn.end();
     })().catch(e => { console.error('[migrate] FATAL:', e.message); process.exit(1); });
-  " 2>&1 | tail -10
+  " 2>&1 | tail -15
 else
   echo "[deploy] WARN: src/db/migrations not found, skip migration"
+fi
+
+# 4. pm2 reload (在 migration 之后 → DB schema 已就绪, 新代码启动不会因缺表 500)
+if command -v pm2 >/dev/null 2>&1; then
+  PM2_NAME="${PM2_NAME:-resume-app-backend}"
+  if pm2 show "$PM2_NAME" >/dev/null 2>&1; then
+    pm2 reload "$PM2_NAME" 2>&1 | tail -3 || pm2 restart "$PM2_NAME" 2>&1 | tail -3
+    echo "[deploy] pm2 reloaded: $PM2_NAME"
+  else
+    echo "[deploy] WARN: pm2 process $PM2_NAME not found"
+  fi
+else
+  echo "[deploy] WARN: pm2 not in PATH"
 fi
 
 # 5. R41-Gap-3: 健康探测 — 持续 N 次失败则自动 rollback
