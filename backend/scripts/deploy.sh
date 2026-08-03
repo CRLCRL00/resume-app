@@ -29,6 +29,10 @@ mkdir -p "$BACKUP_DIR"
 HEALTH_PROBE_TIMEOUT="${DEPLOY_HEALTH_PROBE_TIMEOUT:-30}"
 HEALTH_INTERVAL="${DEPLOY_HEALTH_PROBE_INTERVAL:-2}"
 HEALTH_FAIL_THRESHOLD="${DEPLOY_HEALTH_FAIL_THRESHOLD:-5}"
+# R-JobPilot-v2: 给 backend 足够启动时间 (migration + seed 之后 backend 首次启动 ~30s)
+HEALTH_PROBE_TIMEOUT="${DEPLOY_HEALTH_PROBE_TIMEOUT:-60}"
+HEALTH_INTERVAL="${DEPLOY_HEALTH_PROBE_INTERVAL:-3}"
+HEALTH_FAIL_THRESHOLD="${DEPLOY_HEALTH_FAIL_THRESHOLD:-10}"
 # R43.5: probe /api/health/live (process up) by default. /api/health/ready
 # can legitimately return 503 in prod (e.g. Redis AOF enforce fires when
 # appendonly=no) — that's not a deploy failure. Set HEALTH_URL=...ready
