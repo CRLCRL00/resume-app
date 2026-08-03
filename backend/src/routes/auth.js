@@ -83,11 +83,15 @@ router.post('/login', checkLockout, async (req, res, next) => {
     }
 
     // Round 40 (admin panel re-attempt): dev-bypass 走 admins 表校验 + 跳过 wechat
-    //   - 仅在 NODE_ENV !== 'production' 时生效（生产强制走 wechat）
+    //   - 默认仅在 NODE_ENV !== 'production' 时生效
+    //   - R-JobPilot-v2 W3: 如果 ENABLE_DEV_BYPASS=true (用户手动开) → prod 也允许
+    //     用于 WX_SECRET 错的临时调试 (不依赖真 wechat API)
     //   - openid 必须已在 admins 表（不允许任意 openid 登录）
     //   - 不调 wechatService.code2session（避免 dev 无 WX_APPID 跑不起来）
     //   - 走与 wechat 路径完全相同的 issueSession（cookie + JWT + CSRF）
-    if (code === 'dev-bypass' && process.env.NODE_ENV !== 'production') {
+    const allowDevBypass = code === 'dev-bypass'
+      && (process.env.NODE_ENV !== 'production' || process.env.ENABLE_DEV_BYPASS === 'true');
+    if (allowDevBypass) {
       const devOpenid = (req.body && req.body.openid) || 'dev-admin';
       let adminRows;
       try {

@@ -20,32 +20,38 @@ Page({
     wx.showLoading({ title: '登录中...', mask: true });
     wx.login({
       success: ({ code }) => {
-        wx.request({
-          url: `${require('../../src/config').apiBaseUrl}/api/auth/login`,
-          method: 'POST',
-          data: { code },
-          success: (res) => {
-            wx.hideLoading();
-            if (res.data && res.data.code === 0) {
-              const { token, user } = res.data.data;
-              wx.setStorageSync('token', token);
-              if (user) wx.setStorageSync('user', user);
-              wx.showToast({ title: '登录成功', icon: 'success' });
-              this._refreshAuthState();
-            } else {
-              wx.showToast({ title: res.data?.message || '登录失败', icon: 'none' });
-            }
-          },
-          fail: (err) => {
-            wx.hideLoading();
-            wx.showToast({ title: '网络错误, 请检查后端', icon: 'none' });
-            console.error('[me.onLogin] fail:', err);
-          },
-        });
+        this._doLogin(code);
       },
       fail: () => {
+        // IDE 模拟器沙箱: wx.login fail → fallback 到 dev-bypass
+        // (需要 prod server ENABLE_DEV_BYPASS=true)
         wx.hideLoading();
-        wx.showToast({ title: 'wx.login 失败 (模拟器常见)', icon: 'none' });
+        this._doLogin('dev-bypass');
+      },
+    });
+  },
+  // 实际发起 /api/auth/login
+  _doLogin(code) {
+    wx.request({
+      url: `${require('../../src/config').apiBaseUrl}/api/auth/login`,
+      method: 'POST',
+      data: { code, openid: 'dev-admin' },
+      success: (res) => {
+        wx.hideLoading();
+        if (res.data && res.data.code === 0) {
+          const { token, user } = res.data.data;
+          wx.setStorageSync('token', token);
+          if (user) wx.setStorageSync('user', user);
+          wx.showToast({ title: '登录成功', icon: 'success' });
+          this._refreshAuthState();
+        } else {
+          wx.showToast({ title: res.data?.message || '登录失败', icon: 'none' });
+        }
+      },
+      fail: (err) => {
+        wx.hideLoading();
+        wx.showToast({ title: '网络错误, 请检查后端', icon: 'none' });
+        console.error('[me._doLogin] fail:', err);
       },
     });
   },
