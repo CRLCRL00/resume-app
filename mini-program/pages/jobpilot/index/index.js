@@ -65,12 +65,8 @@ Page({
   },
 
   onLoad(options) {
-    // R-JobPilot-v2 W3 fix: 跳 me 页引导登录 (而非 navigateBack, 用户可能没上一页)
-    if (!getToken()) {
-      wx.showToast({ title: '请先登录', icon: 'none' });
-      setTimeout(() => wx.navigateTo({ url: '/pages/me/me' }), 800);
-      return;
-    }
+    // R-JobPilot-v2 W3 后: 移除 "请先登录" toast + 跳转 (me 页已无登录入口)
+    //   - API 返 401 时自然报错, 比误导性 toast 清楚
     // R139: 加载 AI 助手 loading 提示 (用户从首页跳转过来有感知)
     wx.showLoading({ title: '加载 AI 助手...', mask: true });
 
@@ -78,9 +74,7 @@ Page({
     const token = getToken();
     if (!token) {
       wx.hideLoading();
-      wx.showToast({ title: '请先登录', icon: 'none' });
-      setTimeout(() => wx.navigateBack({ delta: 1 }), 1000);
-      return;
+      // 不再跳转 — 让用户停在当前页, API 调用自然 401 显示错误
     }
 
     // 恢复上次的 state (持久化)
