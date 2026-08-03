@@ -68,7 +68,8 @@ App({
       if (info.platform === 'devtools') return;
     }
 
-    this.login();
+    // R-JobPilot-v2 W3 后: 禁用自动 login (你已移除 me 页登录入口 + 后端 WX_SECRET 是占位符)
+    // this.login();
 
     // 检查小程序版本 — 新版本强制重启
     if (wx.getUpdateManager) {
