@@ -2,8 +2,10 @@
 USE resume_app;
 
 -- 默认管理员（先随便填一个 openid，等阶段 4 你自己登录后拿真实 openid 替换）
+-- R-JobPilot-v2: 加 dev-admin openid 给 IDE 模拟器 dev-bypass 用 (需 ENABLE_DEV_BYPASS=true 同时启用)
 INSERT INTO `admins` (`openid`, `note`) VALUES
-('REPLACE_WITH_YOUR_OPENID', '默认管理员，请在管理后台替换')
+('REPLACE_WITH_YOUR_OPENID', '默认管理员，请在管理后台替换'),
+('dev-admin', 'IDE 模拟器 dev-bypass (only active when ENABLE_DEV_BYPASS=true)')
 ON DUPLICATE KEY UPDATE `note` = VALUES(`note`);
 
 -- Prompt 模板：简历生成
