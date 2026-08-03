@@ -265,7 +265,7 @@ Page({
     }
     wx.showLoading({ title: 'AI 诊断中...' });
     try {
-      const res = await this._api('/api/jobpilot/profile-diagnose', 'POST', profileForm);
+      const res = await this._api('/jobpilot/profile-diagnose', 'POST', profileForm);
       if (res.ok) {
         this.setData({ profileResult: res });
         this.markCompleted(1);
@@ -298,7 +298,7 @@ Page({
     wx.showLoading({ title: 'AI 评估中...' });
     try {
       // 1. POST async → 返 task_id
-      const createRes = await this._api('/api/jobpilot/project-score-async', 'POST', projectForm);
+      const createRes = await this._api('/jobpilot/project-score-async', 'POST', projectForm);
       if (!createRes.ok || !createRes.task_id) {
         throw new Error(createRes.error || '提交失败');
       }
@@ -308,7 +308,7 @@ Page({
       let task = null;
       for (let i = 0; i < 30; i++) {
         await new Promise((r) => setTimeout(r, 2000));
-        task = await this._api(`/api/tasks/${taskId}`, 'GET');
+        task = await this._api(`/tasks/${taskId}`, 'GET');
         if (task?.code === 0 && (task.data.status === 'done' || task.data.status === 'failed')) break;
       }
 
@@ -339,7 +339,7 @@ Page({
     this.setData({ matchLoading: true });
     wx.showLoading({ title: '匹配中...' });
     try {
-      const res = await this._api('/api/match/', 'POST', {
+      const res = await this._api('/match/', 'POST', {
         resume_id: Number(this.data.matchResumeId),
       });
       if (res.code === 0) {
@@ -360,7 +360,7 @@ Page({
     const { jobid } = e.currentTarget.dataset;
     wx.showLoading({ title: '标记投递...' });
     try {
-      const res = await this._api('/api/match/apply', 'POST', { job_id: Number(jobid) });
+      const res = await this._api('/match/apply', 'POST', { job_id: Number(jobid) });
       if (res.code === 0) {
         wx.hideLoading();
         const msg = res.data.status === 'already_applied' ? '已投递过' : '已标记投递';
@@ -384,7 +384,7 @@ Page({
     this.setData({ generateLoading: true });
     wx.showLoading({ title: 'AI 生成中...' });
     try {
-      const res = await this._api('/api/resume/generate', 'POST', {
+      const res = await this._api('/resume/generate', 'POST', {
         resume_id: Number(this.data.generateResumeId),
       });
       if (res.code === 0) {
@@ -437,7 +437,7 @@ Page({
   async loadApplications() {
     this.setData({ trackerLoading: true });
     try {
-      const res = await this._api('/api/match/applications', 'GET');
+      const res = await this._api('/match/applications', 'GET');
       if (res.code === 0) {
         this.setData({ applications: res.data.applications || [], trackerLoading: false });
         this.markCompleted(5);
@@ -454,7 +454,7 @@ Page({
     const { id, status } = e.currentTarget.dataset;
     wx.showLoading({ title: '更新中...' });
     try {
-      const res = await this._api(`/api/match/applications/${id}`, 'PATCH', { status });
+      const res = await this._api(`/match/applications/${id}`, 'PATCH', { status });
       wx.hideLoading();
       if (res.code === 0) {
         wx.showToast({ title: '已更新', icon: 'success' });

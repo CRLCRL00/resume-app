@@ -98,7 +98,7 @@ Page({
     try {
       const res = await Promise.race([
         request({
-          url: '/api/jobpilot/v1/chat-build/start',
+          url: '/jobpilot/v1/chat-build/start',
           method: 'POST',
           data: {
             image: this.data.selectedImage,
@@ -161,7 +161,7 @@ Page({
       // 2) 调 next API
       const res = await Promise.race([
         request({
-          url: '/api/jobpilot/v1/chat-build/next',
+          url: '/jobpilot/v1/chat-build/next',
           method: 'POST',
           data: {
             sessionId: this.data.sessionId,
@@ -206,7 +206,7 @@ Page({
     try {
       const res = await Promise.race([
         request({
-          url: '/api/jobpilot/v1/chat-build/complete',
+          url: '/jobpilot/v1/chat-build/complete',
           method: 'POST',
           data: { sessionId: this.data.sessionId },
         }),

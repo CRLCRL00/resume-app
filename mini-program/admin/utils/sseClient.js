@@ -17,6 +17,10 @@
  *   // later: task.abort() to close
  *
  * Reconnect: caller is responsible (call sseConnect again on close/error).
+ *
+ * R-JobPilot-v2 W3 fix: moved from /utils/sseClient.js → /admin/utils/sseClient.js
+ *   - 仅 admin/dashboard 用 → 移到 admin subpackage
+ *   - 主包不再包含此文件 → IDE 代码质量检查通过
  */
 'use strict';
 

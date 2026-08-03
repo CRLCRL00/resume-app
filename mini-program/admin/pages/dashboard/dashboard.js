@@ -138,7 +138,7 @@ Page({
   _startSse() {
     this._stopSse();
     try {
-      const { sseConnectWithRetry } = require('../../../utils/sseClient');
+      const { sseConnectWithRetry } = require('../../utils/sseClient');
       const { apiBaseUrl } = require('../../../src/config');
       const token = (function () {
         try { return require('../../../utils/auth').getToken(); } catch (_) { return ''; }

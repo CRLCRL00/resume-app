@@ -36,5 +36,6 @@
       { "pagePath": "pages/index/index", "text": "首页" },
       { "pagePath": "pages/me/me", "text": "我的" }
     ]
-  }
+  },
+  "lazyCodeLoading": "requiredComponents"
 }

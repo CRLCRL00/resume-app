@@ -13,6 +13,8 @@ const { getToken, clearToken } = require('./auth');
 const { reportClientError } = require('./monitor');
 // R49: backend host 集中 — 实际值在 src/config.js (gitignored, 真值由 ops 注入)
 const { apiBaseUrl } = require('../src/config');
+// BASE_URL 统一加 /api — 所有 caller 传 path 不带 /api 前缀
+// (chat-build/index.js + jobpilot/index/index.js 历史遗留的 /api/ 前缀需要清理)
 const BASE_URL = `${apiBaseUrl}/api`;
 
 function fallbackByStatus(code) {

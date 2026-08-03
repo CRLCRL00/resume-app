@@ -5,7 +5,7 @@
  */
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { parseEvent, decodeChunk, sseConnectWithRetry } = require('../utils/sseClient');
+const { parseEvent, decodeChunk, sseConnectWithRetry } = require('../admin/utils/sseClient');
 
 test('decodeChunk: string passthrough', () => {
   assert.equal(decodeChunk('hello'), 'hello');
