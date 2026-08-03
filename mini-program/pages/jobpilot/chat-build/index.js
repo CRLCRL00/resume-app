@@ -76,20 +76,30 @@ Page({
 
   /**
    * 启动对话: POST /api/jobpilot/v1/chat-build/start
+   * R-JobPilot-v2 W3 fix: 加 8 秒兜底超时 — 避免 401 refresh hang 让 loading 一直转
    */
   async onStart() {
     if (!this.data.selectedImage || this.data.loading) return;
 
     this.setData({ loading: true });
+
+    // 兜底超时: 8 秒后强制清 loading + 提示用户 (避免 utils/request 的 401 refresh hang)
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('请求超时, 请检查网络或重新登录后重试')), 8000);
+    });
+
     try {
-      const res = await request({
-        url: '/api/jobpilot/v1/chat-build/start',
-        method: 'POST',
-        data: {
-          image: this.data.selectedImage,
-          answers: this._answersFromForm(),
-        },
-      });
+      const res = await Promise.race([
+        request({
+          url: '/api/jobpilot/v1/chat-build/start',
+          method: 'POST',
+          data: {
+            image: this.data.selectedImage,
+            answers: this._answersFromForm(),
+          },
+        }),
+        timeoutPromise,
+      ]);
 
       if (res && res.sessionId) {
         const firstMsg = this._mkMsg('assistant', res.firstQuestion, res.hint || '');
@@ -121,6 +131,7 @@ Page({
 
   /**
    * 提交回答: 循环 next 直到 isComplete
+   * R-JobPilot-v2 W3 fix: 加 10 秒兜底超时 (next API 处理 LLM 调用, 应稍长)
    */
   async onSubmit() {
     const answer = (this.data.userAnswer || '').trim();
@@ -135,16 +146,23 @@ Page({
       lastMessageId: userMsg.id,
     });
 
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('请求超时, 请重试')), 10000);
+    });
+
     try {
       // 2) 调 next API
-      const res = await request({
-        url: '/api/jobpilot/v1/chat-build/next',
-        method: 'POST',
-        data: {
-          sessionId: this.data.sessionId,
-          userAnswer: answer,
-        },
-      });
+      const res = await Promise.race([
+        request({
+          url: '/api/jobpilot/v1/chat-build/next',
+          method: 'POST',
+          data: {
+            sessionId: this.data.sessionId,
+            userAnswer: answer,
+          },
+        }),
+        timeoutPromise,
+      ]);
 
       if (res && res.nextQuestion) {
         const aiMsg = this._mkMsg('assistant', res.nextQuestion, res.hint || '');
@@ -172,14 +190,21 @@ Page({
 
   /**
    * 完成: 调 complete API 拿 STAR 故事点
+   * R-JobPilot-v2 W3 fix: 加 10 秒兜底超时
    */
   async _complete() {
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('请求超时')), 10000);
+    });
     try {
-      const res = await request({
-        url: '/api/jobpilot/v1/chat-build/complete',
-        method: 'POST',
-        data: { sessionId: this.data.sessionId },
-      });
+      const res = await Promise.race([
+        request({
+          url: '/api/jobpilot/v1/chat-build/complete',
+          method: 'POST',
+          data: { sessionId: this.data.sessionId },
+        }),
+        timeoutPromise,
+      ]);
 
       if (res && res.storyPoints) {
         this.setData({
