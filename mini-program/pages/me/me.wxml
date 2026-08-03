@@ -3,18 +3,6 @@
     <view class="title">我的</view>
   </view>
 
-  <!-- R-JobPilot-v2 W3 fix: 登录入口 (IDE 模拟器跳过自动登录) -->
-  <view class="section">
-    <view wx:if="{{!isLoggedIn}}" class="row login-row" bindtap="onLogin">
-      <text class="login-text">🔑 点击登录 (聊天需要 token)</text>
-      <text class="arrow">›</text>
-    </view>
-    <view wx:else class="row">
-      <text>✅ 已登录 (openid: {{openidTail}})</text>
-      <text class="logout-text" bindtap="onLogout">退出</text>
-    </view>
-  </view>
-
   <view class="section">
     <view class="row" bindtap="onAbout">
       <text>关于简历助手</text>
