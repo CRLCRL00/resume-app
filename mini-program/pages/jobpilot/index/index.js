@@ -18,6 +18,7 @@
 
 const { apiBaseUrl } = require('../../../src/config');
 const { request } = require('../../../utils/request');
+const { getToken } = require('../../../utils/auth');
 
 const STORAGE_KEY = 'jobpilot_state_v2';
 
@@ -64,11 +65,17 @@ Page({
   },
 
   onLoad(options) {
+    // R-JobPilot-v2 W3 fix: 跳 me 页引导登录 (而非 navigateBack, 用户可能没上一页)
+    if (!getToken()) {
+      wx.showToast({ title: '请先登录', icon: 'none' });
+      setTimeout(() => wx.navigateTo({ url: '/pages/me/me' }), 800);
+      return;
+    }
     // R139: 加载 AI 助手 loading 提示 (用户从首页跳转过来有感知)
     wx.showLoading({ title: '加载 AI 助手...', mask: true });
 
     // 修复: token 在 wx.storage,不在 globalData
-    const token = wx.getStorageSync('token');
+    const token = getToken();
     if (!token) {
       wx.hideLoading();
       wx.showToast({ title: '请先登录', icon: 'none' });
