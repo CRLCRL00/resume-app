@@ -15,6 +15,7 @@ const pool = require('../config/db');
 router.get('/', async (req, res, next) => {
   try {
     // R139: 主查询 + 子查询并行 (top_city / common_degree)
+    // R-JobPilot-v2 W4: 加 j1 别名 + recent_new_jobs 子查询 (近 7 天新增岗位数)
     // 主: 每个 title 统计
     const [rows] = await pool.query(`
       SELECT
@@ -24,8 +25,12 @@ router.get('/', async (req, res, next) => {
                   AND verified_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)
                  THEN 1 ELSE 0 END) AS recent_verified,
         AVG(salary_max) AS avg_salary_max,
-        MAX(verify_status) AS best_status
-      FROM jobs
+        MAX(verify_status) AS best_status,
+        (SELECT COUNT(*) FROM jobs j2
+         WHERE j2.title = j1.title
+           AND j2.is_online = 1 AND j2.is_deleted = 0
+           AND j2.created_at >= DATE_SUB(NOW(), INTERVAL 7 DAY)) AS recent_new_jobs
+      FROM jobs j1
       WHERE is_online = 1 AND is_deleted = 0
       GROUP BY title
       ORDER BY
@@ -68,6 +73,21 @@ router.get('/', async (req, res, next) => {
       for (const r of degreeRows) {
         if (!degreeMap.has(r.title)) degreeMap.set(r.title, r.degree_required);
       }
+
+      // R-JobPilot-v2 W4: common_experience — 同 degree 模式, 取每个 title 出现最多的 experience_required (排除"不限")
+      const expMap = new Map();
+      const [expRows] = await pool.query(
+        `SELECT title, experience_required, COUNT(*) AS cnt
+         FROM jobs
+         WHERE is_online = 1 AND is_deleted = 0 AND title IN (${placeholders})
+           AND experience_required != '不限'
+         GROUP BY title, experience_required
+         ORDER BY title, cnt DESC`,
+        titles
+      );
+      for (const r of expRows) {
+        if (!expMap.has(r.title)) expMap.set(r.title, r.experience_required);
+      }
     }
 
     // 算热度分 (recent_verified × 100 + job_count × 10 + (avg_salary_max / 100))
@@ -80,6 +100,9 @@ router.get('/', async (req, res, next) => {
       // R139: 新加 top_city + common_degree (前端用于预填 jobpilot Step 0)
       top_city: cityMap.get(r.industry) || '',
       common_degree: degreeMap.get(r.industry) || '不限',
+      // R-JobPilot-v2 W4: 新加 common_experience + recent_new_jobs (行业卡片信息密度)
+      common_experience: expMap.get(r.industry) || '不限',
+      recent_new_jobs: Number(r.recent_new_jobs) || 0,
       hot_score: (Number(r.recent_verified) || 0) * 100
                  + (Number(r.job_count) || 0) * 10
                  + Math.round((Number(r.avg_salary_max) || 0) / 100),
