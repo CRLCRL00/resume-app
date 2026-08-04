@@ -13,6 +13,7 @@
  */
 
 const { request } = require('../../../utils/request');
+const { getToken } = require('../../../utils/auth');
 
 const IMAGE_OPTIONS = [
   { value: 'ai_collaboration_project_lead', icon: '🤖', label: 'AI 协作负责人' },
