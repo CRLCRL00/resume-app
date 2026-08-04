@@ -45,6 +45,8 @@ router.get('/', async (req, res, next) => {
     const titles = rows.map(r => r.industry);
     let cityMap = new Map();
     let degreeMap = new Map();
+    // R-JobPilot-v2 W4: expMap 提到外层声明 (let, 和 cityMap/degreeMap 同级) — 避免 titles.length===0 时 result.map 里 ReferenceError
+    let expMap = new Map();
 
     if (titles.length > 0) {
       const placeholders = titles.map(() => '?').join(',');
@@ -75,7 +77,6 @@ router.get('/', async (req, res, next) => {
       }
 
       // R-JobPilot-v2 W4: common_experience — 同 degree 模式, 取每个 title 出现最多的 experience_required (排除"不限")
-      const expMap = new Map();
       const [expRows] = await pool.query(
         `SELECT title, experience_required, COUNT(*) AS cnt
          FROM jobs
