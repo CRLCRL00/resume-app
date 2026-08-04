@@ -480,7 +480,7 @@ Page({
     if (!err) return fallback;
     const msg = err.message || String(err);
     if (/timeout|network|request:fail/i.test(msg)) return '网络出错,请检查后端';
-    if (/401|未授权|token/i.test(msg)) return '功能暂不可用';
+    if (/401|未授权|token/i.test(msg)) return '请重新登录';
     if (/404/i.test(msg)) return '接口不存在,需后端部署';
     if (msg.length > 30) return fallback;
     return msg;
