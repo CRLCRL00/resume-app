@@ -5,6 +5,7 @@ Page({
     hasResume: false,
     industries: [],
     loading: true,
+    sortBy: 'hot',
   },
 
   onShow() {
@@ -25,7 +26,8 @@ Page({
     try {
       const res = await request({ url: '/industries', silent: true });
       if (res.code === 0 && res.data && res.data.industries) {
-        this.setData({ industries: res.data.industries, loading: false });
+        const sorted = this._sortIndustries(res.data.industries, this.data.sortBy);
+        this.setData({ industries: this._withDerived(sorted), loading: false });
       } else {
         this.setData({ industries: [], loading: false });
       }
@@ -33,6 +35,42 @@ Page({
       // 没数据或未登录
       this.setData({ industries: [], loading: false });
     }
+  },
+
+  _sortIndustries(list, by) {
+    const arr = [...list];
+    if (by === 'salary') return arr.sort((a, b) => (b.avg_salary_max || 0) - (a.avg_salary_max || 0));
+    if (by === 'count') return arr.sort((a, b) => (b.job_count || 0) - (a.job_count || 0));
+    return arr;
+  },
+
+  _withDerived(list) {
+    const maxHot = Math.max(...list.map((i) => i.hot_score || 0), 1);
+    return list.map((i) => ({
+      ...i,
+      emoji: this._industryEmoji(i.industry),
+      hot_bar_pct: Math.min(100, Math.round(((i.hot_score || 0) / maxHot) * 100)),
+    }));
+  },
+
+  _industryEmoji(name) {
+    const map = {
+      AI: '🤖', 算法: '🤖', 数据: '📊', 产品: '📦',
+      运营: '🚀', 设计: '🎨', 前端: '💻', 后端: '⚙️',
+      测试: '🔍', 运维: '🛠️', 市场: '📣', 销售: '💼',
+      HR: '👥', 财务: '💰', 法务: '⚖️',
+    };
+    for (const [k, v] of Object.entries(map)) {
+      if (name && name.includes(k)) return v;
+    }
+    return '🏷️';
+  },
+
+  onSwitchSort(e) {
+    const { sortBy } = e.currentTarget.dataset;
+    if (!sortBy || sortBy === this.data.sortBy) return;
+    const sorted = this._sortIndustries(this.data.industries, sortBy);
+    this.setData({ sortBy, industries: this._withDerived(sorted) });
   },
 
   // R130: 点行业 → 跳 jobpilot/index, query 传行业名, Step 0 期望岗位预填
