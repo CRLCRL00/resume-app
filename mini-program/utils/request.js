@@ -19,7 +19,7 @@ const BASE_URL = `${apiBaseUrl}/api`;
 
 function fallbackByStatus(code) {
   if (code === 400) return '请求参数错误';
-  if (code === 401) return '功能暂不可用';
+  if (code === 401) return '请重新登录';
   if (code === 403) return '无权限';
   if (code === 404) return '资源不存在';
   if (code === 429) return '请求过于频繁';
@@ -56,24 +56,24 @@ function doRequest(opts) {
               } else {
                 // refresh 也失败 → 清 token + toast + reject
                 clearToken();
-                if (!opts.silent) showToast(res.data?.message || '功能暂不可用');
+                if (!opts.silent) showToast(res.data?.message || '请重新登录');
                 reject(res.data);
               }
             }).catch(() => {
               clearToken();
-              if (!opts.silent) showToast(res.data?.message || '功能暂不可用');
+              if (!opts.silent) showToast(res.data?.message || '请重新登录');
               reject(res.data);
             });
           } else {
             // 无 app 实例 (单测环境) → 原行为
             clearToken();
-            if (!opts.silent) showToast(res.data?.message || '功能暂不可用');
+            if (!opts.silent) showToast(res.data?.message || '请重新登录');
             reject(res.data);
           }
         } else if (res.statusCode === 401) {
           // 已经 retry 过仍 401 → 放弃
           clearToken();
-          if (!opts.silent) showToast(res.data?.message || '功能暂不可用');
+          if (!opts.silent) showToast(res.data?.message || '请重新登录');
           reject(res.data);
         } else {
           if (!opts.silent) showToast(res.data?.message || fallbackByStatus(res.statusCode));
