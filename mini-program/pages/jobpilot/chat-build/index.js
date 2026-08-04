@@ -48,9 +48,13 @@ Page({
   },
 
   onLoad(options) {
-    // R-JobPilot-v2 W3 后: 移除 "请先登录" toast + 跳转 (me 页已无登录入口)
-    //   - onStart 时若 API 返 401, 自然会显示错误, 比误导性 toast 更清楚
-    //   - 支持从 jobpilot/index 预选画像 (从 query 拿)
+    // R-JobPilot-v2 W3 fix: 没 token 直接跳 me 页引导登录 (避免 401 loading 一直转)
+    if (!getToken()) {
+      wx.showToast({ title: '请先登录', icon: 'none' });
+      setTimeout(() => wx.navigateTo({ url: '/pages/me/me' }), 800);
+      return;
+    }
+    // R-JobPilot-v2 W3: 支持从 jobpilot/index 预选画像 (从 query 拿)
     if (options && options.image) {
       const matched = IMAGE_OPTIONS.find((o) => o.value === options.image);
       if (matched) {
