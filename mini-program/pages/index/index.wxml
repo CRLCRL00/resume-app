@@ -5,6 +5,19 @@
   </view>
 
   <view class="industries-list">
+    <!-- 排序 toggle bar -->
+    <view class="sort-bar">
+      <view class="sort-btn {{sortBy === 'hot' ? 'active' : ''}}" data-sort-by="hot" bindtap="onSwitchSort">
+        🔥 热度
+      </view>
+      <view class="sort-btn {{sortBy === 'salary' ? 'active' : ''}}" data-sort-by="salary" bindtap="onSwitchSort">
+        💰 薪资
+      </view>
+      <view class="sort-btn {{sortBy === 'count' ? 'active' : ''}}" data-sort-by="count" bindtap="onSwitchSort">
+        📊 岗位数
+      </view>
+    </view>
+
     <view
       wx:for="{{industries}}"
       wx:key="industry"
@@ -16,19 +29,35 @@
     >
       <view class="industry-left">
         <view class="industry-header">
+          <text class="industry-emoji">{{item.emoji}}</text>
           <text class="industry-name">{{item.industry}}</text>
           <view wx:if="{{item.recent_verified > 0}}" class="hot-badge">
             <text class="hot-badge-text">🔥 近期较好</text>
           </view>
         </view>
         <view class="industry-stats">
-          <text class="stat-item">📊 {{item.job_count}} 个岗位</text>
-          <text wx:if="{{item.recent_verified > 0}}" class="stat-item">✓ {{item.recent_verified}} 近 7 天已 verify</text>
-          <text wx:if="{{item.avg_salary_max > 0}}" class="stat-item">💰 平均 {{item.avg_salary_max}}K</text>
-          <text wx:if="{{item.top_city}}" class="stat-item">📍 {{item.top_city}} 热招</text>
+          <text class="stat-item">📊 {{item.job_count}} 岗位</text>
+          <text wx:if="{{item.recent_new_jobs > 0}}" class="stat-item stat-highlight">
+            ✓ +{{item.recent_new_jobs}} 新增
+          </text>
+          <text wx:if="{{item.avg_salary_max > 0}}" class="stat-item">
+            💰 {{item.avg_salary_max}}K
+          </text>
+        </view>
+        <view class="industry-stats industry-stats-2">
+          <text wx:if="{{item.top_city}}" class="stat-item">📍 {{item.top_city}}</text>
+          <text wx:if="{{item.common_degree && item.common_degree !== '不限'}}" class="stat-item">
+            🎓 {{item.common_degree}}
+          </text>
+          <text wx:if="{{item.common_experience && item.common_experience !== '不限'}}" class="stat-item">
+            💼 {{item.common_experience}}
+          </text>
         </view>
       </view>
-      <text class="industry-arrow">›</text>
+      <view class="hot-bar">
+        <view class="hot-bar-fill" style="width: {{item.hot_bar_pct}}%"></view>
+        <text class="hot-bar-text">{{item.hot_score}}</text>
+      </view>
     </view>
     <view wx:if="{{loading}}" class="loading">加载中...</view>
     <view wx:elif="{{industries.length === 0}}" class="empty">
