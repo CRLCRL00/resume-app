@@ -46,22 +46,23 @@
 .industry-card {
   background: #ffffff;
   border: 1rpx solid #e5e5e7;
-  border-radius: 16rpx;
+  border-radius: 20rpx;
   padding: 28rpx 32rpx;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  transition: transform 0.15s, box-shadow 0.2s, border-color 0.2s;
+  box-shadow: 0 6rpx 20rpx rgba(99,102,241,0.08);
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
   animation: cardIn 0.4s ease-out backwards;
 }
 
-/* 错位入场动画 (stagger) */
-.industry-card:nth-child(1) { animation-delay: 0.05s; }
-.industry-card:nth-child(2) { animation-delay: 0.10s; }
-.industry-card:nth-child(3) { animation-delay: 0.15s; }
-.industry-card:nth-child(4) { animation-delay: 0.20s; }
-.industry-card:nth-child(5) { animation-delay: 0.25s; }
-.industry-card:nth-child(6) { animation-delay: 0.30s; }
+/* 错位入场动画 (stagger) —— nth-child 从 2 起, 因首个子元素是 .sort-bar */
+.industry-card:nth-child(2) { animation-delay: 0.05s; }
+.industry-card:nth-child(3) { animation-delay: 0.10s; }
+.industry-card:nth-child(4) { animation-delay: 0.15s; }
+.industry-card:nth-child(5) { animation-delay: 0.20s; }
+.industry-card:nth-child(6) { animation-delay: 0.25s; }
+.industry-card:nth-child(7) { animation-delay: 0.30s; }
 
 @keyframes cardIn {
   from { opacity: 0; transform: translateX(-20rpx); }
@@ -72,7 +73,7 @@
   transform: scale(0.98);
   background: #f9f9fb;
   border-color: #6366f1;
-  box-shadow: 0 4rpx 16rpx rgba(99,102,241,0.12);
+  box-shadow: 0 4rpx 16rpx rgba(99,102,241,0.16);
 }
 
 .industry-card.hot {
@@ -134,18 +135,50 @@
   color: #8e8e93;
 }
 
-/* 右侧箭头 */
-.industry-arrow {
+.industry-emoji {
   font-size: 36rpx;
-  color: #c7c7cc;
-  font-weight: 300;
-  margin-left: 16rpx;
-  transition: transform 0.2s, color 0.2s;
+  margin-right: 12rpx;
+  flex-shrink: 0;
 }
 
-.industry-card:active .industry-arrow {
-  color: #6366f1;
-  transform: translateX(4rpx);
+.stat-highlight {
+  color: #07c160;
+  font-weight: 600;
+}
+
+.industry-stats-2 {
+  margin-top: 8rpx;
+  opacity: 0.85;
+}
+
+/* 热度条 */
+.hot-bar {
+  width: 80rpx;
+  height: 56rpx;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  position: relative;
+  margin-left: 16rpx;
+}
+
+.hot-bar-fill {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 6rpx;
+  background: linear-gradient(90deg, #ff9500 0%, #ff6b00 100%);
+  border-radius: 3rpx;
+  transition: width 0.4s ease-out;
+}
+
+.hot-bar-text {
+  position: relative;
+  font-size: 22rpx;
+  color: #8e8e93;
+  font-weight: 600;
+  margin-bottom: 8rpx;
 }
 
 /* Loading / Empty */
@@ -185,4 +218,30 @@
 
 .preview-btn:active {
   background: #f2f2f7;
+}
+
+/* 排序 toggle bar */
+.sort-bar {
+  display: flex;
+  gap: 12rpx;
+  padding: 0 8rpx;
+  margin-bottom: 16rpx;
+}
+
+.sort-btn {
+  flex: 1;
+  padding: 16rpx 0;
+  text-align: center;
+  font-size: 26rpx;
+  color: #8e8e93;
+  background: #f5f5f7;
+  border-radius: 12rpx;
+  transition: all 0.2s;
+}
+
+.sort-btn.active {
+  background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4rpx 12rpx rgba(99,102,241,0.25);
 }
